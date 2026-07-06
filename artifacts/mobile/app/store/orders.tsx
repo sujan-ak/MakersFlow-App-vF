@@ -7,8 +7,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { supabase } from "@/lib/supabase";
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
-import { getInvoicePath } from '@/lib/invoiceStorage';
+import * as Print from 'expo-print';
 
 export default function OrdersScreen() {
   const colors = useColors();
@@ -16,7 +15,6 @@ export default function OrdersScreen() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [invoicePaths, setInvoicePaths] = useState<Record<string, string>>({});
   const [sharingId, setSharingId] = useState<string | null>(null);
 
   // Refund Modal States
@@ -65,28 +63,11 @@ export default function OrdersScreen() {
               total: Number(order.total_amount) || 0,
               tax: Number(order.tax_amount) || 0,
               shipping: order.shipping_address ?? null,
+              created_at: order.created_at,
+              total_amount: Number(order.total_amount) || 0,
             };
           });
           setOrders(mapped);
-
-          // Load invoice paths for each order
-          const paths: Record<string, string> = {};
-          await Promise.all(mapped.map(async (o: any) => {
-            const p = await getInvoicePath(o.id);
-            if (p) {
-              if (Platform.OS === 'web' || p.startsWith('html:')) {
-                paths[o.id] = p;
-              } else {
-                try {
-                  const info = await FileSystem.getInfoAsync(p);
-                  if (info && info.exists) paths[o.id] = p;
-                } catch (err) {
-                  console.warn('Error reading file info:', err);
-                }
-              }
-            }
-          }));
-          setInvoicePaths(paths);
         }
       } catch (err) {
         console.error('[Orders] Load error:', err);
@@ -144,36 +125,21 @@ export default function OrdersScreen() {
     }
   };
 
-  const handleShareInvoice = async (orderId: string) => {
-    const path = invoicePaths[orderId];
-    if (!path) { Alert.alert('No invoice', 'Invoice not available for this order.'); return; }
-    setSharingId(orderId);
+  const generateInvoice = async (order: any) => {
+    setSharingId(order.id);
     try {
-      if (Platform.OS === 'web' || path.startsWith('html:')) {
-        const htmlContent = path.startsWith('html:') ? path.substring(5) : path;
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(htmlContent);
-          printWindow.document.close();
-          printWindow.focus();
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-          }, 500);
-        } else {
-          Alert.alert('Popup Blocked', 'Please allow popups to print/download the invoice.');
-        }
-        return;
-      }
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(path, { mimeType: 'application/pdf', dialogTitle: 'Download Invoice' });
-      } else {
-        Alert.alert('Saved', `Invoice at:\n${path}`);
-      }
+      const html = `
+        <h1>MakersFlow Invoice</h1>
+        <p>Order ID: ${order.id}</p>
+        <p>Date: ${new Date(order.created_at).toLocaleDateString()}</p>
+        <p>Amount: ₹${order.total_amount}</p>
+        <p>Status: ${order.status}</p>
+      `;
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri);
     } catch (e) {
-      Alert.alert('Error', 'Could not share invoice.');
+      console.error('[Invoice] Error generating invoice:', e);
+      Alert.alert('Error', 'Failed to generate or share invoice.');
     } finally {
       setSharingId(null);
     }
@@ -210,8 +176,7 @@ export default function OrdersScreen() {
         ) : (
           orders.map((order) => (
             <View key={order.id} style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.orderHeader}>
-                <Text style={[styles.orderId, { color: colors.mutedForeground }]}>Order #{order.id.toUpperCase()}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View
                   style={[
                     styles.statusBadge,
@@ -227,8 +192,9 @@ export default function OrdersScreen() {
                     {order.status}
                   </Text>
                 </View>
+                <Text style={[styles.date, { color: colors.mutedForeground }]}>{order.date}</Text>
               </View>
-              <Text style={[styles.date, { color: colors.mutedForeground }]}>{order.date}</Text>
+              <Text style={[styles.orderId, { color: colors.mutedForeground }]}>Order #{order.id.toUpperCase()}</Text>
               {order.items.map((item: string, i: number) => (
                 <Text key={i} style={[styles.item, { color: colors.foreground }]}>
                   · {item}
@@ -258,18 +224,16 @@ export default function OrdersScreen() {
                   )}
                 </View>
               )}
-              {invoicePaths[order.id] && (
-                <Pressable
-                  style={[styles.invoiceBtn, { borderColor: colors.border }]}
-                  onPress={() => handleShareInvoice(order.id)}
-                  disabled={sharingId === order.id}
-                >
-                  <Feather name="download" size={14} color={colors.primary} />
-                  <Text style={[styles.invoiceBtnText, { color: colors.primary }]}>
-                    {sharingId === order.id ? 'Opening...' : 'Download Invoice'}
-                  </Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={[styles.invoiceBtn, { borderColor: colors.border }]}
+                onPress={() => generateInvoice(order)}
+                disabled={sharingId === order.id}
+              >
+                <Feather name="download" size={14} color={colors.primary} />
+                <Text style={[styles.invoiceBtnText, { color: colors.primary }]}>
+                  {sharingId === order.id ? 'Generating...' : 'Download Invoice'}
+                </Text>
+              </Pressable>
               {(order.rawStatus === 'completed' || order.rawStatus === 'failed') && (
                 <Pressable
                   style={[styles.refundBtn, { borderColor: '#FCA5A5' }]}

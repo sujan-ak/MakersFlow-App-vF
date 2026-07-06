@@ -46,14 +46,24 @@ export default function ProfileScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const enrolledCourses = Array.from(courseProgress.values());
+  const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
+  const [certsLoading, setCertsLoading] = useState(true);
+  const [enrolledCount, setEnrolledCount] = useState(0);
+  const [validCourseIds, setValidCourseIds] = useState<string[]>([]);
+  const [isValidLoaded, setIsValidLoaded] = useState(false);
+
+  const enrolledCourses = React.useMemo(() => {
+    const allCourses = Array.from(courseProgress.values());
+    if (!isValidLoaded) {
+      return allCourses;
+    }
+    return allCourses.filter((c) => validCourseIds.includes(String(c.courseId)));
+  }, [courseProgress, validCourseIds, isValidLoaded]);
+
   const avgProgress =
     enrolledCourses.length > 0
       ? Math.round(enrolledCourses.reduce((s, c) => s + c.progress, 0) / enrolledCourses.length)
       : 0;
-
-  const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
-  const [certsLoading, setCertsLoading] = useState(true);
 
   // Account Deletion State
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -71,6 +81,23 @@ export default function ProfileScreen() {
         }
         setCertsLoading(true);
         try {
+          const { data: enrollData, error: countError } = await supabase
+            .from("enrollments")
+            .select("course_id, payment_status, courses(id)")
+            .eq("user_id", user.id);
+
+          if (!countError && enrollData) {
+            const valid = enrollData.filter(
+              (enr: any) =>
+                enr.courses &&
+                enr.payment_status !== 'pending' &&
+                enr.payment_status !== 'failed'
+            );
+            setEnrolledCount(valid.length);
+            setValidCourseIds(valid.map((enr) => String(enr.course_id)));
+            setIsValidLoaded(true);
+          }
+
           const { data: enrollments } = await supabase
             .from("enrollments")
             .select("course_id, completed_at, enrolled_at, courses(title)")
@@ -225,7 +252,6 @@ export default function ProfileScreen() {
       items: [
         { icon: "user", label: "Edit Profile", onPress: () => router.push("/profile/edit") },
         { icon: "settings", label: "Settings", onPress: () => router.push("/settings") },
-        { icon: "bell", label: "Notifications", onPress: () => router.push("/settings/notifications") },
         { icon: "shield", label: "Privacy Policy", onPress: () => router.push("/settings/privacy-policy") },
         { icon: "file-text", label: "Terms of Service", onPress: () => router.push("/settings/terms-of-service") },
       ],
@@ -288,7 +314,7 @@ export default function ProfileScreen() {
       {/* Stats */}
       <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.stat}>
-          <Text style={[styles.statNum, { color: colors.foreground }]}>{enrolledCourses.length}</Text>
+          <Text style={[styles.statNum, { color: colors.foreground }]}>{enrolledCount}</Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Enrolled</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />

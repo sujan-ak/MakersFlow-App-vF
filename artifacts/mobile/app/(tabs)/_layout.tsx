@@ -79,11 +79,11 @@ function TabLayout() {
           tabBarAccessibilityLabel: "Progress tab. Track your learning journey",
         }}
       />
+
       <Tabs.Screen
         name="news"
         options={{
-          title: "News",
-          tabBarIcon: ({ color }) => <Feather name="file-text" size={22} color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
