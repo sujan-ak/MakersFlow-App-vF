@@ -1,0 +1,805 @@
+import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import React, { useState, useEffect } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  Modal,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCart } from "@/context/CartContext";
+import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContextSupabase";
+import { supabase } from "@/lib/supabase";
+import * as Print from "expo-print";
+import * as FileSystem from "expo-file-system/legacy";
+import { setInvoicePath } from "@/lib/invoiceStorage";
+import { RazorpayWebView, type RazorpayPaymentParams } from "@/components/RazorpayWebView";
+import {
+  createRazorpayOrder,
+  verifyRazorpayPayment,
+} from "@/services/razorpayService";
+
+export default function CheckoutScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { items, total, clearCart, removeFromCart } = useCart();
+  const { user } = useAuth();
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState("");
+  // Shipping config — same `settings` keys the web checkout uses
+  const [shippingConfig, setShippingConfig] = useState({ fee: 49, remoteFee: 149, threshold: 999 });
+  const [gstRates, setGstRates] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    supabase
+      .from("settings")
+      .select("key, value")
+      .in("key", ["shipping_fee", "shipping_fee_remote", "free_shipping_threshold"])
+      .then(({ data }) => {
+        if (!data) return;
+        const map = Object.fromEntries(data.map((r: any) => [r.key, Number(r.value)]));
+        setShippingConfig({
+          fee: map.shipping_fee ?? 49,
+          remoteFee: map.shipping_fee_remote ?? 149,
+          threshold: map.free_shipping_threshold ?? 999,
+        });
+      });
+  }, []);
+  // Per-item GST rates from the products table (same source as web)
+  useEffect(() => {
+    if (items.length === 0) return;
+    supabase
+      .from("products")
+      .select("id, gst_rate")
+      .in("id", items.map((i) => i.product.id))
+      .then(({ data }) => {
+        setGstRates(new Map((data ?? []).map((r: any) => [String(r.id), r.gst_rate ?? 18])));
+      });
+  }, [items]);
+
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discount: number; // absolute ₹ amount from validate-coupon (handles % AND fixed coupons)
+    label: string;
+    id: string;
+  } | null>(null);
+
+  // Saved Addresses
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [formFullName, setFormFullName] = useState("");
+  const [formAddressLine1, setFormAddressLine1] = useState("");
+  const [formAddressLine2, setFormAddressLine2] = useState("");
+  const [formCity, setFormCity] = useState("");
+  const [formState, setFormState] = useState("");
+  const [formPostalCode, setFormPostalCode] = useState("");
+  const [formPhone, setFormPhone] = useState("");
+
+  // Razorpay states
+  const [showPayment, setShowPayment] = useState(false);
+  const [razorpayParams, setRazorpayParams] = useState<RazorpayPaymentParams | null>(null);
+  const [pendingAddress, setPendingAddress] = useState<any>(null);
+
+  const discount = appliedPromo ? Math.min(appliedPromo.discount, total) : 0;
+  const hasPhysical = items.some((i) => i.product.category === "physical");
+
+  // Remote states/UTs with higher delivery cost (mirrors web checkout)
+  const REMOTE_STATES = new Set([
+    "Arunachal Pradesh", "Assam", "Manipur", "Meghalaya", "Mizoram",
+    "Nagaland", "Sikkim", "Tripura",
+    "Andaman and Nicobar Islands", "Lakshadweep",
+    "Jammu and Kashmir", "Ladakh",
+  ]);
+  const taxable = Math.max(0, total - discount);
+  // Per-item GST on the discounted share — identical math to the web app
+  const taxAmount = Math.round(
+    items.reduce((sum, item) => {
+      const itemSubtotal = item.product.price * item.quantity;
+      const discountShare = total > 0 ? (itemSubtotal / total) * discount : 0;
+      const itemTaxable = Math.max(0, itemSubtotal - discountShare);
+      const rate = gstRates.get(String(item.product.id)) ?? 18;
+      return sum + itemTaxable * (rate / 100);
+    }, 0),
+  );
+  const isRemoteState = !!(pendingAddress?.state && REMOTE_STATES.has(pendingAddress.state));
+  const shippingFee =
+    hasPhysical && taxable < shippingConfig.threshold
+      ? (isRemoteState ? shippingConfig.remoteFee : shippingConfig.fee)
+      : 0;
+  const finalTotal = taxable + taxAmount + shippingFee;
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  useEffect(() => {
+    if (items.length === 0) router.back();
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.full_name) setName(data.full_name);
+      });
+  }, [user?.id]);
+
+  async function loadAddresses() {
+    if (!user?.id) return;
+    const { data, error } = await supabase
+      .from("shipping_addresses")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("is_default", { ascending: false });
+    if (error || !data) return;
+    setAddresses(data);
+    const def = data.find((a) => a.is_default) ?? data[0];
+    if (def) {
+      setSelectedAddressId(String(def.id));
+      setName(def.full_name);
+      setPhone(def.phone);
+    }
+  }
+
+  useEffect(() => { loadAddresses(); }, [user?.id]);
+
+  // ── Address form ────────────────────────────────────────────────────────────
+
+  const resetAddressForm = () => {
+    setEditingAddressId(null);
+    setFormFullName(""); setFormAddressLine1(""); setFormAddressLine2("");
+    setFormCity(""); setFormState(""); setFormPostalCode(""); setFormPhone("");
+  };
+
+  const handleEditAddress = (addr: any) => {
+    setEditingAddressId(String(addr.id));
+    setFormFullName(addr.full_name);
+    setFormAddressLine1(addr.address_line1);
+    setFormAddressLine2(addr.address_line2 ?? "");
+    setFormCity(addr.city);
+    setFormState(addr.state);
+    setFormPostalCode(addr.postal_code);
+    setFormPhone(addr.phone);
+    setShowAddressForm(true);
+  };
+
+  const handleSaveAddress = async () => {
+    if (!formFullName.trim() || !formAddressLine1.trim() || !formCity.trim() || !formState.trim() || !formPostalCode.trim() || !formPhone.trim()) {
+      Alert.alert("Validation Error", "All fields except Address Line 2 are required."); return;
+    }
+    if (!/^\d{10}$/.test(formPhone.trim())) {
+      Alert.alert("Validation Error", "Phone must be a 10-digit number."); return;
+    }
+    if (!/^\d{6}$/.test(formPostalCode.trim())) {
+      Alert.alert("Validation Error", "Pincode must be exactly 6 digits."); return;
+    }
+    if (!user?.id) return;
+
+    const addressData = {
+      user_id: user.id,
+      full_name: formFullName.trim(),
+      address_line1: formAddressLine1.trim(),
+      address_line2: formAddressLine2.trim() || null,
+      city: formCity.trim(),
+      state: formState.trim(),
+      postal_code: formPostalCode.trim(),
+      phone: formPhone.trim(),
+    };
+
+    const { error } = editingAddressId
+      ? await supabase.from("shipping_addresses").update(addressData).eq("id", Number(editingAddressId))
+      : await supabase.from("shipping_addresses").insert({ ...addressData, is_default: addresses.length === 0 });
+
+    if (error) { Alert.alert("Error", error.message); return; }
+    Alert.alert("Success", "Address saved successfully.");
+    setShowAddressForm(false);
+    resetAddressForm();
+    await loadAddresses();
+  };
+
+  // ── Promo code ──────────────────────────────────────────────────────────────
+
+  async function handleApplyPromo() {
+    const code = promoCode.trim().toUpperCase();
+    if (!code) return;
+    setPromoError("");
+    setPromoLoading(true);
+    try {
+      // Same server-side validation the web app uses — checks the `coupons`
+      // table the admin panel manages (active/expiry/usage-limit/min-order/
+      // item restrictions/per-user usage all enforced server-side).
+      const { data, error } = await supabase.functions.invoke("validate-coupon", {
+        body: {
+          code,
+          subtotal: total,
+          item_ids: items.map((i) => String(i.product.id)),
+          user_id: user?.id ?? null,
+        },
+      });
+
+      if (error)         { setPromoError("Could not validate coupon. Try again."); return; }
+      if (!data?.valid)  { setPromoError(data?.message || "Invalid coupon code."); return; }
+
+      setAppliedPromo({
+        code,
+        discount: Number(data.discount ?? 0),
+        label: data.label ?? "",
+        id: data.coupon_id,
+      });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setPromoError("Failed to validate coupon.");
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  // ── STEP 1: Tap "Pay" → call edge fn → open WebView ────────────────────────
+
+  async function handlePay() {
+    const selectedAddress = addresses.find((a) => String(a.id) === selectedAddressId);
+
+    if (hasPhysical && !selectedAddress) {
+      Alert.alert("Incomplete", "Please add and select a shipping address."); return;
+    }
+    if (!hasPhysical && (!name.trim() || !phone.trim())) {
+      Alert.alert("Incomplete", "Please fill in your name and phone number."); return;
+    }
+    if (!user?.id) {
+      Alert.alert("Login Required", "Please log in to place an order."); return;
+    }
+
+    setLoading(true);
+    try {
+      const cartItems = items.map((item) => ({
+        id:        item.product.id,
+        price:     item.product.price,
+        qty:       item.quantity,
+        is_course: (item.product as any).is_course ?? false,
+        course_id: (item.product as any).course_id ?? null,
+      }));
+
+      const rzpOrder = await createRazorpayOrder(cartItems, finalTotal);
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      setPendingAddress(selectedAddress);
+
+      setRazorpayParams({
+        orderId:     rzpOrder.id,
+        amount:      rzpOrder.amount,
+        currency:    rzpOrder.currency,
+        keyId:       rzpOrder.key_id,
+        name:        selectedAddress?.full_name ?? name,
+        email:       (profile as any)?.email ?? (user as any)?.email ?? "",
+        phone:       selectedAddress?.phone ?? phone,
+        description: `${items.length} item${items.length > 1 ? "s" : ""} from MakersFlow`,
+      });
+      setShowPayment(true);
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Could not start payment. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── STEP 2: Payment successful → verify → save order ───────────────────────
+
+  async function handlePaymentSuccess(
+    paymentId: string,
+    orderId: string,
+    signature: string,
+  ) {
+    setShowPayment(false);
+    setLoading(true);
+    try {
+      const verification = await verifyRazorpayPayment({
+        razorpay_order_id:   orderId,
+        razorpay_payment_id: paymentId,
+        razorpay_signature:  signature,
+        amount:              finalTotal,
+        user_id:             user!.id,
+        coupon_code:         appliedPromo?.code ?? null,
+        coupon_id:           appliedPromo?.id ?? null,
+        discount_amount:     discount,
+        tax_amount:          taxAmount,
+      });
+
+      if (!verification.success) {
+        Alert.alert(
+          "Verification Failed",
+          "We could not verify your payment. If money was deducted, contact support with ID: " + paymentId,
+        );
+        return;
+      }
+
+      // Look up course flags for all items in one query — the shared
+      // razorpay-webhook parses order.items expecting the web app's shape
+      // ({id, qty, is_course, course_id}); with this shape our orders also get
+      // order_items + course_purchases + stock decrements, exactly like web.
+      const { data: prodFlags } = await supabase
+        .from("products")
+        .select("id, is_course, course_id")
+        .in("id", items.map((i) => i.product.id));
+      const flagMap = new Map((prodFlags ?? []).map((p: any) => [String(p.id), p]));
+
+      const orderItems = items.map((item) => {
+        const f = flagMap.get(String(item.product.id));
+        return {
+          id:        String(item.product.id),
+          title:     item.product.title,
+          price:     item.product.price,
+          qty:       item.quantity,
+          is_course: !!(f?.is_course || f?.course_id),
+          course_id: f?.course_id ? String(f.course_id) : (f?.is_course ? String(item.product.id) : null),
+        };
+      });
+
+      const orderPayload = {
+        user_id:             user!.id,
+        total_amount:        finalTotal,
+        status:              "paid",
+        razorpay_order_id:   orderId,
+        razorpay_payment_id: paymentId,
+        promo_code:          appliedPromo?.code ?? null,
+        discount_amount:     discount,
+        tax_amount:          taxAmount,
+        shipping_address:    hasPhysical && pendingAddress
+          ? {
+              name:    pendingAddress.full_name,
+              address: `${pendingAddress.address_line1}${pendingAddress.address_line2 ? `, ${pendingAddress.address_line2}` : ""}`,
+              city:    `${pendingAddress.city}, ${pendingAddress.state} - ${pendingAddress.postal_code}`,
+              phone:   pendingAddress.phone,
+            }
+          : { name, phone },
+        items: orderItems,
+      };
+
+      // Preferred path: single DB transaction (order + enrollments + promo
+      // counter succeed or fail together). Falls back to the legacy multi-step
+      // writes if the `complete_paid_order` function isn't deployed yet.
+      const { error: rpcError } = await supabase.rpc("complete_paid_order", {
+        p_order: orderPayload,
+        p_product_ids: items.map((i) => String(i.product.id)),
+        p_promo_id: appliedPromo?.id ?? null,
+      });
+
+      if (rpcError) {
+        // Always log WHY the transactional path failed — this was previously
+        // dev-only, which made "order saving failed" impossible to debug.
+        console.error("[Checkout] complete_paid_order RPC failed, using legacy path:", rpcError.message);
+
+        // BUG FIX (PGRST204 "Could not find the 'items' column of 'orders'"):
+        // if the live orders table is missing a column, keep stripping the
+        // column PostgREST names and retrying — a captured payment must NEVER
+        // be lost because of schema drift. Permanent fix: PAYMENT_ORDERS_FIX.sql.
+        let payload: Record<string, any> = { ...orderPayload };
+        let orderError: any = null;
+        for (let attempt = 0; attempt < 6; attempt++) {
+          const { error: insErr } = await supabase.from("orders").insert(payload);
+          orderError = insErr;
+          if (!insErr) break;
+          const match = insErr.code === "PGRST204"
+            ? insErr.message?.match(/'([^']+)' column/)
+            : null;
+          if (match && match[1] in payload) {
+            console.warn(`[Checkout] orders table missing '${match[1]}' — retrying without it`);
+            delete payload[match[1]];
+          } else {
+            break;
+          }
+        }
+
+        if (orderError) throw orderError;
+
+        for (const oi of orderItems) {
+          if (oi.is_course && oi.course_id) {
+            const enrolledAt = new Date();
+            const expiresAt = new Date(enrolledAt.getTime() + 365 * 24 * 60 * 60 * 1000);
+            await supabase.from("enrollments").upsert(
+              {
+                user_id:        user!.id,
+                course_id:      oi.course_id,
+                payment_status: "completed",
+                status:         "active",
+                enrolled_at:    enrolledAt.toISOString(),
+                expires_at:     expiresAt.toISOString(),
+              },
+              { onConflict: "user_id,course_id" },
+            );
+          }
+        }
+
+        // Coupon usage is recorded server-side by verify-razorpay-payment
+        // (coupon_usage insert + increment_coupon_usage RPC) — nothing to do here.
+      }
+
+      try {
+        const ordId = Date.now().toString();
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+          <style>body{font-family:Arial,sans-serif;padding:40px;color:#111}
+          h1{color:#4F46E5}table{width:100%;border-collapse:collapse;margin:20px 0}
+          th,td{padding:10px;border:1px solid #e5e7eb;text-align:left}th{background:#f3f4f6}
+          .total{font-size:18px;font-weight:bold;color:#4F46E5}
+          .footer{margin-top:40px;font-size:12px;color:#9ca3af}</style></head><body>
+          <h1>MAKERSFLOW</h1><p>Tax Invoice</p>
+          <p><strong>Payment ID:</strong> ${paymentId}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+          <p><strong>Customer:</strong> ${name}</p>
+          <table><thead><tr><th>Item</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr></thead><tbody>
+          ${items.map((i) => `<tr><td>${i.product.title}</td><td>₹${i.product.price}</td><td>${i.quantity}</td><td>₹${i.product.price * i.quantity}</td></tr>`).join("")}
+          </tbody></table>
+          <p>Subtotal: ₹${total}</p>
+          <p>GST: ₹${taxAmount}</p>
+          ${shippingFee > 0 ? `<p>Shipping: ₹${shippingFee}</p>` : ''}
+          ${appliedPromo ? `<p style="color:#10B981">Promo (${appliedPromo.code}): -₹${discount}</p>` : ""}
+          <p class="total">Total Paid: ₹${finalTotal}</p>
+          <div class="footer">MakersFlow · Learn · Explore · Excel<br/>Razorpay Payment ID: ${paymentId}</div>
+          </body></html>`;
+
+        if (Platform.OS === "web") {
+          await setInvoicePath(ordId, `html:${html}`);
+        } else {
+          const { uri } = await Print.printToFileAsync({ html, base64: false });
+          const dir = `${FileSystem.documentDirectory}invoices/`;
+          const dirInfo = await FileSystem.getInfoAsync(dir);
+          if (!dirInfo.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          const dest = `${dir}invoice_${ordId}.pdf`;
+          await FileSystem.moveAsync({ from: uri, to: dest });
+          await setInvoicePath(ordId, dest);
+        }
+      } catch (e) {
+        console.error("[Checkout] Invoice error:", e);
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      clearCart();
+
+      Alert.alert(
+        "🎉 Payment Successful!",
+        `₹${finalTotal} paid.\nPayment ID: ${paymentId.slice(-8)}${appliedPromo ? `\nYou saved ₹${discount}!` : ""}`,
+        [
+          { text: "View Orders", onPress: () => router.replace("/store/orders") },
+          { text: "OK", onPress: () => router.replace("/(tabs)") },
+        ],
+      );
+    } catch (err: any) {
+      console.error("[Checkout] Post-payment error:", err);
+      Alert.alert(
+        "Order Error",
+        `Payment was successful (ID: ${paymentId}) but order saving failed. Please contact support.`,
+      );
+    } finally {
+      setLoading(false);
+      setPendingAddress(null);
+      setRazorpayParams(null);
+    }
+  }
+
+  // ── STEP 3: Payment failed ──────────────────────────────────────────────────
+
+  function handlePaymentFailure(reason: string) {
+    setShowPayment(false);
+    setRazorpayParams(null);
+    Alert.alert(
+      "Payment Failed",
+      reason || "Your payment could not be completed. No amount has been deducted.",
+      [{ text: "Try Again" }],
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <View style={[styles.empty, { backgroundColor: colors.background, paddingTop: topPad + 20 }]}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Feather name="arrow-left" size={22} color={colors.foreground} />
+        </Pressable>
+        <Feather name="shopping-bag" size={48} color={colors.mutedForeground} />
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your cart is empty</Text>
+        <Pressable style={[styles.shopBtn, { backgroundColor: colors.primary }]} onPress={() => router.push("/(tabs)/store")}>
+          <Text style={styles.shopBtnText}>Browse Store</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <Pressable onPress={() => router.back()}>
+            <Feather name="arrow-left" size={22} color={colors.foreground} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Checkout</Text>
+          <View style={{ width: 22 }} />
+        </View>
+
+        <ScrollView
+          contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 120 : insets.bottom + 140 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Order Summary</Text>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {items.map((item) => (
+              <View key={item.product.id} style={styles.orderItem}>
+                <Text style={[styles.orderItemName, { color: colors.foreground }]} numberOfLines={1}>
+                  {item.product.title}
+                </Text>
+                <Text style={[styles.orderItemPrice, { color: colors.primary }]}>
+                  ₹{item.product.price} × {item.quantity}
+                </Text>
+                <Pressable onPress={() => removeFromCart(String(item.product.id))} style={styles.removeBtn} hitSlop={8}>
+                  <Feather name="trash-2" size={16} color="#ef4444" />
+                </Pressable>
+              </View>
+            ))}
+            <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.totalLabel, { color: colors.foreground }]}>Subtotal</Text>
+              <Text style={[styles.totalAmount, { color: colors.foreground }]}>₹{total}</Text>
+            </View>
+            {appliedPromo && (
+              <View style={styles.discountRow}>
+                <Text style={styles.discountLabel}>Coupon ({appliedPromo.code}) — {appliedPromo.label}</Text>
+                <Text style={styles.discountAmount}>-₹{discount}</Text>
+              </View>
+            )}
+            <View style={styles.discountRow}>
+              <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>GST</Text>
+              <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>+₹{taxAmount}</Text>
+            </View>
+            {hasPhysical && (
+              <View style={styles.discountRow}>
+                <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>
+                  Shipping{shippingFee === 0 ? " (free)" : isRemoteState ? " (remote area)" : ""}
+                </Text>
+                <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>
+                  {shippingFee === 0 ? "₹0" : `+₹${shippingFee}`}
+                </Text>
+              </View>
+            )}
+            <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total</Text>
+              <Text style={[styles.totalAmount, { color: colors.primary }]}>₹{finalTotal}</Text>
+            </View>
+          </View>
+
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Promo Code</Text>
+          {appliedPromo ? (
+            <View style={[styles.promoApplied, { backgroundColor: "#DCFCE7", borderColor: "#10B981" }]}>
+              <Feather name="check-circle" size={16} color="#10B981" />
+              <Text style={styles.promoAppliedText}>{appliedPromo.code} — {appliedPromo.label} applied!</Text>
+              <Pressable onPress={() => { setAppliedPromo(null); setPromoCode(""); }} hitSlop={8}>
+                <Feather name="x" size={16} color="#6B7280" />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.promoRow}>
+              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: promoError ? "#DC2626" : colors.border, flex: 1 }]}>
+                <TextInput
+                  style={[styles.input, { color: colors.foreground }]}
+                  value={promoCode}
+                  onChangeText={(t) => { setPromoCode(t.toUpperCase()); setPromoError(""); }}
+                  placeholder="Enter promo code"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCapitalize="characters"
+                />
+              </View>
+              <Pressable style={[styles.promoBtn, { backgroundColor: colors.primary, opacity: promoLoading ? 0.7 : 1 }]} onPress={handleApplyPromo} disabled={promoLoading}>
+                {promoLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.promoBtnText}>Apply</Text>}
+              </Pressable>
+            </View>
+          )}
+          {promoError ? <Text style={styles.promoError}>{promoError}</Text> : null}
+
+          {hasPhysical ? (
+            <>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Shipping Address</Text>
+                <Pressable onPress={() => { resetAddressForm(); setShowAddressForm(true); }} style={styles.addAddrBtn}>
+                  <Feather name="plus" size={14} color={colors.primary} />
+                  <Text style={[styles.addAddrBtnText, { color: colors.primary }]}>Add New</Text>
+                </Pressable>
+              </View>
+              {addresses.map((addr) => {
+                const isSelected = String(addr.id) === selectedAddressId;
+                return (
+                  <Pressable key={addr.id} onPress={() => setSelectedAddressId(String(addr.id))}
+                    style={[styles.addressCard, { backgroundColor: colors.card, borderColor: isSelected ? colors.primary : colors.border, borderWidth: isSelected ? 2 : 1 }]}>
+                    <View style={styles.addressCardHeader}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Feather name={isSelected ? "check-circle" : "circle"} size={18} color={isSelected ? colors.primary : colors.mutedForeground} />
+                        <Text style={[styles.addressName, { color: colors.foreground }]}>{addr.full_name}</Text>
+                        {addr.is_default && <View style={styles.defaultBadge}><Text style={styles.defaultBadgeText}>Default</Text></View>}
+                      </View>
+                      <Pressable onPress={() => handleEditAddress(addr)} hitSlop={8}>
+                        <Feather name="edit-2" size={14} color={colors.primary} />
+                      </Pressable>
+                    </View>
+                    <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ""}</Text>
+                    <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.city}, {addr.state} - {addr.postal_code}</Text>
+                    <Text style={[styles.addressText, { color: colors.mutedForeground }]}>Ph: {addr.phone}</Text>
+                  </Pressable>
+                );
+              })}
+              {addresses.length === 0 && (
+                <View style={[styles.emptyAddressesCard, { borderColor: colors.border }]}>
+                  <Feather name="map-pin" size={24} color={colors.mutedForeground} style={{ marginBottom: 4 }} />
+                  <Text style={[styles.emptyAddressesText, { color: colors.mutedForeground }]}>No saved addresses. Please add a shipping address.</Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Contact Details</Text>
+              {[
+                { label: "Full Name", value: name, setter: setName, placeholder: "Your full name", keyboard: "default" as const },
+                { label: "Phone", value: phone, setter: setPhone, placeholder: "10-digit mobile number", keyboard: "phone-pad" as const },
+              ].map((field) => (
+                <View key={field.label} style={styles.fieldGroup}>
+                  <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground }]}
+                      value={field.value}
+                      onChangeText={field.setter}
+                      placeholder={field.placeholder}
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType={field.keyboard}
+                    />
+                  </View>
+                </View>
+              ))}
+            </>
+          )}
+
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment</Text>
+          <View style={[styles.paymentCard, { backgroundColor: colors.accent, borderColor: colors.primary }]}>
+            <Feather name="credit-card" size={20} color={colors.primary} />
+            <Text style={[styles.paymentText, { color: colors.primary }]}>UPI / Debit / Credit Card (Razorpay)</Text>
+            <Feather name="lock" size={16} color={colors.primary} />
+          </View>
+        </ScrollView>
+
+        <View style={[styles.cta, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === "web" ? 20 : insets.bottom + 8 }]}>
+          <Pressable style={[styles.orderBtn, { backgroundColor: colors.primary }]} onPress={handlePay} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Feather name="credit-card" size={18} color="#FFF" />
+                <Text style={styles.orderBtnText}>Pay ₹{finalTotal} · Razorpay</Text>
+                <Feather name="arrow-right" size={18} color="#FFF" />
+              </>
+            )}
+          </Pressable>
+          <Text style={[styles.secureNote, { color: colors.mutedForeground }]}>🔒 Secured by Razorpay · 100% Safe</Text>
+        </View>
+      </View>
+
+      <RazorpayWebView
+        visible={showPayment}
+        params={razorpayParams}
+        onSuccess={handlePaymentSuccess}
+        onFailure={handlePaymentFailure}
+        onDismiss={() => {
+          setShowPayment(false);
+          setRazorpayParams(null);
+        }}
+      />
+
+      <Modal visible={showAddressForm} transparent animationType="slide" onRequestClose={() => setShowAddressForm(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>{editingAddressId ? "Edit Address" : "Add New Address"}</Text>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                {[
+                  { label: "Full Name", value: formFullName, setter: setFormFullName, placeholder: "e.g. John Doe" },
+                  { label: "Address Line 1", value: formAddressLine1, setter: setFormAddressLine1, placeholder: "Flat / House No / Street" },
+                  { label: "Address Line 2 (Optional)", value: formAddressLine2, setter: setFormAddressLine2, placeholder: "Area / Landmark" },
+                  { label: "City", value: formCity, setter: setFormCity, placeholder: "e.g. Mumbai" },
+                  { label: "State", value: formState, setter: setFormState, placeholder: "e.g. Maharashtra" },
+                  { label: "Pincode", value: formPostalCode, setter: setFormPostalCode, placeholder: "6-digit pincode", keyboard: "numeric" as const },
+                  { label: "Phone", value: formPhone, setter: setFormPhone, placeholder: "10-digit phone", keyboard: "phone-pad" as const },
+                ].map((field) => (
+                  <View key={field.label} style={styles.fieldGroup}>
+                    <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <TextInput style={[styles.input, { color: colors.foreground }]} value={field.value} onChangeText={field.setter} placeholder={field.placeholder} placeholderTextColor={colors.mutedForeground} keyboardType={(field as any).keyboard ?? "default"} />
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={styles.modalBtnRow}>
+                <Pressable style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleSaveAddress}>
+                  <Text style={styles.modalBtnText}>Save</Text>
+                </Pressable>
+                <Pressable style={[styles.modalBtn, { backgroundColor: colors.muted }]} onPress={() => { setShowAddressForm(false); resetAddressForm(); }}>
+                  <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  empty: { flex: 1, alignItems: "center", paddingHorizontal: 24, gap: 16 },
+  backBtn: { alignSelf: "flex-start", marginBottom: 32 },
+  emptyTitle: { fontSize: 20, fontWeight: "700" },
+  shopBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
+  shopBtnText: { fontSize: 15, fontWeight: "700", color: "#FFF" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1 },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
+  sectionTitle: { fontSize: 17, fontWeight: "700", marginTop: 8, marginBottom: 10 },
+  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10, marginBottom: 4 },
+  orderItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  removeBtn: { padding: 4 },
+  orderItemName: { fontSize: 14, flex: 1 },
+  orderItemPrice: { fontSize: 14, fontWeight: "600" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, borderTopWidth: 1, marginTop: 4 },
+  totalLabel: { fontSize: 16, fontWeight: "700" },
+  totalAmount: { fontSize: 18, fontWeight: "800" },
+  fieldGroup: { gap: 6, marginBottom: 12 },
+  label: { fontSize: 14, fontWeight: "600" },
+  inputWrapper: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  input: { fontSize: 15 },
+  paymentCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 12, borderWidth: 2 },
+  paymentText: { flex: 1, fontSize: 14, fontWeight: "600" },
+  cta: { padding: 16, borderTopWidth: 1 },
+  orderBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: 14 },
+  orderBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  secureNote: { textAlign: "center", fontSize: 11, marginTop: 6 },
+  promoRow: { flexDirection: "row", gap: 10, alignItems: "center", marginBottom: 4 },
+  promoBtn: { paddingHorizontal: 18, paddingVertical: 14, borderRadius: 12 },
+  promoBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  promoApplied: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 4 },
+  promoAppliedText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#065F46" },
+  promoError: { fontSize: 12, color: "#DC2626", marginTop: 4, marginBottom: 8 },
+  discountRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
+  discountLabel: { fontSize: 13, color: "#10B981", fontWeight: "600" },
+  discountAmount: { fontSize: 13, color: "#10B981", fontWeight: "700" },
+  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8, marginBottom: 10 },
+  addAddrBtn: { flexDirection: "row", alignItems: "center", gap: 4, padding: 6 },
+  addAddrBtnText: { fontSize: 14, fontWeight: "700" },
+  addressCard: { borderRadius: 14, padding: 14, marginBottom: 10, gap: 4 },
+  addressCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+  addressName: { fontSize: 15, fontWeight: "700" },
+  defaultBadge: { backgroundColor: "#DCFCE7", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  defaultBadgeText: { color: "#16A34A", fontSize: 10, fontWeight: "700" },
+  addressText: { fontSize: 13, lineHeight: 18 },
+  emptyAddressesCard: { borderRadius: 14, borderWidth: 1, borderStyle: "dashed", padding: 24, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  emptyAddressesText: { fontSize: 13, textAlign: "center", lineHeight: 18 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
+  modalContent: { width: "100%", maxWidth: 400, maxHeight: "85%", borderRadius: 20, borderWidth: 1, padding: 24, gap: 16 },
+  modalTitle: { fontSize: 18, fontWeight: "700" },
+  modalBtnRow: { flexDirection: "row", gap: 12, marginTop: 8 },
+  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  modalBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+});

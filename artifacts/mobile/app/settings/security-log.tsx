@@ -1,0 +1,112 @@
+import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/context/AuthContextSupabase';
+import { supabase } from '@/lib/supabase';
+
+export default function SecurityLogScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const [events, setEvents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      if (!user?.id) { setIsLoading(false); return; }
+      const { data } = await supabase
+        .from('login_events')
+        .select('id, device_info, created_at, is_flagged')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setEvents(data ?? []);
+      setIsLoading(false);
+    }
+    load();
+  }, [user?.id]);
+
+  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Feather name="arrow-left" size={20} color={colors.foreground} />
+        </Pressable>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Login Activity</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
+        </View>
+      ) : events.length === 0 ? (
+        <View style={styles.center}>
+          <Feather name="shield" size={40} color={colors.mutedForeground} />
+          <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No login events yet</Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
+          {events.map((e) => {
+            const date = new Date(e.created_at).toLocaleString('en-IN', {
+              day: 'numeric', month: 'short', year: 'numeric',
+              hour: '2-digit', minute: '2-digit',
+            });
+            return (
+              <View
+                key={e.id}
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: e.is_flagged ? '#FEF2F2' : colors.card,
+                    borderColor: e.is_flagged ? '#FCA5A5' : colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.cardRow}>
+                  <Feather
+                    name={e.is_flagged ? 'alert-triangle' : 'check-circle'}
+                    size={18}
+                    color={e.is_flagged ? '#DC2626' : '#10B981'}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.deviceText, { color: e.is_flagged ? '#DC2626' : colors.foreground }]}>
+                      {e.device_info || 'Unknown device'}
+                    </Text>
+                    <Text style={[styles.dateText, { color: colors.mutedForeground }]}>{date}</Text>
+                  </View>
+                  {e.is_flagged && (
+                    <View style={styles.flagBadge}>
+                      <Text style={styles.flagText}>Suspicious</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  emptyText: { fontSize: 15 },
+  card: { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 10 },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  deviceText: { fontSize: 14, fontWeight: '600' },
+  dateText: { fontSize: 12, marginTop: 2 },
+  flagBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  flagText: { fontSize: 11, fontWeight: '700', color: '#DC2626' },
+});

@@ -1,0 +1,339 @@
+# REPLIT MASTER PROMPT FOR EDODWAJA
+
+You are a Senior Product Designer, Senior UX Architect, Senior Mobile App Designer, Senior Frontend Architect, and Figma Design System Specialist.
+
+Your task is to create a complete production-ready UI/UX architecture and workflow for an educational platform called EDODWAJA.
+
+====================================================
+PROJECT OVERVIEW
+================
+
+Edodwaja is a student-focused educational platform containing:
+
+1. LMS (Recorded Video Courses)
+2. Premium Learning Resources
+3. Digital Products
+4. Physical Educational Kits
+5. Educational News Feed
+6. Student Progress Tracking
+7. Quiz System
+8. Student Profile Management
+
+Target Users:
+
+* Students
+
+Expected Users:
+
+* 500 to 5000
+
+Platforms:
+
+* Web Application
+* Android Application
+
+====================================================
+TECH STACK
+==========
+
+Web:
+
+* Next.js
+* TypeScript
+* Tailwind CSS
+* Shadcn UI
+
+Mobile:
+
+* React Native
+* Expo
+* NativeWind
+
+Backend:
+
+* Node.js
+* Express.js
+
+Database:
+
+* Hostinger MySQL
+
+Authentication:
+
+* JWT
+* Google Login
+
+Video Hosting:
+
+* YouTube Unlisted
+
+File Storage:
+
+* Hostinger Storage
+
+====================================================
+PRIMARY NAVIGATION
+==================
+
+Home
+
+Courses
+
+Store
+
+News
+
+Profile
+
+====================================================
+CORE MODULES
+============
+
+AUTHENTICATION
+
+* Login
+* Register
+* Google Login
+* Forgot Password
+
+COURSES
+
+* Course Listing
+* Search Courses
+* Categories
+* Course Details
+* Enroll Course
+* Purchase Course
+
+LEARNING SPACE
+
+* Video Lessons
+* Course Modules
+* Resources
+* Progress Tracking
+
+QUIZ
+
+* Quiz Attempt
+* Quiz Result
+
+STORE
+
+Physical Products:
+
+* Robotics Kits
+* AI Kits
+* Electronics Kits
+
+Digital Products:
+
+* Notes
+* Question Banks
+* Premium Resources
+
+NEWS
+
+* Latest News
+* Educational Articles
+
+PROFILE
+
+* User Information
+* Purchased Courses
+* Purchased Products
+* Progress Tracking
+
+====================================================
+TASKS
+=====
+
+1. Create complete user journeys.
+
+2. Create detailed user flows.
+
+3. Generate complete information architecture.
+
+4. Create low-fidelity wireframes.
+
+5. Create high-fidelity screen specifications.
+
+6. Design a scalable design system.
+
+7. Define reusable components.
+
+8. Define responsive behavior.
+
+9. Create accessibility standards.
+
+10. Create interaction patterns.
+
+11. Define loading states.
+
+12. Define error states.
+
+13. Define empty states.
+
+14. Define onboarding experience.
+
+15. Define dashboard experience.
+
+16. Define learning experience.
+
+17. Define purchase experience.
+
+18. Define profile experience.
+
+====================================================
+FIGMA DELIVERABLES
+==================
+
+Generate Figma-ready structure.
+
+Page Structure:
+
+01 Foundations
+
+02 Design System
+
+03 Components
+
+04 Mobile Screens
+
+05 Web Screens
+
+06 User Flows
+
+07 Wireframes
+
+08 Prototype Flow
+
+09 Developer Handoff
+
+====================================================
+DESIGN TOKENS
+=============
+
+Create:
+
+Colors
+
+Typography
+
+Spacing
+
+Border Radius
+
+Elevation
+
+Icons
+
+Buttons
+
+Inputs
+
+Cards
+
+Navigation
+
+Badges
+
+Chips
+
+Progress Indicators
+
+Modals
+
+Bottom Sheets
+
+Tables
+
+====================================================
+SCREENS REQUIRED
+================
+
+Authentication
+
+* Splash
+* Login
+* Register
+* Forgot Password
+
+Home
+
+* Dashboard
+* Continue Learning
+* Featured Courses
+* Featured Products
+* Latest News
+
+Courses
+
+* Course Listing
+* Course Details
+* Learning Screen
+
+Quiz
+
+* Quiz Screen
+* Quiz Result
+
+Store
+
+* Product Listing
+* Product Details
+* Checkout
+* Orders
+
+News
+
+* News Listing
+* News Details
+
+Profile
+
+* Profile Overview
+* Edit Profile
+
+Settings
+
+* Security
+* Notifications
+* Help
+
+====================================================
+OUTPUT FORMAT
+=============
+
+Return:
+
+1. User Journey Maps
+
+2. Complete Information Architecture
+
+3. Screen-by-Screen Specifications
+
+4. Component Library Specifications
+
+5. Mobile Navigation Architecture
+
+6. Web Navigation Architecture
+
+7. Design System Specifications
+
+8. Accessibility Checklist
+
+9. Missing Features Analysis
+
+10. MVP Features
+
+11. Future Features
+
+12. Figma Organization Structure
+
+13. Reusable Component Hierarchy
+
+14. Frontend Folder Structure
+
+15. Suggested Project Structure
+
+Generate production-level output suitable for direct implementation by UI/UX designers, frontend developers, and product managers.

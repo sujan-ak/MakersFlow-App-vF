@@ -1,0 +1,743 @@
+import { Feather, Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContextSupabase";
+import { useProgress } from "@/context/ProgressContext";
+import { useColors } from "@/hooks/useColors";
+import { supabase } from "@/lib/supabase";
+import { getCourseModules } from "@/services/courseDataProvider";
+
+interface MenuItem {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+  iconLib?: "feather" | "ionicons";
+}
+
+interface CompletedCourse {
+  courseId: string;
+  courseTitle: string;
+  completedAt: string;
+}
+
+export default function ProfileScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { user, logout } = useAuth();
+  const { courseProgress } = useProgress();
+
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const enrolledCourses = Array.from(courseProgress.values());
+  const avgProgress =
+    enrolledCourses.length > 0
+      ? Math.round(enrolledCourses.reduce((s, c) => s + c.progress, 0) / enrolledCourses.length)
+      : 0;
+
+  const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
+  const [certsLoading, setCertsLoading] = useState(true);
+
+  // Account Deletion State
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<"password" | "confirm">("password");
+  const [deleteError, setDeleteError] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      async function loadCompletedCourses() {
+        if (!user?.id) {
+          setCertsLoading(false);
+          return;
+        }
+        setCertsLoading(true);
+        try {
+          const { data: enrollments } = await supabase
+            .from("enrollments")
+            .select("course_id, completed_at, enrolled_at, courses(title)")
+            .eq("user_id", user.id);
+
+          if (!enrollments) { setCertsLoading(false); return; }
+
+          const { data: progressData } = await supabase
+            .from("lesson_progress")
+            .select("course_id, lesson_id, is_completed")
+            .eq("user_id", user.id);
+
+          const progressList = progressData ?? [];
+          const results: CompletedCourse[] = [];
+
+          for (const enr of enrollments) {
+            const courseId = String(enr.course_id);
+            const courseTitle = (enr.courses as any)?.title ?? "Unknown Course";
+
+            if (enr.completed_at) {
+              results.push({ courseId, courseTitle, completedAt: enr.completed_at });
+              continue;
+            }
+
+            const modules = await getCourseModules(courseId);
+            const allLessonIds = modules.flatMap((m: any) =>
+              (m.lessons ?? []).map((l: any) => String(l.id))
+            );
+            if (allLessonIds.length === 0) continue;
+
+            const completedIds = progressList
+              .filter((p) => p.is_completed && String(p.course_id) === courseId)
+              .map((p) => String(p.lesson_id));
+
+            const allDone = allLessonIds.every((id: string) => completedIds.includes(id));
+            if (allDone) {
+              results.push({
+                courseId,
+                courseTitle,
+                completedAt: enr.enrolled_at ?? new Date().toISOString(),
+              });
+            }
+          }
+          setCompletedCourses(results);
+        } catch (err) {
+          console.error("[Profile] loadCompletedCourses error:", err);
+        } finally {
+          setCertsLoading(false);
+        }
+      }
+      loadCompletedCourses();
+    }, [user?.id])
+  );
+
+  function handleLogout() {
+    if (Platform.OS === "web") {
+      const confirmed = window.confirm("Are you sure you want to sign out?");
+      if (confirmed) {
+        logout().then(() => { window.location.href = "/"; }).catch(() => {
+          alert("Failed to sign out. Please try again.");
+        });
+      }
+    } else {
+      Alert.alert(
+        "Sign Out",
+        "Are you sure you want to sign out?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Sign Out",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                await logout();
+                router.replace("/(auth)/login");
+              } catch (error) {
+                console.error("Logout error:", error);
+              }
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }
+
+  const handleDeleteRequest = () => {
+    setDeletePassword("");
+    setDeleteError("");
+    setDeleteStep("password");
+    setDeleteModalVisible(true);
+  };
+
+  const handleVerifyPassword = async () => {
+    if (!deletePassword) {
+      setDeleteError("Please enter your password");
+      return;
+    }
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user?.email ?? "",
+        password: deletePassword,
+      });
+      if (error) throw error;
+      setDeleteStep("confirm");
+    } catch (err: any) {
+      setDeleteError(err.message || "Incorrect password");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      // 1. Delete avatar from storage if it exists and is hosted on Supabase
+      if (user?.avatar && user.avatar.includes("supabase.co") && user.avatar.includes("avatars")) {
+        const urlParts = user.avatar.split("/");
+        const filename = urlParts[urlParts.length - 1];
+        await supabase.storage.from("avatars").remove([filename]);
+      }
+
+      // 2. Call RPC to delete account from auth.users (will cascade delete profiles etc.)
+      const { error: rpcError } = await supabase.rpc("delete_account");
+      if (rpcError) throw rpcError;
+
+      // 3. Log out and navigate away
+      setDeleteModalVisible(false);
+      await logout();
+      router.replace("/(auth)/login");
+    } catch (err: any) {
+      console.error("Delete account error:", err);
+      setDeleteError(err.message || "Failed to delete account. Please contact support.");
+      setIsDeleting(false);
+    }
+  };
+
+  const learningMenuItems: MenuItem[] = [
+    { icon: "book-open", label: "My Courses", onPress: () => router.push("/(tabs)/courses") },
+    { icon: "heart", label: "Favorites & Watch Later", onPress: () => router.push("/favorites") },
+    { icon: "cart-outline", label: "Store", onPress: () => router.push("/(tabs)/store"), iconLib: "ionicons" as const },
+    { icon: "cart-outline", label: "My Orders", onPress: () => router.push("/store/orders"), iconLib: "ionicons" as const },
+  ];
+
+  const otherSections: { title: string; items: MenuItem[] }[] = [
+    {
+      title: "Account",
+      items: [
+        { icon: "user", label: "Edit Profile", onPress: () => router.push("/profile/edit") },
+        { icon: "settings", label: "Settings", onPress: () => router.push("/settings") },
+        { icon: "bell", label: "Notifications", onPress: () => router.push("/settings/notifications") },
+        { icon: "shield", label: "Privacy Policy", onPress: () => router.push("/settings/privacy-policy") },
+        { icon: "file-text", label: "Terms of Service", onPress: () => router.push("/settings/terms-of-service") },
+      ],
+    },
+    {
+      title: "Support",
+      items: [
+        { icon: "help-circle", label: "Help & Support", onPress: () => router.push("/settings/help") },
+        { icon: "log-out", label: "Sign Out", onPress: handleLogout, danger: true },
+        { icon: "trash-2", label: "Delete Account", onPress: handleDeleteRequest, danger: true },
+      ],
+    },
+  ];
+
+  const initials = user?.name
+    ?.split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) ?? "S";
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+  return (
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={[styles.pageTitle, { color: colors.foreground }]}>Profile</Text>
+
+      {/* Avatar card */}
+      <View style={[styles.profileCard, { backgroundColor: colors.primary }]}>
+        {user?.avatar ? (
+          <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.initials}>{initials}</Text>
+          </View>
+        )}
+        <Text style={styles.name}>{user?.name ?? "Student"}</Text>
+        <Text style={styles.email}>{user?.email}</Text>
+        <View style={styles.badges}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{user?.grade ?? "Student"}</Text>
+          </View>
+          {user?.school ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{user.school}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Stats */}
+      <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.stat}>
+          <Text style={[styles.statNum, { color: colors.foreground }]}>{enrolledCourses.length}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Enrolled</Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.stat}>
+          {avgProgress === 0 ? (
+            <>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>-</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Start Now</Text>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>{avgProgress}%</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Avg Progress</Text>
+            </>
+          )}
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.stat}>
+          <Text style={[styles.statNum, { color: colors.foreground }]}>{completedCourses.length}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Certificates</Text>
+        </View>
+      </View>
+
+      {/* Learning section */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>Learning</Text>
+        <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {learningMenuItems.map((item, idx) => (
+            <React.Fragment key={item.label}>
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+                onPress={item.onPress}
+              >
+                <View style={[styles.menuIconBox, { backgroundColor: colors.accent }]}>
+                  {item.iconLib === "ionicons" ? (
+                    <Ionicons name={item.icon as any} size={16} color={colors.primary} />
+                  ) : (
+                    <Feather name={item.icon as any} size={16} color={colors.primary} />
+                  )}
+                </View>
+                <Text style={[styles.menuLabel, { color: colors.foreground }]}>{item.label}</Text>
+                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              </Pressable>
+              {idx < learningMenuItems.length - 1 && (
+                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              )}
+            </React.Fragment>
+          ))}
+        </View>
+      </View>
+
+      {/* Achievements & Certificates — inline */}
+      <View style={styles.section}>
+        <View style={styles.achievementsHeader}>
+          <View style={styles.achievementsTitleRow}>
+            <Feather name="award" size={16} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginBottom: 0 }]}>
+              ACHIEVEMENTS & CERTIFICATES
+            </Text>
+          </View>
+          {completedCourses.length > 0 && (
+            <View style={[styles.certCountBadge, { backgroundColor: "#10B981" }]}>
+              <Text style={styles.certCountText}>{completedCourses.length}</Text>
+            </View>
+          )}
+        </View>
+
+        {certsLoading ? (
+          <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={{ marginTop: 8, fontSize: 13, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
+          </View>
+        ) : completedCourses.length === 0 ? (
+          <View style={[styles.certsCard, styles.emptyCertsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="award" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
+            <Text style={[styles.emptyCertsText, { color: colors.mutedForeground }]}>
+              No certificates yet
+            </Text>
+            <Text style={[styles.emptyCertsSub, { color: colors.mutedForeground }]}>
+              Complete a course to earn your certificate
+            </Text>
+            <Pressable
+              style={[styles.browseCourseBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/(tabs)/courses")}
+            >
+              <Text style={styles.browseCourseBtnText}>Browse Courses</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {completedCourses.map((course, idx) => (
+              <React.Fragment key={course.courseId}>
+                <View style={styles.certRow}>
+                  {/* Medal icon */}
+                  <View style={styles.medalBox}>
+                    
+                  </View>
+
+                  {/* Course info */}
+                  <View style={styles.certInfo}>
+                    <Text style={[styles.certCourseTitle, { color: colors.foreground }]} numberOfLines={2}>
+                      {course.courseTitle}
+                    </Text>
+                    <Text style={[styles.certDate, { color: colors.mutedForeground }]}>
+                      Completed · {formatDate(course.completedAt)}
+                    </Text>
+                  </View>
+
+                  {/* Download button */}
+                  <Pressable
+                    style={[styles.downloadBtn, { backgroundColor: "#10B981" }]}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/certificate",
+                        params: {
+                          courseName: course.courseTitle,
+                          studentName: user?.name ?? "",
+                          completionDate: course.completedAt,
+                        },
+                      })
+                    }
+                  >
+                    <Feather name="download" size={14} color="#FFF" />
+                  </Pressable>
+                </View>
+                {idx < completedCourses.length - 1 && (
+                  <View style={[styles.menuDivider, { backgroundColor: colors.border, marginLeft: 60 }]} />
+                )}
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {/* Other sections */}
+      {otherSections.map((section) => (
+        <View key={section.title} style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{section.title}</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {section.items.map((item, idx) => (
+              <React.Fragment key={item.label}>
+                <Pressable
+                  style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+                  onPress={item.onPress}
+                >
+                  <View style={[styles.menuIconBox, { backgroundColor: item.danger ? "#FEE2E2" : colors.accent }]}>
+                    {item.iconLib === "ionicons" ? (
+                      <Ionicons name={item.icon as any} size={16} color={item.danger ? "#DC2626" : colors.primary} />
+                    ) : (
+                      <Feather name={item.icon as any} size={16} color={item.danger ? "#DC2626" : colors.primary} />
+                    )}
+                  </View>
+                  <Text style={[styles.menuLabel, { color: item.danger ? "#DC2626" : colors.foreground }]}>
+                    {item.label}
+                  </Text>
+                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                </Pressable>
+                {idx < section.items.length - 1 && (
+                  <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                )}
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+      ))}
+
+      <Text style={[styles.version, { color: colors.mutedForeground }]}>
+        MAKERSFLOW v1.0.0 · Member since {user?.joinedDate}
+      </Text>
+
+      {/* Account Deletion Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isDeleting && setDeleteModalVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            {deleteStep === "password" ? (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>Verify Identity</Text>
+                  <Pressable onPress={() => setDeleteModalVisible(false)} disabled={isDeleting}>
+                    <Feather name="x" size={24} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+                  Please re-enter your password to continue with account deletion.
+                </Text>
+                
+                <TextInput
+                  style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                  placeholder="Password"
+                  placeholderTextColor={colors.mutedForeground}
+                  secureTextEntry
+                  value={deletePassword}
+                  onChangeText={setDeletePassword}
+                  autoCapitalize="none"
+                  editable={!isDeleting}
+                />
+                
+                {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
+                
+                <Pressable
+                  style={[styles.modalBtn, { backgroundColor: colors.primary, opacity: isDeleting ? 0.7 : 1 }]}
+                  onPress={handleVerifyPassword}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalBtnText}>Verify Password</Text>}
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: "#DC2626" }]}>Permanently Delete Account?</Text>
+                  <Pressable onPress={() => setDeleteModalVisible(false)} disabled={isDeleting}>
+                    <Feather name="x" size={24} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+                <Text style={[styles.modalSubtitle, { color: colors.foreground }]}>
+                  This action is <Text style={{ fontWeight: "700" }}>irreversible</Text>. All your data, including progress, courses, and settings will be permanently removed from our servers.
+                </Text>
+                
+                {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
+                
+                <View style={styles.modalBtnRow}>
+                  <Pressable
+                    style={[styles.modalBtnHalf, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+                    onPress={() => setDeleteModalVisible(false)}
+                    disabled={isDeleting}
+                  >
+                    <Text style={[styles.modalBtnHalfText, { color: colors.foreground }]}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.modalBtnHalf, { backgroundColor: "#DC2626", opacity: isDeleting ? 0.7 : 1 }]}
+                    onPress={handleConfirmDelete}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.modalBtnHalfText, { color: "#FFF" }]}>Yes, Delete</Text>}
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  pageTitle: { fontSize: 26, fontWeight: "800", paddingHorizontal: 20, marginBottom: 16 },
+  profileCard: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  avatarImage: { width: 72, height: 72, borderRadius: 36, marginBottom: 12 },
+  initials: { fontSize: 28, fontWeight: "800", color: "#FFF" },
+  name: { fontSize: 20, fontWeight: "800", color: "#FFF", marginBottom: 2 },
+  email: { fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 12 },
+  badges: { flexDirection: "row", gap: 8 },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  badgeText: { fontSize: 12, fontWeight: "600", color: "#FFF" },
+  statsRow: {
+    marginHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    paddingVertical: 16,
+    marginBottom: 24,
+  },
+  stat: { flex: 1, alignItems: "center" },
+  statNum: { fontSize: 20, fontWeight: "800" },
+  statLabel: { fontSize: 12, marginTop: 2 },
+  statDivider: { width: 1 },
+  section: { paddingHorizontal: 20, marginBottom: 20 },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  menuCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  menuIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuLabel: { flex: 1, fontSize: 15, fontWeight: "500" },
+  menuDivider: { height: 1, marginLeft: 62 },
+  version: { textAlign: "center", fontSize: 12, paddingBottom: 8 },
+
+  // Achievements section
+  achievementsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  achievementsTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  certCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  certCountText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFF",
+  },
+  certsCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  emptyCertsCard: {
+    padding: 28,
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyCertsText: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  emptyCertsSub: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  browseCourseBtn: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  browseCourseBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  certRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  medalBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#FFFBEB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  medalEmoji: { fontSize: 22 },
+  certInfo: { flex: 1, gap: 3 },
+  certCourseTitle: { fontSize: 14, fontWeight: "700", lineHeight: 19 },
+  certDate: { fontSize: 12 },
+  downloadBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "700" },
+  modalSubtitle: { fontSize: 15, lineHeight: 22, marginBottom: 20 },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  errorText: { color: "#DC2626", fontSize: 14, marginBottom: 16 },
+  modalBtn: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  modalBtnRow: { flexDirection: "row", gap: 12 },
+  modalBtnHalf: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalBtnHalfText: { fontSize: 16, fontWeight: "600" },
+});
