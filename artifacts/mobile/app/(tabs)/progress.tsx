@@ -11,6 +11,7 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useProgress } from "@/context/ProgressContext";
@@ -49,6 +50,8 @@ export default function ProgressScreen() {
 
   const [courses, setCourses] = useState<any[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [enrolledCount, setEnrolledCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>({
     totalCoursesEnrolled: 0,
     coursesCompleted: 0,
@@ -61,183 +64,200 @@ export default function ProgressScreen() {
     recentlyCompleted: [],
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      async function loadStatsAndCourses() {
-        if (!user?.id) {
-          setIsLoadingCourses(false);
-          return;
+  const loadStatsAndCourses = useCallback(async (isRefreshing = false) => {
+    if (!user?.id) {
+      setIsLoadingCourses(false);
+      return;
+    }
+    if (!isRefreshing) {
+      setIsLoadingCourses(true);
+    }
+    try {
+      const all = await fetchAllCourses();
+      const mapped = all.map((c: any) => ({
+        id: String(c.id),
+        title: c.title,
+        category: c.category || "General",
+        level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
+        price: c.price || 0,
+        isFree: c.is_free,
+        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+        instructor: "MakersFlow Instructor",
+        rating: 4.8,
+        reviews: 120,
+        description: c.description || "",
+        modules: []
+      }));
+      setCourses(mapped);
+
+      // Fetch enrollments
+      const enrollments = await fetchEnrolledCourses(user.id);
+
+      // BUG 3 fix: Query exact enrolled count from supabase
+      const { count } = await supabase
+        .from('enrollments')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      
+      const totalCoursesEnrolled = count ?? 0;
+      setEnrolledCount(totalCoursesEnrolled);
+
+      // Fetch lesson progress
+      const { data: progressData, error: progressError } = await supabase
+        .from('lesson_progress')
+        .select('course_id, lesson_id, time_spent_secs, is_completed, last_watched_at')
+        .eq('user_id', user.id);
+
+      if (progressError) throw progressError;
+      const progressList = progressData ?? [];
+
+      // Calculate completed courses count
+      let completedCoursesCount = 0;
+      let notStartedCoursesCount = 0;
+
+      const courseProgressListMap = new Map<string, any[]>();
+      progressList.forEach((p) => {
+        const cId = String(p.course_id);
+        if (!courseProgressListMap.has(cId)) {
+          courseProgressListMap.set(cId, []);
         }
-        setIsLoadingCourses(true);
-        try {
-          const all = await fetchAllCourses();
-          const mapped = all.map((c: any) => ({
-            id: String(c.id),
-            title: c.title,
-            category: c.category || "General",
-            level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
-            price: c.price || 0,
-            isFree: c.is_free,
-            thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-            instructor: "MakersFlow Instructor",
-            rating: 4.8,
-            reviews: 120,
-            description: c.description || "",
-            modules: []
-          }));
-          setCourses(mapped);
+        courseProgressListMap.get(cId)!.push(p);
+      });
 
-          // Fetch enrollments
-          const enrollments = await fetchEnrolledCourses(user.id);
+      const moduleCache = new Map<string, any[]>();
+      const getCachedModules = async (courseId: string) => {
+        if (!moduleCache.has(courseId)) {
+          moduleCache.set(courseId, await getCourseModules(courseId));
+        }
+        return moduleCache.get(courseId);
+      };
 
-          // Fetch lesson progress
-          const { data: progressData, error: progressError } = await supabase
-            .from('lesson_progress')
-            .select('course_id, lesson_id, time_spent_secs, is_completed, last_watched_at')
-            .eq('user_id', user.id);
-
-          if (progressError) throw progressError;
-          const progressList = progressData ?? [];
-
-          // Calculate completed courses count
-          let completedCoursesCount = 0;
-          let notStartedCoursesCount = 0;
-
-          const courseProgressListMap = new Map<string, any[]>();
-          progressList.forEach((p) => {
-            const cId = String(p.course_id);
-            if (!courseProgressListMap.has(cId)) {
-              courseProgressListMap.set(cId, []);
-            }
-            courseProgressListMap.get(cId)!.push(p);
-          });
-
-          const moduleCache = new Map<string, any[]>();
-          const getCachedModules = async (courseId: string) => {
-            if (!moduleCache.has(courseId)) {
-              moduleCache.set(courseId, await getCourseModules(courseId));
-            }
-            return moduleCache.get(courseId);
-          };
-
-          for (const enr of enrollments) {
-            if (enr.completed_at) {
+      for (const enr of enrollments) {
+        if (enr.completed_at) {
+          completedCoursesCount++;
+        } else {
+          const courseId = String(enr.course_id);
+          const courseModules = await getCachedModules(courseId) || [];
+          const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
+          
+          if (lessonIds.length > 0) {
+            const courseProg = courseProgressListMap.get(courseId) ?? [];
+            const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
+            if (completedLessons === lessonIds.length) {
               completedCoursesCount++;
-            } else {
-              const courseId = String(enr.course_id);
-              const courseModules = await getCachedModules(courseId) || [];
-              const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
-              
-              if (lessonIds.length > 0) {
-                const courseProg = courseProgressListMap.get(courseId) ?? [];
-                const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
-                if (completedLessons === lessonIds.length) {
-                  completedCoursesCount++;
-                } else if (completedLessons === 0 && courseProg.length === 0) {
-                  notStartedCoursesCount++;
-                }
-              } else {
-                notStartedCoursesCount++;
-              }
+            } else if (completedLessons === 0 && courseProg.length === 0) {
+              notStartedCoursesCount++;
             }
+          } else {
+            notStartedCoursesCount++;
           }
-
-          const totalCoursesEnrolled = enrollments.length;
-          const coursesInProgress = Math.max(0, totalCoursesEnrolled - completedCoursesCount - notStartedCoursesCount);
-          const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
-
-          // Calculate average progress
-          let progressSum = 0;
-          for (const enr of enrollments) {
-            const courseId = String(enr.course_id);
-            const courseModules = await getCachedModules(courseId) || [];
-            const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
-            if (lessonIds.length > 0) {
-              const courseProg = courseProgressListMap.get(courseId) ?? [];
-              const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
-              progressSum += Math.round((completedLessons / lessonIds.length) * 100);
-            }
-          }
-          const averageProgress = totalCoursesEnrolled > 0 ? Math.round(progressSum / totalCoursesEnrolled) : 0;
-
-          // Calculate total time spent
-          const totalTimeSpent = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
-
-          // Calculate learning streak
-          const learningStreak = ProgressCalculator.calculateStreak(progressList);
-
-          // Generate weekly activity (7 days ending with today)
-          const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-          const weeklyActivity = [];
-          const now = new Date();
-
-          for (let i = 6; i >= 0; i--) {
-            const date = new Date(now);
-            date.setDate(now.getDate() - i);
-            const dayName = days[date.getDay()];
-            const dateString = date.toDateString();
-
-            const dayProgress = progressList.filter(p => {
-              if (!p.last_watched_at) return false;
-              return new Date(p.last_watched_at).toDateString() === dateString;
-            });
-
-            const dayMinutes = dayProgress.reduce((sum, p) => sum + (p.time_spent_secs || (p.is_completed ? 300 : 0)), 0) / 60;
-            const dayCompleted = dayProgress.filter(p => p.is_completed).length;
-
-            weeklyActivity.push({
-              day: dayName,
-              minutes: Math.round(dayMinutes),
-              lessonsCompleted: dayCompleted,
-            });
-          }
-
-          // Calculate recently completed lessons (last 10)
-          const recentlyCompleted: any[] = [];
-          for (const p of progressList) {
-            if (p.is_completed && p.last_watched_at) {
-              const course = mapped.find((c: any) => c.id === String(p.course_id));
-              if (!course) continue;
-
-              const courseModules = await getCachedModules(String(p.course_id)) || [];
-              const matchedModule = courseModules.find((m: any) => (m.lessons ?? []).some((l: any) => l.id === p.lesson_id));
-
-              if (matchedModule) {
-                recentlyCompleted.push({
-                  courseId: course.id,
-                  courseTitle: course.title,
-                  moduleId: matchedModule.id,
-                  moduleTitle: matchedModule.title,
-                  completedAt: p.last_watched_at,
-                  courseThumbnail: course.thumbnail,
-                });
-              }
-            }
-          }
-          recentlyCompleted.sort((a: any, b: any) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
-          const topRecentlyCompleted = recentlyCompleted.slice(0, 10);
-
-          setStats({
-            totalCoursesEnrolled,
-            coursesCompleted: completedCoursesCount,
-            coursesInProgress,
-            totalLessonsCompleted,
-            averageProgress,
-            totalTimeSpent,
-            learningStreak,
-            weeklyActivity,
-            recentlyCompleted: topRecentlyCompleted,
-          });
-
-        } catch (err) {
-          console.error('[Progress] Error loading stats & courses:', err);
-        } finally {
-          setIsLoadingCourses(false);
         }
       }
-      loadStatsAndCourses();
-    }, [user?.id])
+
+      const coursesInProgress = Math.max(0, totalCoursesEnrolled - completedCoursesCount - notStartedCoursesCount);
+      const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
+
+      // Calculate average progress
+      let progressSum = 0;
+      for (const enr of enrollments) {
+        const courseId = String(enr.course_id);
+        const courseModules = await getCachedModules(courseId) || [];
+        const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
+        if (lessonIds.length > 0) {
+          const courseProg = courseProgressListMap.get(courseId) ?? [];
+          const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
+          progressSum += Math.round((completedLessons / lessonIds.length) * 100);
+        }
+      }
+      const averageProgress = totalCoursesEnrolled > 0 ? Math.round(progressSum / totalCoursesEnrolled) : 0;
+
+      // Calculate total time spent
+      const totalTimeSpent = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
+
+      // Calculate learning streak
+      const learningStreak = ProgressCalculator.calculateStreak(progressList);
+
+      // Generate weekly activity (7 days ending with today)
+      const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const weeklyActivity = [];
+      const now = new Date();
+
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        const dayName = days[date.getDay()];
+        const dateString = date.toDateString();
+
+        const dayProgress = progressList.filter(p => {
+          if (!p.last_watched_at) return false;
+          return new Date(p.last_watched_at).toDateString() === dateString;
+        });
+
+        const dayMinutes = dayProgress.reduce((sum, p) => sum + (p.time_spent_secs || (p.is_completed ? 300 : 0)), 0) / 60;
+        const dayCompleted = dayProgress.filter(p => p.is_completed).length;
+
+        weeklyActivity.push({
+          day: dayName,
+          minutes: Math.round(dayMinutes),
+          lessonsCompleted: dayCompleted,
+        });
+      }
+
+      // Calculate recently completed lessons (last 10)
+      const recentlyCompleted: any[] = [];
+      for (const p of progressList) {
+        if (p.is_completed && p.last_watched_at) {
+          const course = mapped.find((c: any) => c.id === String(p.course_id));
+          if (!course) continue;
+
+          const courseModules = await getCachedModules(String(p.course_id)) || [];
+          const matchedModule = courseModules.find((m: any) => (m.lessons ?? []).some((l: any) => l.id === p.lesson_id));
+
+          if (matchedModule) {
+            recentlyCompleted.push({
+              courseId: course.id,
+              courseTitle: course.title,
+              moduleId: matchedModule.id,
+              moduleTitle: matchedModule.title,
+              completedAt: p.last_watched_at,
+              courseThumbnail: course.thumbnail,
+            });
+          }
+        }
+      }
+      recentlyCompleted.sort((a: any, b: any) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+      const topRecentlyCompleted = recentlyCompleted.slice(0, 10);
+
+      setStats({
+        totalCoursesEnrolled,
+        coursesCompleted: completedCoursesCount,
+        coursesInProgress,
+        totalLessonsCompleted,
+        averageProgress,
+        totalTimeSpent,
+        learningStreak,
+        weeklyActivity,
+        recentlyCompleted: topRecentlyCompleted,
+      });
+
+    } catch (err) {
+      console.error('[Progress] Error loading stats & courses:', err);
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  }, [user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStatsAndCourses(false);
+    }, [loadStatsAndCourses])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadStatsAndCourses(true);
+    setRefreshing(false);
+  };
 
   const coursesWithProgress = useMemo(
     () => ProgressAnalytics.getCoursesWithProgress(courseProgress, courses),
@@ -261,6 +281,9 @@ export default function ProgressScreen() {
         paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100,
       }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+      }
     >
       {/* Header */}
       <View style={styles.header}>

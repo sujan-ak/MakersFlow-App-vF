@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { ScrollView, View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet, Platform, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -31,46 +31,56 @@ export default function CoursesScreen() {
   const [isNotStartedOpen, setIsNotStartedOpen] = useState(true);
   const [isCompletedOpen, setIsCompletedOpen] = useState(true);
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadEnrolledCourses = useCallback(async (isRefreshing = false) => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+    if (!isRefreshing) {
+      setIsLoading(true);
+    }
+    try {
+      const enrollments = await fetchEnrolledCourses(user.id);
+      const mappedList = await Promise.all(
+        // Defensive: skip enrollments whose course was deleted/unpublished
+        // (null join) so one bad row can't blank the whole list.
+        enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
+          const c = enr.courses;
+          const prog = await fetchCourseProgress(user.id, String(c.id));
+          return {
+            courseId: String(c.id),
+            courseTitle: c.title,
+            instructor: "MakersFlow Instructor",
+            thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+            progress: prog.percentage,
+            totalModules: prog.total,
+            completedModules: prog.completed,
+            lastAccessedAt: enr.enrolled_at || new Date().toISOString(),
+            timeSpent: 0,
+          };
+        })
+      );
+      setEnrolledCourses(mappedList);
+    } catch (err) {
+      console.error('[CoursesScreen] Error fetching enrolled courses:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {
-      async function loadEnrolledCourses() {
-        if (!user?.id) {
-          setIsLoading(false);
-          return;
-        }
-        setIsLoading(true);
-        try {
-          const enrollments = await fetchEnrolledCourses(user.id);
-          const mappedList = await Promise.all(
-            // Defensive: skip enrollments whose course was deleted/unpublished
-            // (null join) so one bad row can't blank the whole list.
-            enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
-              const c = enr.courses;
-              const prog = await fetchCourseProgress(user.id, String(c.id));
-              return {
-                courseId: String(c.id),
-                courseTitle: c.title,
-                instructor: "MakersFlow Instructor",
-                thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-                progress: prog.percentage,
-                totalModules: prog.total,
-                completedModules: prog.completed,
-                lastAccessedAt: enr.enrolled_at || new Date().toISOString(),
-                timeSpent: 0,
-              };
-            })
-          );
-          setEnrolledCourses(mappedList);
-        } catch (err) {
-          console.error('[CoursesScreen] Error fetching enrolled courses:', err);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-      loadEnrolledCourses();
-    }, [user?.id])
+      loadEnrolledCourses(false);
+    }, [loadEnrolledCourses])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadEnrolledCourses(true);
+    setRefreshing(false);
+  };
 
   const inProgressCourses = useMemo(() => {
     return enrolledCourses.filter((c) => c.progress > 0 && c.progress < 100);
@@ -112,6 +122,9 @@ export default function CoursesScreen() {
           { paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+        }
       >
         {isLoading ? (
           <View style={styles.skeletonContainer}>

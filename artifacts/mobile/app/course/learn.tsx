@@ -38,7 +38,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export default function LearnScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { courseId, moduleId } = useLocalSearchParams<{ courseId: string; moduleId: string }>();
+  const { courseId, moduleId, lessonId } = useLocalSearchParams<{ courseId: string; moduleId: string; lessonId?: string }>();
   const { user } = useAuth();
   const { isInWatchLater, toggleWatchLater, addDownloadedLesson, removeDownloadedLesson } = useFavorites();
   const { completeModule } = useProgress();
@@ -61,7 +61,7 @@ export default function LearnScreen() {
   const [enrollment, setEnrollment] = useState<any>(null);
   const [isEnrollmentExpired, setIsEnrollmentExpired] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "content">("overview");
-  const [activeModuleId, setActiveModuleId] = useState<string | undefined>(moduleId);
+  const [activeModuleId, setActiveModuleId] = useState<string | undefined>(lessonId || moduleId);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [resumeFromTime, setResumeFromTime] = useState(0);
@@ -164,7 +164,7 @@ export default function LearnScreen() {
           setTotalLessons(flatLessons.length); // store authoritative total
 
           if (!activeModuleId && flatLessons.length > 0) {
-            setActiveModuleId(moduleId ?? flatLessons[0].id);
+            setActiveModuleId(lessonId || moduleId || flatLessons[0].id);
           }
 
           if (user?.id) {

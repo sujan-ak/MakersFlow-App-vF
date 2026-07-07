@@ -11,6 +11,7 @@ import {
   FlatList,
   Alert,
   Share,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProductCard } from "@/components/ProductCard";
@@ -86,34 +87,45 @@ export default function StoreScreen() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadProducts = useCallback(async (isRefreshing = false) => {
+    if (!isRefreshing) {
+      setIsLoading(true);
+    }
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status')
+        .or('status.eq.available,status.eq.active');
+
+      if (error) {
+        console.error('[Store] Error loading products:', error);
+        return;
+      }
+
+      if (data) {
+        const mapped = data.map((row, idx) => mapSupabaseProduct(row, idx));
+        setProducts(mapped);
+      }
+    } catch (err) {
+      console.error('[Store] load error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      async function loadProducts() {
-        try {
-          const { data, error } = await supabase
-            .from('products')
-            .select('id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status')
-            .or('status.eq.available,status.eq.active');
-
-          if (error) {
-            console.error('[Store] Error loading products:', error);
-            return;
-          }
-
-          if (data) {
-            const mapped = data.map((row, idx) => mapSupabaseProduct(row, idx));
-            setProducts(mapped);
-          }
-        } catch (err) {
-          console.error('[Store] load error:', err);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-      loadProducts();
-    }, [])
+      loadProducts(false);
+    }, [loadProducts])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProducts(true);
+    setRefreshing(false);
+  };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -193,6 +205,9 @@ export default function StoreScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+        }
       >
         {isLoading ? (
           <>

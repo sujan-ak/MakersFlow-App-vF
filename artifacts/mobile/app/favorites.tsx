@@ -197,7 +197,7 @@ export default function FavoritesScreen() {
                 onPress={() =>
                   router.push({
                     pathname: "/course/learn",
-                    params: { courseId: lesson.courseId, moduleId: lesson.moduleId },
+                    params: { courseId: lesson.courseId, lessonId: lesson.lessonId },
                   })
                 }
               >
@@ -258,7 +258,7 @@ export default function FavoritesScreen() {
                 onPress={() =>
                   router.push({
                     pathname: "/course/learn",
-                    params: { courseId: lesson.courseId, moduleId: lesson.moduleId },
+                    params: { courseId: lesson.courseId, lessonId: lesson.lessonId },
                   })
                 }
               >

@@ -13,6 +13,7 @@ import {
   Dimensions,
   FlatList,
   ImageBackground,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -51,144 +52,155 @@ export default function HomeScreen() {
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const bannerFlatListRef = useRef<any>(null);
   const { refreshProgress } = useProgress();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async (isRefreshing = false) => {
+    if (!isRefreshing) {
+      setIsLoading(true);
+    }
+    try {
+      // Sync global progress context
+      await refreshProgress().catch(() => {});
+
+      // Fetch promotions
+      try {
+        const { data: promoData, error: promoError } = await supabase
+          .from('promotions')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        // BUG FIX (promotions add/delete not reflected):
+        // Previously setPromotions was only called when the query succeeded
+        // AND returned data, so after an admin deleted/deactivated banners
+        // (or the query errored) the OLD banners stayed on screen forever.
+        // Now the state always mirrors the latest fetch result.
+        if (promoError) {
+          console.error("Failed to load promotions:", promoError);
+          setPromotions([]);
+        } else {
+          const now = new Date().getTime();
+          const activePromos = (promoData ?? []).filter(p => !p.expires_at || new Date(p.expires_at).getTime() > now);
+          setPromotions(activePromos);
+        }
+      } catch (e) {
+        console.error("Failed to load promotions:", e);
+        setPromotions([]);
+      }
+
+      // Unread notifications badge (per-user rows + new admin broadcasts)
+      if (user?.id) {
+        try {
+          const lastSeen = await AsyncStorage.getItem("announcements_last_seen");
+          const [{ count: personalCount }, broadcast] = await Promise.all([
+            supabase
+              .from("notifications")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .eq("is_read", false),
+            supabase
+              .from("announcements")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "published")
+              .gt("created_at", lastSeen ?? "1970-01-01"),
+          ]);
+          setUnreadNotifCount((personalCount ?? 0) + (broadcast.count ?? 0));
+        } catch {
+          // tables may not exist yet — badge just stays hidden
+        }
+      }
+
+      const all = await fetchAllCourses();
+      const mapped = all.map((c: any) => ({
+        id: String(c.id),
+        title: c.title,
+        category: c.category || "General",
+        level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
+        price: c.price || 0,
+        isFree: c.is_free,
+        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+        instructor: "MakersFlow Instructor",
+        rating: 4.8,
+        reviews: 120,
+        description: c.description || "",
+        modules: []
+      }));
+      setCourses(mapped);
+
+      if (user?.id) {
+        const enrollments = await fetchEnrolledCourses(user.id);
+        const mappedEnrolled = await Promise.all(
+          // Defensive: skip enrollments whose course was deleted/unpublished
+          // (null join) so one bad row can't blank the whole section.
+          enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
+            const c = enr.courses;
+            const prog = await fetchCourseProgress(user.id, String(c.id));
+            return {
+              progress: prog.percentage,
+            };
+          })
+        );
+        setEnrolledCourses(mappedEnrolled);
+
+        // Fetch lesson progress for calculating real streak
+        const { data: lpData } = await supabase
+          .from('lesson_progress')
+          .select('last_watched_at')
+          .eq('user_id', user.id);
+        if (lpData) {
+          const streak = ProgressCalculator.calculateStreak(lpData);
+          setLearningStreak(streak);
+        }
+      }
+
+      // Fetch real kits from Supabase
+      const { data: kitData, error: kitError } = await supabase
+        .from('products')
+        .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock, badge')
+        .or('status.eq.available,status.eq.active')
+        .neq('category', 'digital')
+        .limit(5);
+
+      if (!kitError && kitData) {
+        const kitFallbacks = [
+          require('@/assets/images/product_kit_1.png'),
+          require('@/assets/images/product_kit_2.png'),
+          require('@/assets/images/product_kit_3.png'),
+        ];
+        const mappedKits: Product[] = kitData.map((row: any, idx: number) => ({
+          id: String(row.id),
+          title: row.title || "Untitled Product",
+          category: 'physical',
+          subcategory: row.subcategory || "Physical Kits",
+          price: Number(row.price) || 0,
+          originalPrice: Number(row.original_price) || Number(row.price) || 0,
+          thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
+          description: row.description || "No description available.",
+          rating: 4.5,
+          reviews: 0,
+          inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+          badge: row.badge || undefined,
+          features: [],
+        }));
+        setPopularKits(mappedKits);
+      }
+    } catch (err) {
+      console.error('[Home] Error fetching courses:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {
-      async function loadData() {
-        try {
-          // Sync global progress context
-          await refreshProgress().catch(() => {});
-
-          // Fetch promotions
-          try {
-            const { data: promoData, error: promoError } = await supabase
-              .from('promotions')
-              .select('*')
-              .eq('is_active', true)
-              .order('created_at', { ascending: false });
-            // BUG FIX (promotions add/delete not reflected):
-            // Previously setPromotions was only called when the query succeeded
-            // AND returned data, so after an admin deleted/deactivated banners
-            // (or the query errored) the OLD banners stayed on screen forever.
-            // Now the state always mirrors the latest fetch result.
-            if (promoError) {
-              console.error("Failed to load promotions:", promoError);
-              setPromotions([]);
-            } else {
-              const now = new Date().getTime();
-              const activePromos = (promoData ?? []).filter(p => !p.expires_at || new Date(p.expires_at).getTime() > now);
-              setPromotions(activePromos);
-            }
-          } catch (e) {
-            console.error("Failed to load promotions:", e);
-            setPromotions([]);
-          }
-
-          // Unread notifications badge (per-user rows + new admin broadcasts)
-          if (user?.id) {
-            try {
-              const lastSeen = await AsyncStorage.getItem("announcements_last_seen");
-              const [{ count: personalCount }, broadcast] = await Promise.all([
-                supabase
-                  .from("notifications")
-                  .select("id", { count: "exact", head: true })
-                  .eq("user_id", user.id)
-                  .eq("is_read", false),
-                supabase
-                  .from("announcements")
-                  .select("id", { count: "exact", head: true })
-                  .eq("status", "published")
-                  .gt("created_at", lastSeen ?? "1970-01-01"),
-              ]);
-              setUnreadNotifCount((personalCount ?? 0) + (broadcast.count ?? 0));
-            } catch {
-              // tables may not exist yet — badge just stays hidden
-            }
-          }
-
-          const all = await fetchAllCourses();
-          const mapped = all.map((c: any) => ({
-            id: String(c.id),
-            title: c.title,
-            category: c.category || "General",
-            level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
-            price: c.price || 0,
-            isFree: c.is_free,
-            thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-            instructor: "MakersFlow Instructor",
-            rating: 4.8,
-            reviews: 120,
-            description: c.description || "",
-            modules: []
-          }));
-          setCourses(mapped);
-
-          if (user?.id) {
-            const enrollments = await fetchEnrolledCourses(user.id);
-            const mappedEnrolled = await Promise.all(
-              // Defensive: skip enrollments whose course was deleted/unpublished
-              // (null join) so one bad row can't blank the whole section.
-              enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
-                const c = enr.courses;
-                const prog = await fetchCourseProgress(user.id, String(c.id));
-                return {
-                  progress: prog.percentage,
-                };
-              })
-            );
-            setEnrolledCourses(mappedEnrolled);
-
-            // Fetch lesson progress for calculating real streak
-            const { data: lpData } = await supabase
-              .from('lesson_progress')
-              .select('last_watched_at')
-              .eq('user_id', user.id);
-            if (lpData) {
-              const streak = ProgressCalculator.calculateStreak(lpData);
-              setLearningStreak(streak);
-            }
-          }
-
-          // Fetch real kits from Supabase
-          const { data: kitData, error: kitError } = await supabase
-            .from('products')
-            .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock, badge')
-            .or('status.eq.available,status.eq.active')
-            .neq('category', 'digital')
-            .limit(5);
-
-          if (!kitError && kitData) {
-            const kitFallbacks = [
-              require('@/assets/images/product_kit_1.png'),
-              require('@/assets/images/product_kit_2.png'),
-              require('@/assets/images/product_kit_3.png'),
-            ];
-            const mappedKits: Product[] = kitData.map((row: any, idx: number) => ({
-              id: String(row.id),
-              title: row.title || "Untitled Product",
-              category: 'physical',
-              subcategory: row.subcategory || "Physical Kits",
-              price: Number(row.price) || 0,
-              originalPrice: Number(row.original_price) || Number(row.price) || 0,
-              thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
-              description: row.description || "No description available.",
-              rating: 4.5,
-              reviews: 0,
-              inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
-              badge: row.badge || undefined,
-              features: [],
-            }));
-            setPopularKits(mappedKits);
-          }
-        } catch (err) {
-          console.error('[Home] Error fetching courses:', err);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-      loadData();
-    }, [user?.id])
+      loadData(false);
+    }, [loadData])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData(true);
+    setRefreshing(false);
+  };
 
   // BUG FIX: when the promotions list shrinks (admin deleted/deactivated a
   // banner), the carousel could be left scrolled past the end of the new list
@@ -298,6 +310,9 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+        }
       >
 
       {/* Stats Banner */}

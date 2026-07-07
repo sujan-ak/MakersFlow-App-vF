@@ -264,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         full_name: supabaseUser.user_metadata?.name || supabaseUser.email!.split('@')[0],
         grade: supabaseUser.user_metadata?.grade ?? null,
         school: supabaseUser.user_metadata?.school ?? null,
-        role: 'student' as const,
+        role: 'pending' as const,
       };
 
       const { data, error } = await authService.createProfile(profileData);
@@ -391,6 +391,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         // Profile will be created automatically via loadUserProfile
+        router.replace('/(tabs)');
         return { success: true };
       }
 
