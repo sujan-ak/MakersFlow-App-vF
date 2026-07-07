@@ -20,6 +20,8 @@ import { CartProvider } from "@/context/CartContext";
 import { ProgressProvider } from "@/context/ProgressContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { useColors } from "@/hooks/useColors";
+import NetInfo from "@react-native-community/netinfo";
+import { OfflineScreen } from "@/components/OfflineScreen";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,6 +29,27 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colors = useColors();
+  const [isOffline, setIsOffline] = React.useState(false);
+  const [isChecking, setIsChecking] = React.useState(false);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOffline(state.isConnected === false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleRetry = async () => {
+    setIsChecking(true);
+    const state = await NetInfo.fetch();
+    setIsOffline(state.isConnected === false);
+    setIsChecking(false);
+  };
+
+  if (isOffline) {
+    return <OfflineScreen onRetry={handleRetry} isChecking={isChecking} />;
+  }
+
   return (
     <Stack
       screenOptions={{

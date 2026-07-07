@@ -568,7 +568,7 @@ export default function ProgressScreen() {
                   My Enrolled Courses
                 </Text>
                 <Text style={[styles.coursesShortcutSubtitle, { color: colors.mutedForeground }]}>
-                  {coursesWithProgress.length} course{coursesWithProgress.length !== 1 ? "s" : ""} enrolled
+                  {stats.totalCoursesEnrolled} course{stats.totalCoursesEnrolled !== 1 ? "s" : ""} enrolled
                 </Text>
               </View>
               <Feather name="chevron-right" size={18} color={colors.primary} />

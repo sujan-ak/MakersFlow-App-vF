@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Platform,
@@ -37,31 +37,58 @@ const productFallbacks: Record<string, any[]> = {
 };
 
 function mapSupabaseProduct(row: any, index: number): Product {
-  const isDigital = row.category?.toLowerCase() === 'digital' || 
-                    row.subcategory?.toLowerCase() === 'notes' ||
-                    row.subcategory?.toLowerCase() === 'question banks' ||
-                    row.subcategory?.toLowerCase() === 'premium resources';
-  const category = isDigital ? 'digital' : 'physical';
-  
-  let subcategory = row.subcategory;
-  if (!subcategory) {
-    subcategory = isDigital ? "Notes" : "Physical Kits";
+  // ── Determine if this product is a course ────────────────────
+  const isCourse =
+    row.is_course === true ||
+    row.category?.toLowerCase() === 'courses' ||
+    row.subcategory?.toLowerCase() === 'courses';
+
+  // ── Determine if this is a physical kit ──────────────────────
+  const isPhysical =
+    !isCourse &&
+    (row.category?.toLowerCase() === 'physical' ||
+      row.subcategory?.toLowerCase() === 'physical kits' ||
+      row.subcategory?.toLowerCase() === 'kit' ||
+      row.subcategory?.toLowerCase() === 'kits');
+
+  // ── Classify digital vs physical ─────────────────────────────
+  const isDigital =
+    isCourse ||
+    row.category?.toLowerCase() === 'digital' ||
+    row.subcategory?.toLowerCase() === 'notes' ||
+    row.subcategory?.toLowerCase() === 'premium resources';
+
+  const category: 'physical' | 'digital' = isPhysical ? 'physical' : isDigital ? 'digital' : 'physical';
+
+  // ── Normalize subcategory for filter matching ─────────────────
+  let subcategory: string;
+  if (isCourse) {
+    subcategory = 'Courses';
+  } else if (isPhysical) {
+    subcategory = 'Physical Kits';
+  } else if (row.subcategory?.toLowerCase() === 'notes') {
+    subcategory = 'Notes';
+  } else if (row.subcategory?.toLowerCase() === 'premium resources') {
+    subcategory = 'Premium Resources';
+  } else {
+    // Fallback: use DB value or infer from category
+    subcategory = row.subcategory || (category === 'digital' ? 'Notes' : 'Physical Kits');
   }
 
-  const thumbnail = row.thumbnail_url 
-    ? { uri: row.thumbnail_url } 
+  const thumbnail = row.thumbnail_url
+    ? { uri: row.thumbnail_url }
     : (productFallbacks[category] || productFallbacks.physical)[index % 3];
 
   return {
     id: String(row.id),
-    title: row.title || "Untitled Product",
+    title: row.title || 'Untitled Product',
     category,
     subcategory,
     price: Number(row.price) || 0,
     originalPrice: Number(row.original_price) || Number(row.price) || 0,
     thumbnail,
-    description: row.description || "No description available.",
-    rating: Number(row.rating) || 4.5,
+    description: row.description || 'No description available.',
+    rating: Number(row.rating) || 0,
     reviews: Number(row.total_reviews) || 0,
     inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
     badge: row.badge || undefined,
@@ -75,16 +102,32 @@ export default function StoreScreen() {
   const { count } = useCart();
 
   const handleShare = async () => {
+    const link = "https://edodwaja.com/store";
+    const message = `Check out Edodwaja Store on Edodwaja! ${link}`;
     try {
-      await Share.share({
-        message: `Check out Edodwaja Store on Edodwaja! https://edodwaja.com/store`,
-      });
-    } catch (error) {
-      console.error("Error sharing store:", error);
+      const result = await Share.share({ message });
+      if (result.action === Share.sharedAction) {
+        console.log('[StoreShare] Shared successfully');
+      } else if (result.action === Share.dismissedAction) {
+        console.log('[StoreShare] Share dismissed');
+      }
+    } catch (error: any) {
+      console.error("[StoreShare] Share failed error:", error);
+      Alert.alert(
+        "Share Link",
+        `Here is the link to copy:\n${link}\n\n(Sharing is not supported on this device: ${error?.message || error})`
+      );
     }
   };
+  const params = useLocalSearchParams<{ category?: string }>();
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [activeCategory, setActiveCategory] = useState(params.category || "All");
+
+  useEffect(() => {
+    if (params.category) {
+      setActiveCategory(params.category);
+    }
+  }, [params.category]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -96,7 +139,7 @@ export default function StoreScreen() {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status')
+        .select('id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status, is_course, course_id')
         .or('status.eq.available,status.eq.active');
 
       if (error) {
@@ -137,7 +180,9 @@ export default function StoreScreen() {
     const matchCat =
       activeCategory === "All" ||
       (activeCategory === "Physical Kits" && p.category === "physical") ||
-      (["Notes", "Question Banks", "Premium Resources"].includes(activeCategory) && p.subcategory === activeCategory);
+      (activeCategory === "Courses" && p.subcategory === "Courses") ||
+      (activeCategory === "Notes" && p.subcategory === "Notes") ||
+      (activeCategory === "Premium Resources" && p.subcategory === "Premium Resources");
     return matchSearch && matchCat;
   });
 
@@ -148,7 +193,7 @@ export default function StoreScreen() {
   };
 
   const handleCartPress = () => {
-    router.push("/store/checkout");
+    router.push("/cart");
   };
 
   const handleClearSearch = () => {

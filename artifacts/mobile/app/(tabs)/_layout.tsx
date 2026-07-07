@@ -56,6 +56,14 @@ function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="store"
+        options={{
+          title: "Store",
+          tabBarIcon: ({ color }) => <Feather name="shopping-bag" size={22} color={color} />,
+          tabBarAccessibilityLabel: "Store tab",
+        }}
+      />
+      <Tabs.Screen
         name="courses"
         options={{
           title: "Courses",
@@ -74,9 +82,7 @@ function TabLayout() {
       <Tabs.Screen
         name="progress"
         options={{
-          title: "Progress",
-          tabBarIcon: ({ color }) => <Feather name="trending-up" size={22} color={color} />,
-          tabBarAccessibilityLabel: "Progress tab. Track your learning journey",
+          href: null,
         }}
       />
 
@@ -86,12 +92,7 @@ function TabLayout() {
           href: null,
         }}
       />
-      <Tabs.Screen
-        name="store"
-        options={{
-          href: null,
-        }}
-      />
+
       <Tabs.Screen
         name="profile"
         options={{

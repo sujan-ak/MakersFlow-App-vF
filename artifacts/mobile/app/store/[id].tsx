@@ -1,12 +1,14 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useFavorites } from "@/context/FavoritesContext";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Alert,
   Image,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -78,47 +80,74 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { addToCart, items } = useCart();
+  const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
+
+  const isWishlisted = isProductInWishlist(String(id));
+
+  const handleToggleWishlist = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await toggleWishlistProduct(String(id));
+  };
 
   const handleShare = async () => {
+    const link = `https://edodwaja.com/store/${id}`;
+    const message = `Check out ${product?.title || "Product"} on Edodwaja! ${link}`;
     try {
-      await Share.share({
-        message: `Check out ${product?.title || "Product"} on Edodwaja! https://edodwaja.com/store/${id}`,
-      });
-    } catch (error) {
-      console.error("Error sharing product:", error);
+      const result = await Share.share({ message });
+      if (result.action === Share.sharedAction) {
+        console.log('[ProductShare] Shared successfully');
+      } else if (result.action === Share.dismissedAction) {
+        console.log('[ProductShare] Share dismissed');
+      }
+    } catch (error: any) {
+      console.error("[ProductShare] Share failed error:", error);
+      Alert.alert(
+        "Share Product",
+        `Here is the product link to copy:\n${link}\n\n(Sharing is not supported on this device: ${error?.message || error})`
+      );
     }
   };
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadProduct = useCallback(async (isRefreshing = false) => {
+    if (!id) return;
+    if (!isRefreshing) {
+      setIsLoading(true);
+    }
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error('[ProductDetail] Error loading product:', error);
+        return;
+      }
+
+      if (data) {
+        setProduct(mapSupabaseProduct(data));
+      }
+    } catch (err) {
+      console.error('[ProductDetail] load error:', err);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, [id]);
 
   useEffect(() => {
-    async function loadProduct() {
-      if (!id) return;
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('*')
-          .eq('id', id)
-          .single();
+    loadProduct(false);
+  }, [loadProduct]);
 
-        if (error) {
-          console.error('[ProductDetail] Error loading product:', error);
-          return;
-        }
-
-        if (data) {
-          setProduct(mapSupabaseProduct(data));
-        }
-      } catch (err) {
-        console.error('[ProductDetail] load error:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadProduct();
-  }, [id]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProduct(true);
+  };
 
   if (isLoading) {
     return <DetailSkeleton />;
@@ -151,6 +180,13 @@ export default function ProductDetailScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 120 : insets.bottom + 120 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         <View style={styles.imageContainer}>
           <Image source={product.thumbnail} style={styles.image} />
@@ -172,6 +208,16 @@ export default function ProductDetailScreen() {
             onPress={handleShare}
           >
             <Feather name="share-2" size={20} color="#FFF" />
+          </Pressable>
+          <Pressable
+            style={[styles.heartCircle, { top: topPad + 8 }]}
+            onPress={handleToggleWishlist}
+          >
+            <Ionicons
+              name={isWishlisted ? "heart" : "heart-outline"}
+              size={20}
+              color={isWishlisted ? "#EF4444" : "#FFF"}
+            />
           </Pressable>
           {product.badge && (
             <View style={[styles.badge, { backgroundColor: colors.secondary, bottom: 16, left: 16 }]}>
@@ -275,6 +321,16 @@ const styles = StyleSheet.create({
   shareCircle: {
     position: "absolute",
     right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heartCircle: {
+    position: "absolute",
+    right: 68,
     width: 40,
     height: 40,
     borderRadius: 20,

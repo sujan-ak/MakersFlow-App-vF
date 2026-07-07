@@ -1,5 +1,5 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { Product } from "@/data/mockData";
 
 interface CartItem {
@@ -11,6 +11,7 @@ interface CartContextType {
   items: CartItem[];
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
+  decrementQuantity: (productId: string) => void;
   clearCart: () => void;
   total: number;
   count: number;
@@ -29,6 +30,7 @@ interface PersistedCart {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const lastAddRef = useRef<number>(0);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -56,11 +58,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }
 
   function addToCart(product: Product) {
+    const now = Date.now();
+    if (now - lastAddRef.current < 500) {
+      return; // prevent duplicate clicks within 500ms
+    }
+    lastAddRef.current = now;
+
     const existing = items.find((i) => i.product.id === product.id);
     if (existing) {
       save(items.map((i) => (i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)));
     } else {
       save([...items, { product, quantity: 1 }]);
+    }
+  }
+
+  function decrementQuantity(productId: string) {
+    const existing = items.find((i) => i.product.id === productId);
+    if (!existing) return;
+    if (existing.quantity <= 1) {
+      removeFromCart(productId);
+    } else {
+      save(items.map((i) => (i.product.id === productId ? { ...i, quantity: i.quantity - 1 } : i)));
     }
   }
 
@@ -76,7 +94,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, clearCart, total, count }}>
+    <CartContext.Provider value={{ items, addToCart, removeFromCart, decrementQuantity, clearCart, total, count }}>
       {children}
     </CartContext.Provider>
   );

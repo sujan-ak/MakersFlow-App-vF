@@ -11,7 +11,15 @@ expo-env.d.ts
 
 # Native
 ios/
-android/
+
+# Android generated files
+android/.gradle/
+android/.cxx/
+android/build/
+android/app/build/
+android/local.properties
+android/app/debug.keystore
+
 *.orig.*
 *.jks
 *.p8
@@ -32,13 +40,17 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
-# typescript
+# TypeScript
 *.tsbuildinfo
+
+# Vercel
 .vercel
 
-.env
+# Agents
 .agents/
 
+# Documentation
 docs/

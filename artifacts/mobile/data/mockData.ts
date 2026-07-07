@@ -1,4 +1,4 @@
-﻿// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // mockData.ts  —  MakersFlow complete mock data
 // FIX: All courses are now inside the single COURSES array.
 // The original file closed the array after c5 and placed
@@ -243,7 +243,8 @@ export const CATEGORIES = [
 export const STORE_CATEGORIES = [
   "All",
   "Physical Kits",
+  "Courses",
   "Notes",
-  "Question Banks",
   "Premium Resources",
 ];
+

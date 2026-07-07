@@ -1,4 +1,4 @@
-﻿import { Feather } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -39,17 +39,25 @@ export default function RegisterScreen() {
   const [schoolError, setSchoolError] = useState("");
 
   async function handleGoogleSignup() {
+    if (googleLoading) return;
     setError("");
     setGoogleLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     const result = await loginWithGoogle();
     
-    if (!result.success) {
+    if (result.success) {
+      const profile = (result as any).profile;
+      setGoogleLoading(false);
+      if (profile && profile.grade) {
+        router.replace("/(tabs)");
+      } else {
+        router.replace("/(auth)/onboarding");
+      }
+    } else {
       setGoogleLoading(false);
       setError(result.error || "Google sign-up failed. Please try again.");
     }
-    // Don't set loading to false on success - the OAuth flow will handle redirect
   }
 
   async function handleRegister() {
@@ -112,8 +120,7 @@ export default function RegisterScreen() {
     setLoading(false);
     
     if (result.success) {
-      setError("Success! Please check your email to confirm your account.");
-      setTimeout(() => router.replace("/(auth)/login"), 2000);
+      router.replace("/(auth)/onboarding");
     } else {
       setError(result.error || "Registration failed. Please try again.");
     }
@@ -277,17 +284,17 @@ export default function RegisterScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.googleBtn,
-              { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={handleGoogleSignup}
             disabled={googleLoading}
           >
             {googleLoading ? (
-              <ActivityIndicator size="small" color={colors.foreground} />
+              <ActivityIndicator size="small" color="#1F2937" />
             ) : (
               <>
-                <Feather name="chrome" size={18} color={colors.foreground} />
-                <Text style={[styles.googleBtnText, { color: colors.foreground }]}>Continue with Google</Text>
+                <Feather name="chrome" size={18} color="#1F2937" />
+                <Text style={[styles.googleBtnText, { color: "#1F2937" }]}>Continue with Google</Text>
               </>
             )}
           </Pressable>

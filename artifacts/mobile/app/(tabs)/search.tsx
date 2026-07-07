@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +12,25 @@ import colors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
 
 const POPULAR_TOPICS = ["Robotics", "Arduino", "AI & ML", "IoT", "Python", "Electronics", "Circuits", "3D Printing"];
+
+const COURSE_FALLBACKS = [
+  require('@/assets/images/course_robotics.png'),
+  require('@/assets/images/course_ai.png'),
+  require('@/assets/images/course_electronics.png'),
+];
+
+const PRODUCT_FALLBACKS: Record<string, any[]> = {
+  physical: [
+    require('@/assets/images/product_kit_1.png'),
+    require('@/assets/images/product_kit_2.png'),
+    require('@/assets/images/product_kit_3.png'),
+  ],
+  digital: [
+    require('@/assets/images/product_notes_1.png'),
+    require('@/assets/images/product_notes_2.png'),
+    require('@/assets/images/product_notes_3.png'),
+  ],
+};
 
 const CATEGORIES = [
   { emoji: "", name: "Robotics & Automation" },
@@ -27,6 +46,7 @@ const CATEGORIES = [
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const { count } = useCart();
+  const params = useLocalSearchParams<{ query?: string; category?: string }>();
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
@@ -37,20 +57,32 @@ export default function SearchScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  useEffect(() => {
+    if (params.query !== undefined) {
+      setSearchQuery(params.query);
+      setDebouncedQuery(params.query.trim().toLowerCase());
+    } else if (params.category !== undefined) {
+      setSearchQuery(params.category);
+      setDebouncedQuery(params.category.trim().toLowerCase());
+    }
+  }, [params.query, params.category]);
+
   useFocusEffect(
     useCallback(() => {
       async function loadCourses() {
         try {
           const all = await fetchAllCourses();
-          const mapped = all.map((c: any) => ({
+          const mapped = all.map((c: any, idx: number) => ({
             id: String(c.id),
             title: c.title,
             category: c.category || "General",
+            instructor: (c.profiles as any)?.full_name ?? "MakersFlow Instructor",
             level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
-            price: c.price || 0,
-            isFree: c.is_free,
-            thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-            instructor: "MakersFlow Instructor",
+            price: Number(c.price) || 0,
+            isFree: Boolean(c.is_free),
+            thumbnail: c.thumbnail_url 
+              ? { uri: c.thumbnail_url } 
+              : COURSE_FALLBACKS[idx % COURSE_FALLBACKS.length],
             rating: 4.8,
             reviews: 120,
             description: c.description || "",
@@ -76,11 +108,13 @@ export default function SearchScreen() {
                 subcategory: row.subcategory || (isDigital ? "Notes" : "Physical Kits"),
                 price: Number(row.price) || 0,
                 originalPrice: Number(row.original_price) || Number(row.price) || 0,
-                thumbnail: row.thumbnail_url 
-                  ? { uri: row.thumbnail_url } 
-                  : require('@/assets/images/product_kit_1.png'), // generic fallback
+                thumbnail: row.thumbnail_url
+                  ? { uri: row.thumbnail_url }
+                  : (PRODUCT_FALLBACKS[category] || PRODUCT_FALLBACKS.physical)[Number(row.id) % 3],
                 inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
                 badge: row.badge,
+                rating: Number(row.rating) || 0,
+                reviews: Number(row.total_reviews) || 0,
               };
             });
             setProducts(mappedProds);

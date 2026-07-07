@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState, useEffect } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator, Modal, TextInput } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
@@ -23,60 +23,71 @@ export default function OrdersScreen() {
   const [refundReason, setRefundReason] = useState("");
   const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
 
-  useEffect(() => {
-    async function loadOrders() {
-      if (!user?.id) {
-        setIsLoading(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadOrders = useCallback(async (isRefreshing = false) => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+    if (!isRefreshing) {
+      setIsLoading(true);
+    }
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['paid', 'completed', 'failed', 'refunded', 'refund_requested'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[Orders] Error fetching orders:', error);
         return;
       }
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('user_id', user.id)
-          .in('status', ['paid', 'completed', 'failed', 'refunded', 'refund_requested'])
-          .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('[Orders] Error fetching orders:', error);
-          return;
-        }
-
-        if (data) {
-          const mapped = data.map((order: any) => {
-            let itemsList: any[] = [];
-            try {
-              itemsList = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
-            } catch (e) {
-              itemsList = Array.isArray(order.items) ? order.items : [];
-            }
-            const dateObj = new Date(order.created_at);
-            const dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-            return {
-              id: String(order.id),
-              date: dateStr,
-              status: order.status === 'refund_requested' ? 'Refund Requested' :
-                      order.status ? (order.status.charAt(0).toUpperCase() + order.status.slice(1)) : 'Processing',
-              rawStatus: order.status,
-              items: itemsList.map((i: any) => i.title || "Untitled Product"),
-              total: Number(order.total_amount) || 0,
-              tax: Number(order.tax_amount) || 0,
-              shipping: order.shipping_address ?? null,
-              created_at: order.created_at,
-              total_amount: Number(order.total_amount) || 0,
-            };
-          });
-          setOrders(mapped);
-        }
-      } catch (err) {
-        console.error('[Orders] Load error:', err);
-      } finally {
-        setIsLoading(false);
+      if (data) {
+        const mapped = data.map((order: any) => {
+          let itemsList: any[] = [];
+          try {
+            itemsList = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+          } catch (e) {
+            itemsList = Array.isArray(order.items) ? order.items : [];
+          }
+          const dateObj = new Date(order.created_at);
+          const dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          return {
+            id: String(order.id),
+            date: dateStr,
+            status: order.status === 'refund_requested' ? 'Refund Requested' :
+                    order.status ? (order.status.charAt(0).toUpperCase() + order.status.slice(1)) : 'Processing',
+            rawStatus: order.status,
+            items: itemsList.map((i: any) => i.title || "Untitled Product"),
+            total: Number(order.total_amount) || 0,
+            tax: Number(order.tax_amount) || 0,
+            shipping: order.shipping_address ?? null,
+            created_at: order.created_at,
+            total_amount: Number(order.total_amount) || 0,
+          };
+        });
+        setOrders(mapped);
       }
+    } catch (err) {
+      console.error('[Orders] Load error:', err);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
     }
-    loadOrders();
   }, [user?.id]);
+
+  useEffect(() => {
+    loadOrders(false);
+  }, [loadOrders]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadOrders(true);
+  };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -167,6 +178,13 @@ export default function OrdersScreen() {
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         {orders.length === 0 ? (
           <View style={styles.empty}>

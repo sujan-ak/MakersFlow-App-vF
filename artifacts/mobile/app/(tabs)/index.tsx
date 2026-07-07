@@ -23,7 +23,6 @@ const SNAP_INTERVAL = CARD_WIDTH + 16;
 import { CourseCard } from "@/components/CourseCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { WatchlistCard } from "@/components/WatchlistCard";
-import { LearningStreak } from "@/components/LearningStreak";
 import { ProductCard } from "@/components/ProductCard";
 import { HomeSkeleton } from "@/components/SkeletonLoader";
 import { useAuth } from "@/context/AuthContextSupabase";
@@ -36,6 +35,83 @@ import { fetchEnrolledCourses } from "@/services/enrollmentService";
 import { fetchCourseProgress } from "@/lib/progressStorage";
 import { ProgressCalculator } from "@/lib/progressCalculator";
 
+const CATEGORY_ICONS: Record<string, string> = {
+  "robotics": "cpu",
+  "electronics": "zap",
+  "iot": "wifi",
+  "embedded systems": "box",
+  "arduino & projects": "tool",
+  "ai + robotics": "activity",
+  "drone technology": "navigation",
+  "industry 4.0": "settings",
+  "automation": "sliders",
+  "coding": "code",
+  "3d printing": "layers",
+};
+
+interface CategoryGridProps {
+  categories: string[];
+  colors: any;
+  onCategoryPress: (category: string) => void;
+}
+
+function CategoryGrid({ categories, colors, onCategoryPress }: CategoryGridProps) {
+  if (categories.length === 0) return null;
+  const half = Math.ceil(categories.length / 2);
+  const row1 = categories.slice(0, half);
+  const row2 = categories.slice(half);
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Browse by Category" onSeeAll={() => onCategoryPress("all")} />
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoriesScrollContent}
+      >
+        <View style={styles.categoriesContainer}>
+          <View style={styles.categoriesRow}>
+            {row1.map((cat) => {
+              const icon = CATEGORY_ICONS[cat.toLowerCase()] || "book-open";
+              return (
+                <Pressable
+                  key={cat}
+                  style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => onCategoryPress(cat)}
+                >
+                  <Feather name={icon as any} size={18} color={colors.primary} />
+                  <Text style={[styles.categoryText, { color: colors.foreground }]}>
+                    {cat}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {row2.length > 0 && (
+            <View style={styles.categoriesRow}>
+              {row2.map((cat) => {
+                const icon = CATEGORY_ICONS[cat.toLowerCase()] || "book-open";
+                return (
+                  <Pressable
+                    key={cat}
+                    style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => onCategoryPress(cat)}
+                  >
+                    <Feather name={icon as any} size={18} color={colors.primary} />
+                    <Text style={[styles.categoryText, { color: colors.foreground }]}>
+                      {cat}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -44,6 +120,7 @@ export default function HomeScreen() {
 
   const [courses, setCourses] = useState<any[]>([]);
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
+  const [popularCourses, setPopularCourses] = useState<any[]>([]);
   const [popularKits, setPopularKits] = useState<Product[]>([]);
   const [learningStreak, setLearningStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +130,22 @@ export default function HomeScreen() {
   const bannerFlatListRef = useRef<any>(null);
   const { refreshProgress } = useProgress();
   const [refreshing, setRefreshing] = useState(false);
+  const [longestStreak, setLongestStreak] = useState(0);
+  const [totalLessonsCompleted, setTotalLessonsCompleted] = useState(0);
+  const [totalHoursLearned, setTotalHoursLearned] = useState(0);
+  const [categories, setCategories] = useState<string[]>([
+    "Robotics",
+    "Electronics",
+    "IoT",
+    "Embedded Systems",
+    "Arduino & Projects",
+    "AI + Robotics",
+    "Drone Technology",
+    "Industry 4.0",
+    "Automation",
+    "Coding",
+    "3D Printing"
+  ]);
 
   const loadData = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing) {
@@ -109,22 +202,50 @@ export default function HomeScreen() {
         }
       }
 
+      // Fetch all course reviews to calculate real statistics
+      let reviewStats: Record<string, { ratingSum: number; count: number }> = {};
+      try {
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select('course_id, rating');
+
+        if (!reviewsError && reviewsData) {
+          reviewsData.forEach((rev: any) => {
+            const cId = String(rev.course_id);
+            if (!reviewStats[cId]) {
+              reviewStats[cId] = { ratingSum: 0, count: 0 };
+            }
+            reviewStats[cId].ratingSum += Number(rev.rating) || 0;
+            reviewStats[cId].count += 1;
+          });
+        }
+      } catch (err) {
+        console.error('[Home] Failed to load reviews:', err);
+      }
+
       const all = await fetchAllCourses();
-      const mapped = all.map((c: any) => ({
-        id: String(c.id),
-        title: c.title,
-        category: c.category || "General",
-        level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
-        price: c.price || 0,
-        isFree: c.is_free,
-        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-        instructor: "MakersFlow Instructor",
-        rating: 4.8,
-        reviews: 120,
-        description: c.description || "",
-        modules: []
-      }));
+      const mapped = all.map((c: any) => {
+        const stats = reviewStats[String(c.id)];
+        const rating = stats ? Number((stats.ratingSum / stats.count).toFixed(1)) : 0;
+        const reviews = stats ? stats.count : 0;
+
+        return {
+          id: String(c.id),
+          title: c.title,
+          category: c.category || "General",
+          level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
+          price: c.price || 0,
+          isFree: c.is_free,
+          thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+          instructor: c.profiles?.full_name || "",
+          rating,
+          reviews,
+          description: c.description || "",
+          modules: []
+        };
+      });
       setCourses(mapped);
+      setPopularCourses(mapped.slice(0, 8));
 
       if (user?.id) {
         const enrollments = await fetchEnrolledCourses(user.id);
@@ -142,46 +263,105 @@ export default function HomeScreen() {
         setEnrolledCourses(mappedEnrolled);
 
         // Fetch lesson progress for calculating real streak
+        // Fetch lesson progress for calculating real streak
         const { data: lpData } = await supabase
           .from('lesson_progress')
-          .select('last_watched_at')
+          .select('course_id, lesson_id, time_spent_secs, is_completed, last_watched_at')
           .eq('user_id', user.id);
         if (lpData) {
           const streak = ProgressCalculator.calculateStreak(lpData);
           setLearningStreak(streak);
+
+          const completed = lpData.filter((p) => p.is_completed).length;
+          setTotalLessonsCompleted(completed);
+
+          const timeSecs = lpData.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
+          setTotalHoursLearned(Number((timeSecs / 3600).toFixed(1)));
+        }
+
+        // Fetch longest streak from streaks table
+        try {
+          const { data: streakTableData, error: streakTableError } = await supabase
+            .from('streaks')
+            .select('longest_streak')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (!streakTableError && streakTableData) {
+            setLongestStreak(Number(streakTableData.longest_streak) || 0);
+          } else {
+            setLongestStreak(0);
+          }
+        } catch {
+          setLongestStreak(0);
         }
       }
 
-      // Fetch real kits from Supabase
-      const { data: kitData, error: kitError } = await supabase
-        .from('products')
-        .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock, badge')
-        .or('status.eq.available,status.eq.active')
-        .neq('category', 'digital')
-        .limit(5);
+      // Fetch distinct categories from courses table
+      try {
+        const { data: catData, error: catError } = await supabase
+          .from('courses')
+          .select('category')
+          .eq('is_published', true)
+          .not('category', 'is', null);
 
-      if (!kitError && kitData) {
-        const kitFallbacks = [
-          require('@/assets/images/product_kit_1.png'),
-          require('@/assets/images/product_kit_2.png'),
-          require('@/assets/images/product_kit_3.png'),
-        ];
-        const mappedKits: Product[] = kitData.map((row: any, idx: number) => ({
-          id: String(row.id),
-          title: row.title || "Untitled Product",
-          category: 'physical',
-          subcategory: row.subcategory || "Physical Kits",
-          price: Number(row.price) || 0,
-          originalPrice: Number(row.original_price) || Number(row.price) || 0,
-          thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
-          description: row.description || "No description available.",
-          rating: 4.5,
-          reviews: 0,
-          inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
-          badge: row.badge || undefined,
-          features: [],
-        }));
-        setPopularKits(mappedKits);
+        if (!catError && catData) {
+          const uniqueCats = Array.from(new Set(catData.map((c: any) => c.category)))
+            .filter((c): c is string => typeof c === 'string' && c.trim().length > 0);
+          
+          const merged = Array.from(new Set([
+            "Robotics",
+            "Electronics",
+            "IoT",
+            "Embedded Systems",
+            "Arduino & Projects",
+            "AI + Robotics",
+            "Drone Technology",
+            "Industry 4.0",
+            "Automation",
+            "Coding",
+            "3D Printing",
+            ...uniqueCats
+          ]));
+          setCategories(merged);
+        }
+      } catch (err) {
+        console.error("[Home] Failed to load categories:", err);
+      }
+
+      // Fetch real kits from Supabase (top 8 by created_at DESC)
+      try {
+        const { data: kitData, error: kitError } = await supabase
+          .from('products')
+          .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock')
+          .or('status.eq.available,status.eq.active')
+          .neq('category', 'digital')
+          .order('created_at', { ascending: false })
+          .limit(8);
+
+        if (!kitError && kitData) {
+          const kitFallbacks = [
+            require('@/assets/images/product_kit_1.png'),
+            require('@/assets/images/product_kit_2.png'),
+            require('@/assets/images/product_kit_3.png'),
+          ];
+          const mappedKits: Product[] = kitData.map((row: any, idx: number) => ({
+            id: String(row.id),
+            title: row.title || "Untitled Product",
+            category: 'physical',
+            subcategory: row.subcategory || "Physical Kits",
+            price: Number(row.price) || 0,
+            originalPrice: Number(row.original_price) || Number(row.price) || 0,
+            thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
+            description: row.description || "No description available.",
+            rating: 0,
+            reviews: 0,
+            inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+            features: [],
+          }));
+          setPopularKits(mappedKits);
+        }
+      } catch (err) {
+        console.error('[Home] Error fetching popular kits:', err);
       }
     } catch (err) {
       console.error('[Home] Error fetching courses:', err);
@@ -361,11 +541,15 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Learning Streak */}
+      {/* Learning Streak Carousel */}
       {enrolledCourses.length > 0 && (
-        <View style={styles.streakSection}>
-          <LearningStreak streak={learningStreak} bestStreak={7} />
-        </View>
+        <StreakCarousel
+          learningStreak={learningStreak}
+          longestStreak={longestStreak}
+          totalLessonsCompleted={totalLessonsCompleted}
+          totalHoursLearned={totalHoursLearned}
+          colors={colors}
+        />
       )}
 
       {/* Banner Carousel */}
@@ -457,149 +641,66 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Popular Robotics Courses */}
-      <View style={styles.section}>
-        <View style={styles.sectionTitleContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Popular Robotics Courses</Text>
-        </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContent}
-          snapToInterval={SNAP_INTERVAL}
-          decelerationRate="fast"
-        >
-          {courses.filter(course => course.category === "Robotics").slice(0, 5).map((course) => (
-            <CourseCard key={course.id} course={course} />
-          ))}
-          <Pressable 
-            style={[styles.seeAllCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push({
-              pathname: "/(tabs)/courses",
-              params: { category: "Robotics" }
-            })}
+      {/* Popular Courses Section */}
+      {popularCourses.length > 0 && (
+        <View style={styles.section}>
+          <SectionHeader 
+            title="Popular Courses" 
+            onSeeAll={() => router.push({ pathname: "/(tabs)/store", params: { category: "Courses" } })} 
+          />
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselContent}
+            snapToInterval={SNAP_INTERVAL}
+            decelerationRate="fast"
           >
-            <Feather name="grid" size={32} color={colors.primary} />
-            <Text style={[styles.seeAllText, { color: colors.foreground }]}>See All Courses</Text>
-            <Feather name="arrow-right" size={20} color={colors.primary} />
-          </Pressable>
-        </ScrollView>
-      </View>
-
-      {/* Popular Electronics Courses */}
-      <View style={styles.section}>
-        <View style={styles.sectionTitleContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Popular Electronics Courses</Text>
+            {popularCourses.map((course) => (
+              <CourseCard key={course.id} course={course} />
+            ))}
+          </ScrollView>
         </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContent}
-          snapToInterval={SNAP_INTERVAL}
-          decelerationRate="fast"
-        >
-          {courses.filter(course => course.category === "Electronics").slice(0, 5).map((course) => (
-            <CourseCard key={course.id} course={course} />
-          ))}
-          <Pressable 
-            style={[styles.seeAllCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push({
-              pathname: "/(tabs)/courses",
-              params: { category: "Electronics" }
-            })}
-          >
-            <Feather name="grid" size={32} color={colors.primary} />
-            <Text style={[styles.seeAllText, { color: colors.foreground }]}>See All Courses</Text>
-            <Feather name="arrow-right" size={20} color={colors.primary} />
-          </Pressable>
-        </ScrollView>
-      </View>
+      )}
 
       {/* Categories */}
-      <View style={styles.section}>
-        <SectionHeader title="Browse by Category" onSeeAll={() => router.push("/(tabs)/courses")} />
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesScrollContent}
-        >
-          <View style={styles.categoriesContainer}>
-            <View style={styles.categoriesRow}>
-              {[
-                { name: "Robotics", icon: "cpu" },
-                { name: "Electronics", icon: "zap" },
-                { name: "IoT", icon: "wifi" },
-                { name: "Embedded Systems", icon: "box" },
-              ].map((category) => (
-                <Pressable
-                  key={category.name}
-                  style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => router.push({
-                    pathname: "/(tabs)/courses",
-                    params: { category: category.name }
-                  })}
-                >
-                  <Feather name={category.icon as any} size={18} color={colors.primary} />
-                  <Text style={[styles.categoryText, { color: colors.foreground }]}>
-                    {category.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.categoriesRow}>
-              {[
-                { name: "Arduino & Projects", icon: "tool" },
-                { name: "AI + Robotics", icon: "activity" },
-                { name: "Drone Technology", icon: "navigation" },
-                { name: "Industry 4.0", icon: "settings" },
-              ].map((category) => (
-                <Pressable
-                  key={category.name}
-                  style={[styles.categoryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={() => router.push({
-                    pathname: "/(tabs)/courses",
-                    params: { category: category.name }
-                  })}
-                >
-                  <Feather name={category.icon as any} size={18} color={colors.primary} />
-                  <Text style={[styles.categoryText, { color: colors.foreground }]}>
-                    {category.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </ScrollView>
-      </View>
+      <CategoryGrid
+        categories={categories}
+        colors={colors}
+        onCategoryPress={(cat) => {
+          if (cat === "all") {
+            router.push({
+              pathname: "/(tabs)/search",
+              params: { query: "" }
+            });
+          } else {
+            router.push({
+              pathname: "/(tabs)/search",
+              params: { category: cat }
+            });
+          }
+        }}
+      />
 
-      {/* Popular IoT Courses */}
-      <View style={styles.section}>
-        <View style={styles.sectionTitleContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Popular IoT Courses</Text>
-        </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContent}
-          snapToInterval={SNAP_INTERVAL}
-          decelerationRate="fast"
-        >
-          {courses.filter(course => course.category === "IoT").slice(0, 5).map((course) => (
-            <CourseCard key={course.id} course={course} />
-          ))}
-          <Pressable 
-            style={[styles.seeAllCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push({
-              pathname: "/(tabs)/courses",
-              params: { category: "IoT" }
-            })}
+      {/* Popular Kits Section */}
+      {popularKits.length > 0 && (
+        <View style={styles.section}>
+          <SectionHeader 
+            title="Popular Kits" 
+            onSeeAll={() => router.push({ pathname: "/(tabs)/store", params: { category: "Physical Kits" } })} 
+          />
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselContent}
+            snapToInterval={SNAP_INTERVAL}
+            decelerationRate="fast"
           >
-            <Feather name="grid" size={32} color={colors.primary} />
-            <Text style={[styles.seeAllText, { color: colors.foreground }]}>See All Courses</Text>
-            <Feather name="arrow-right" size={20} color={colors.primary} />
-          </Pressable>
-        </ScrollView>
-      </View>
+            {popularKits.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Ecosystem of MakersFlow */}
       <View style={styles.section}>
@@ -624,64 +725,6 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
-      </View>
-
-      {/* Trending Courses */}
-      <View style={styles.section}>
-        <View style={styles.sectionTitleContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Trending Courses</Text>
-        </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContent}
-          snapToInterval={SNAP_INTERVAL}
-          decelerationRate="fast"
-        >
-          {[
-            courses.find(c => c.category === "Robotics"),
-            courses.find(c => c.category === "Electronics"),
-            courses.find(c => c.category === "IoT"),
-            courses.find(c => c.category === "Embedded Systems"),
-            courses.find(c => c.category === "Arduino & Projects"),
-          ].filter(Boolean).map((course) => (
-            <CourseCard key={course!.id} course={course!} />
-          ))}
-          <Pressable 
-            style={[styles.seeAllCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push("/(tabs)/courses")}
-          >
-            <Feather name="grid" size={32} color={colors.primary} />
-            <Text style={[styles.seeAllText, { color: colors.foreground }]}>See All Courses</Text>
-            <Feather name="arrow-right" size={20} color={colors.primary} />
-          </Pressable>
-        </ScrollView>
-      </View>
-
-      {/* Popular Kits */}
-      <View style={styles.section}>
-        <View style={styles.sectionTitleContainer}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Popular Kits</Text>
-        </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.carouselContent}
-          snapToInterval={SNAP_INTERVAL}
-          decelerationRate="fast"
-        >
-          {popularKits.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-          <Pressable 
-            style={[styles.seeAllKitsCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => router.push("/(tabs)/store")}
-          >
-            <Ionicons name="cart-outline" size={32} color={colors.primary} />
-            <Text style={[styles.seeAllText, { color: colors.foreground }]}>See All Kits</Text>
-            <Feather name="arrow-right" size={20} color={colors.primary} />
-          </Pressable>
-        </ScrollView>
       </View>
       </ScrollView>
     </View>
@@ -919,4 +962,158 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
+  carouselSection: {
+    marginBottom: 24,
+    alignItems: "center",
+  },
+  streakCardWrapper: {
+    width: SCREEN_WIDTH,
+    paddingHorizontal: 20,
+  },
+  streakCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 20,
+  },
+  streakIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  streakContent: {
+    flex: 1,
+    gap: 4,
+  },
+  streakTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  streakValue: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  streakLabel: {
+    fontSize: 12,
+  },
+  streakDotsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+  },
+  streakDot: {
+    height: 8,
+    borderRadius: 4,
+  },
 });
+
+interface StreakCarouselProps {
+  learningStreak: number;
+  longestStreak: number;
+  totalLessonsCompleted: number;
+  totalHoursLearned: number;
+  colors: any;
+}
+
+function StreakCarousel({
+  learningStreak,
+  longestStreak,
+  totalLessonsCompleted,
+  totalHoursLearned,
+  colors,
+}: StreakCarouselProps) {
+  const [activeStreakIndex, setActiveStreakIndex] = useState(0);
+
+  const streakData = [
+    {
+      id: "current_streak",
+      title: "Current Streak",
+      value: `${learningStreak} days`,
+      icon: "zap",
+      iconColor: "#F97316", // orange
+      bgColor: "#FFF7ED", // light orange
+      label: "Active Days"
+    },
+    {
+      id: "longest_streak",
+      title: "Longest Streak",
+      value: `${longestStreak} days`,
+      icon: "award", // trophy icon
+      iconColor: "#4F46E5", // indigo
+      bgColor: "#EEF2FF", // light indigo
+      label: "Personal Best"
+    },
+    {
+      id: "lessons_completed",
+      title: "Lessons Completed",
+      value: `${totalLessonsCompleted} lessons`,
+      icon: "book-open",
+      iconColor: "#F97316", // orange
+      bgColor: "#FFF7ED", // light orange
+      label: "Lessons Done"
+    },
+    {
+      id: "hours_learned",
+      title: "Learning Time",
+      value: `${totalHoursLearned} hrs`,
+      icon: "clock",
+      iconColor: "#4F46E5", // indigo
+      bgColor: "#EEF2FF", // light indigo
+      label: "Hours Learned"
+    }
+  ];
+
+  return (
+    <View style={styles.carouselSection}>
+      <FlatList
+        data={streakData}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => {
+          const slideSize = e.nativeEvent.layoutMeasurement.width;
+          const index = Math.round(e.nativeEvent.contentOffset.x / slideSize);
+          setActiveStreakIndex(index);
+        }}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.streakCardWrapper}>
+            <View style={[styles.streakCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.streakIconContainer, { backgroundColor: item.bgColor }]}>
+                <Feather name={item.icon as any} size={28} color={item.iconColor} />
+              </View>
+              <View style={styles.streakContent}>
+                <Text style={[styles.streakTitle, { color: colors.mutedForeground }]}>{item.title}</Text>
+                <Text style={[styles.streakValue, { color: colors.foreground }]}>{item.value}</Text>
+                <Text style={[styles.streakLabel, { color: colors.mutedForeground }]}>{item.label}</Text>
+              </View>
+            </View>
+          </View>
+        )}
+      />
+      {/* Dot Indicators */}
+      <View style={styles.streakDotsContainer}>
+        {streakData.map((_, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.streakDot,
+              {
+                backgroundColor: idx === activeStreakIndex ? colors.primary : colors.border,
+                width: idx === activeStreakIndex ? 16 : 8,
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}

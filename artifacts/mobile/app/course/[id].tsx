@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -49,6 +50,7 @@ export default function CourseDetailScreen() {
   const [enrollment, setEnrollment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const isFavorite = course ? isFavoriteCourse(course.id) : false;
 
   // Review state
@@ -79,109 +81,101 @@ export default function CourseDetailScreen() {
     }
   };
 
-  useEffect(() => {
-    async function loadCourse() {
-      if (!id) return;
+  const loadCourseData = useCallback(async (isRefreshing = false) => {
+    if (!id) return;
+    if (!isRefreshing) {
       setIsLoading(true);
-      try {
-        const courseData = await getCourseById(id);
-        if (courseData) {
-          const mappedCourse = {
-            id: String(courseData.id),
-            title: courseData.title,
-            category: courseData.category || "General",
-            level: courseData.level ? (courseData.level.charAt(0).toUpperCase() + courseData.level.slice(1)) : "Beginner",
-            price: courseData.price || 0,
-            isFree: courseData.is_free,
-            thumbnail: courseData.thumbnail_url ? { uri: courseData.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-            instructor: "MakersFlow Instructor",
-            rating: 4.8,
-            reviews: 120,
-            description: courseData.description || "",
-            tags: [courseData.category || "Robotics"],
-          };
-          setCourse(mappedCourse);
-
-          const modulesData = await getCourseModules(id);
-          const flatLessons = modulesData.flatMap((m: any) =>
-            m.lessons.map((l: any) => ({
-              id: l.id,
-              title: l.title,
-              duration: l.duration_minutes ? `${l.duration_minutes} mins` : "0 mins",
-              duration_minutes: l.duration_minutes,
-            }))
-          );
-          setModules(flatLessons);
-
-          if (user?.id) {
-            const enrolledStatus = await checkEnrollment(user.id, id);
-            setIsEnrolled(enrolledStatus);
-
-            if (enrolledStatus) {
-              const progressData = await fetchCourseLessonsProgress(user.id, id);
-              setLessonsProgress(progressData);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("[CourseDetail] load error", error);
-      } finally {
-        setIsLoading(false);
-      }
     }
-    loadCourse();
+    try {
+      const courseData = await getCourseById(id);
+      if (courseData) {
+        const mappedCourse = {
+          id: String(courseData.id),
+          title: courseData.title,
+          category: courseData.category || "General",
+          level: courseData.level ? (courseData.level.charAt(0).toUpperCase() + courseData.level.slice(1)) : "Beginner",
+          price: courseData.price || 0,
+          isFree: courseData.is_free,
+          thumbnail: courseData.thumbnail_url ? { uri: courseData.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+          instructor: "MakersFlow Instructor",
+          rating: 4.8,
+          reviews: 120,
+          description: courseData.description || "",
+          tags: [courseData.category || "Robotics"],
+        };
+        setCourse(mappedCourse);
+
+        const modulesData = await getCourseModules(id);
+        const flatLessons = modulesData.flatMap((m: any) =>
+          m.lessons.map((l: any) => ({
+            id: l.id,
+            title: l.title,
+            duration: l.duration_minutes ? `${l.duration_minutes} mins` : "0 mins",
+            duration_minutes: l.duration_minutes,
+          }))
+        );
+        setModules(flatLessons);
+      }
+
+      if (user?.id) {
+        const enrolledStatus = await checkEnrollment(user.id, id);
+        setIsEnrolled(enrolledStatus);
+        if (enrolledStatus) {
+          const progressData = await fetchCourseLessonsProgress(user.id, id);
+          setLessonsProgress(progressData);
+          const enrollData = await getEnrollment(user.id, id);
+          setEnrollment(enrollData);
+        } else {
+          setEnrollment(null);
+        }
+      }
+
+      // Load reviews
+      let reviews: any[] = [];
+      try {
+        reviews = await fetchCourseReviews(id);
+      } catch (reviewErr) {
+        console.error("[CourseDetail] fetchCourseReviews error:", reviewErr);
+      }
+      setAllReviews(reviews);
+      if (reviews.length > 0) {
+        const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
+        setAvgRating(Math.round(avg * 10) / 10);
+      } else {
+        setAvgRating(null);
+      }
+
+      // Load user's review
+      if (user?.id) {
+        const mine = await fetchMyReview(user.id, id);
+        if (mine) {
+          setMyReview({ rating: mine.rating, comment: mine.comment ?? "" });
+          setDraftRating(mine.rating);
+          setDraftComment(mine.comment ?? "");
+        }
+      }
+    } catch (error) {
+      console.error("[CourseDetail] load error", error);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
   }, [id, user?.id]);
 
-  // Re-fetch progress every time this screen comes into focus
-  // (e.g. when navigating back from the learn screen)
+  useEffect(() => {
+    loadCourseData(false);
+  }, [loadCourseData]);
+
   useFocusEffect(
     useCallback(() => {
-      async function refreshData() {
-        if (!id) return;
-        try {
-          // Refresh enrollment & progress
-          if (user?.id) {
-            const enrolledStatus = await checkEnrollment(user.id, id);
-            setIsEnrolled(enrolledStatus);
-            if (enrolledStatus) {
-              const progressData = await fetchCourseLessonsProgress(user.id, id);
-              setLessonsProgress(progressData);
-              const enrollData = await getEnrollment(user.id, id);
-              setEnrollment(enrollData);
-            } else {
-              setEnrollment(null);
-            }
-          }
-          // Load reviews + calculate average
-          let reviews: any[] = [];
-          try {
-            reviews = await fetchCourseReviews(id);
-          } catch (reviewErr) {
-            console.error("[CourseDetail] fetchCourseReviews full error:", JSON.stringify(reviewErr, null, 2), reviewErr);
-          }
-          setAllReviews(reviews);
-          if (reviews.length > 0) {
-            const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
-            setAvgRating(Math.round(avg * 10) / 10);
-          } else {
-            setAvgRating(null);
-          }
-          // Load the current user's own review
-          if (user?.id) {
-            const mine = await fetchMyReview(user.id, id);
-            if (mine) {
-              setMyReview({ rating: mine.rating, comment: mine.comment ?? "" });
-              setDraftRating(mine.rating);
-              setDraftComment(mine.comment ?? "");
-            }
-          }
-        } catch (err) {
-          console.error("[CourseDetail] refreshData error:", err);
-        }
-      }
-      refreshData();
-    }, [user?.id, id])
+      loadCourseData(true);
+    }, [loadCourseData])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadCourseData(true);
+  };
 
   if (isLoading) {
     return <DetailSkeleton />;
@@ -366,6 +360,13 @@ export default function CourseDetailScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 120 : insets.bottom + 120 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Thumbnail */}
         <View style={styles.thumbnailContainer}>

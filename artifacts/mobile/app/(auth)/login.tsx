@@ -19,6 +19,26 @@ import { Alert } from "react-native";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 
+function getFriendlyErrorMessage(err: string): string {
+  const msg = err.toLowerCase();
+  if (msg.includes("invalid login credentials") || msg.includes("invalid credentials")) {
+    return "Incorrect email or password. Please try again.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Please confirm your email address before logging in.";
+  }
+  if (msg.includes("user not found")) {
+    return "No account found with this email. Please sign up.";
+  }
+  if (msg.includes("rate limit") || msg.includes("too many requests")) {
+    return "Too many requests. Please try again in a few minutes.";
+  }
+  if (msg.includes("network")) {
+    return "Network error. Please check your connection.";
+  }
+  return err;
+}
+
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -37,20 +57,30 @@ export default function LoginScreen() {
   const [otpProvider, setOtpProvider] = useState<'sms' | 'whatsapp'>('sms');
 
   async function handleGoogleLogin() {
+    if (googleLoading) return;
     setError("");
     setGoogleLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     const result = await loginWithGoogle();
     
-    if (!result.success) {
+    if (result.success) {
+      const profile = (result as any).profile;
+      setGoogleLoading(false);
+      if (profile && profile.grade) {
+        router.replace("/(tabs)");
+      } else {
+        router.replace("/(auth)/onboarding");
+      }
+    } else {
       setGoogleLoading(false);
       setError(result.error || "Google sign-in failed. Please try again.");
     }
-    // Don't set loading to false on success - the OAuth flow will handle redirect
   }
 
   async function handleLogin() {
+    if (loading) return;
+
     setEmailError("");
     setPasswordError("");
     setError("");
@@ -80,9 +110,14 @@ export default function LoginScreen() {
     setLoading(false);
     
     if (result.success) {
-      router.replace("/(tabs)");
+      const profile = (result as any).profile;
+      if (profile && profile.grade) {
+        router.replace("/(tabs)");
+      } else {
+        router.replace("/(auth)/onboarding");
+      }
     } else {
-      setError(result.error || "Invalid credentials. Please try again.");
+      setError(getFriendlyErrorMessage(result.error || "Invalid credentials. Please try again."));
     }
   }
 
@@ -224,17 +259,17 @@ export default function LoginScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.googleBtn,
-              { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={handleGoogleLogin}
             disabled={googleLoading}
           >
             {googleLoading ? (
-              <ActivityIndicator size="small" color={colors.foreground} />
+              <ActivityIndicator size="small" color="#1F2937" />
             ) : (
               <>
-                <Feather name="chrome" size={18} color={colors.foreground} />
-                <Text style={[styles.googleBtnText, { color: colors.foreground }]}>Continue with Google</Text>
+                <Feather name="chrome" size={18} color="#1F2937" />
+                <Text style={[styles.googleBtnText, { color: "#1F2937" }]}>Continue with Google</Text>
               </>
             )}
           </Pressable>

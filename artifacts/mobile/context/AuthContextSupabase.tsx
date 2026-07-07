@@ -354,7 +354,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           devLog('[Auth] Google OAuth successful');
-          // The onAuthStateChange will handle loading the profile
+          const userId = sessionData.user?.id || sessionData.session?.user?.id;
+          if (userId) {
+            const { data: profile } = await authService.getProfile(userId);
+            return { success: true, profile } as any;
+          }
           return { success: true };
         }
       } else if (result.type === 'cancel') {
@@ -391,7 +395,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         // Profile will be created automatically via loadUserProfile
-        router.replace('/(tabs)');
         return { success: true };
       }
 
@@ -462,7 +465,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem(ATTEMPTS_KEY).catch(() => {});
         // Record login event and check for suspicious activity
         await recordLoginEvent(data.session.user.id).catch(() => {});
-        return { success: true };
+        const { data: profile } = await authService.getProfile(data.session.user.id);
+        return { success: true, profile } as any;
       }
 
       return { success: false, error: 'Login failed' };

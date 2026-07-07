@@ -2,7 +2,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,9 @@ import { useProgress } from "@/context/ProgressContext";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { getCourseModules } from "@/services/courseDataProvider";
+import { ProductCard } from "@/components/ProductCard";
+import { Product } from "@/data/mockData";
+import { useFavorites } from "@/context/FavoritesContext";
 
 interface MenuItem {
   icon: string;
@@ -43,8 +46,55 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const { courseProgress } = useProgress();
+  const { wishlistProductIds } = useFavorites();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  useEffect(() => {
+    async function loadWishlistProducts() {
+      if (wishlistProductIds.length === 0) {
+        setWishlistProducts([]);
+        return;
+      }
+      setWishlistLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock')
+          .in('id', wishlistProductIds.map(Number));
+        if (!error && data) {
+          const kitFallbacks = [
+            require('@/assets/images/product_kit_1.png'),
+            require('@/assets/images/product_kit_2.png'),
+            require('@/assets/images/product_kit_3.png'),
+          ];
+          const mapped: Product[] = data.map((row: any, idx: number) => ({
+            id: String(row.id),
+            title: row.title || "Untitled Product",
+            category: row.category || 'physical',
+            subcategory: row.subcategory || "Physical Kits",
+            price: Number(row.price) || 0,
+            originalPrice: Number(row.original_price) || Number(row.price) || 0,
+            thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
+            description: row.description || "No description available.",
+            rating: 0,
+            reviews: 0,
+            inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+            features: [],
+          }));
+          setWishlistProducts(mapped);
+        }
+      } catch (err) {
+        console.error("[Profile] Error loading wishlist products:", err);
+      } finally {
+        setWishlistLoading(false);
+      }
+    }
+    loadWishlistProducts();
+  }, [wishlistProductIds]);
 
   const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
   const [certsLoading, setCertsLoading] = useState(true);
@@ -241,9 +291,11 @@ export default function ProfileScreen() {
 
   const learningMenuItems: MenuItem[] = [
     { icon: "book-open", label: "My Courses", onPress: () => router.push("/(tabs)/courses") },
+    { icon: "trending-up", label: "My Progress", onPress: () => router.push("/(tabs)/progress") },
     { icon: "heart", label: "Favorites & Watch Later", onPress: () => router.push("/favorites") },
     { icon: "cart-outline", label: "Store", onPress: () => router.push("/(tabs)/store"), iconLib: "ionicons" as const },
     { icon: "cart-outline", label: "My Orders", onPress: () => router.push("/store/orders"), iconLib: "ionicons" as const },
+    { icon: "credit-card", label: "My Transactions", onPress: () => router.push("/transactions") },
   ];
 
   const otherSections: { title: string; items: MenuItem[] }[] = [
@@ -446,6 +498,42 @@ export default function ProfileScreen() {
               </React.Fragment>
             ))}
           </View>
+        )}
+      </View>
+
+      {/* Wishlist Section */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>MY WISHLIST</Text>
+        {wishlistLoading ? (
+          <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : wishlistProducts.length === 0 ? (
+          <View style={[styles.certsCard, styles.emptyCertsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="heart" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
+            <Text style={[styles.emptyCertsText, { color: colors.mutedForeground }]}>
+              Your wishlist is empty
+            </Text>
+            <Text style={[styles.emptyCertsSub, { color: colors.mutedForeground }]}>
+              Explore our store and save products you like
+            </Text>
+            <Pressable
+              style={[styles.browseCourseBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/(tabs)/store")}
+            >
+              <Text style={styles.browseCourseBtnText}>Visit Store</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingVertical: 4 }}
+          >
+            {wishlistProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </ScrollView>
         )}
       </View>
 

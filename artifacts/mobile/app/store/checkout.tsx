@@ -5,6 +5,7 @@ import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -32,7 +33,7 @@ import {
 export default function CheckoutScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { items, total, clearCart, removeFromCart } = useCart();
+  const { items, total, clearCart, addToCart, decrementQuantity } = useCart();
   const { user } = useAuth();
 
   const [name, setName] = useState("");
@@ -544,15 +545,33 @@ export default function CheckoutScreen() {
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {items.map((item) => (
               <View key={item.product.id} style={styles.orderItem}>
-                <Text style={[styles.orderItemName, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.product.title}
-                </Text>
-                <Text style={[styles.orderItemPrice, { color: colors.primary }]}>
-                  ₹{item.product.price} × {item.quantity}
-                </Text>
-                <Pressable onPress={() => removeFromCart(String(item.product.id))} style={styles.removeBtn} hitSlop={8}>
-                  <Feather name="trash-2" size={16} color="#ef4444" />
-                </Pressable>
+                <Image
+                  source={
+                    item.product.thumbnail
+                      ? typeof item.product.thumbnail === "string"
+                        ? { uri: item.product.thumbnail }
+                        : item.product.thumbnail
+                      : require('@/assets/images/course_robotics.png')
+                  }
+                  style={styles.itemThumbnail}
+                />
+                <View style={styles.itemInfo}>
+                  <Text style={[styles.orderItemName, { color: colors.foreground }]} numberOfLines={1}>
+                    {item.product.title}
+                  </Text>
+                  <Text style={[styles.orderItemPrice, { color: colors.primary }]}>
+                    ₹{item.product.price}
+                  </Text>
+                </View>
+                <View style={[styles.controlsContainer, { borderColor: colors.border }]}>
+                  <Pressable onPress={() => decrementQuantity(String(item.product.id))} style={styles.controlBtn} hitSlop={8}>
+                    <Feather name={item.quantity <= 1 ? "trash-2" : "minus"} size={14} color={item.quantity <= 1 ? "#ef4444" : colors.foreground} />
+                  </Pressable>
+                  <Text style={[styles.qtyText, { color: colors.foreground }]}>{item.quantity}</Text>
+                  <Pressable onPress={() => addToCart(item.product)} style={styles.controlBtn} hitSlop={8}>
+                    <Feather name="plus" size={14} color={colors.foreground} />
+                  </Pressable>
+                </View>
               </View>
             ))}
             <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
@@ -760,6 +779,11 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: "700", marginTop: 8, marginBottom: 10 },
   card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10, marginBottom: 4 },
   orderItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  itemThumbnail: { width: 48, height: 48, borderRadius: 8 },
+  itemInfo: { flex: 1, gap: 2 },
+  controlsContainer: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 4, paddingVertical: 2 },
+  controlBtn: { padding: 4 },
+  qtyText: { fontSize: 13, fontWeight: "600", minWidth: 16, textAlign: "center" },
   removeBtn: { padding: 4 },
   orderItemName: { fontSize: 14, flex: 1 },
   orderItemPrice: { fontSize: 14, fontWeight: "600" },

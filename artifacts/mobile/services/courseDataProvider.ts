@@ -46,7 +46,7 @@ export async function getCourseModules(courseId: string) {
 export async function fetchAllCourses() {
   const { data, error } = await supabase
     .from('courses')
-    .select('id, title, category, level, price, is_free, thumbnail_url, slug')
+    .select('id, title, category, level, price, is_free, thumbnail_url, slug, profiles:profiles!courses_instructor_id_fkey(full_name)')
     .eq('is_published', true)
     .order('created_at', { ascending: false });
   if (error) throw error;

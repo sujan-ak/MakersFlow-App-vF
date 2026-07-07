@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -6,6 +6,8 @@ import { Image, Pressable, StyleSheet, Text, View, Alert, Platform, Dimensions }
 import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
+import { useFavorites } from "@/context/FavoritesContext";
+import { FavoriteButton } from "./FavoriteButton";
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
@@ -19,8 +21,33 @@ interface ProductCardProps {
 export function ProductCard({ product, onAddedToCart, gridMode = false }: ProductCardProps) {
   const colors = useColors();
   const { addToCart } = useCart();
+  const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
   const [isAdding, setIsAdding] = useState(false);
   const discount = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
+  const isWishlisted = isProductInWishlist(product.id);
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+    for (let i = 1; i <= 5; i++) {
+      if (i <= fullStars) {
+        stars.push(<MaterialIcons key={i} name="star" size={11} color="#F59E0B" />);
+      } else if (i === fullStars + 1 && hasHalfStar) {
+        stars.push(<MaterialIcons key={i} name="star-half" size={11} color="#F59E0B" />);
+      } else {
+        stars.push(<MaterialIcons key={i} name="star-outline" size={11} color="#E5E7EB" />);
+      }
+    }
+    return stars;
+  };
+
+  const handleToggleWishlist = async (e: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await toggleWishlistProduct(product.id);
+  };
 
   const handleAddToCart = async (e: any) => {
     e.preventDefault();
@@ -59,28 +86,25 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
             <Text style={styles.badgeText}>{product.badge}</Text>
           </View>
         )}
-        <View
-          style={[
-            styles.categoryIcon,
-            { backgroundColor: product.category === "physical" ? colors.accent : colors.muted },
-          ]}
-        >
-          <Feather
-            name={product.category === "physical" ? "package" : "file-text"}
-            size={12}
-            color={product.category === "physical" ? colors.primary : colors.mutedForeground}
-          />
-        </View>
       </View>
       <View style={styles.content}>
         <Text style={[styles.subcategory, { color: colors.mutedForeground }]}>{product.subcategory}</Text>
-        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={2}>
-          {product.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, { color: colors.foreground, flex: 1 }]} numberOfLines={2}>
+            {product.title}
+          </Text>
+          <FavoriteButton
+            isFavorite={isWishlisted}
+            onPress={handleToggleWishlist}
+            size={14}
+          />
+        </View>
         <View style={styles.ratingRow}>
-          <Feather name="star" size={11} color="#F59E0B" />
-          <Text style={[styles.rating, { color: colors.mutedForeground }]}> {product.rating}</Text>
-          <Text style={[styles.reviews, { color: colors.mutedForeground }]}> ({product.reviews})</Text>
+          <View style={styles.starsContainer}>
+            {renderStars(product.rating || 0)}
+          </View>
+          <Text style={[styles.rating, { color: colors.mutedForeground }]}>{product.rating > 0 ? product.rating : ""}</Text>
+          <Text style={[styles.reviews, { color: colors.mutedForeground }]}>{product.reviews > 0 ? `(${product.reviews})` : "No reviews"}</Text>
         </View>
         <View style={styles.priceRow}>
           <View style={styles.priceGroup}>
@@ -95,7 +119,7 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
             style={[styles.addToCartBtn, { backgroundColor: colors.secondary }]}
             onPress={handleAddToCart}
           >
-            <Feather name="shopping-cart" size={16} color="#FFF" />
+            <Feather name="plus" size={13} color="#FFF" />
           </Pressable>
         </View>
         {discount > 0 && (
@@ -140,18 +164,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
   },
-  categoryIcon: {
-    position: "absolute",
-    bottom: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   content: {
     padding: 12,
+    gap: 4,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   subcategory: {
@@ -165,12 +184,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     lineHeight: 19,
-    minHeight: 38,
     flexShrink: 1,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  starsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
   },
   rating: {
     fontSize: 11,
@@ -215,11 +240,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   addToCartBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
 });
+

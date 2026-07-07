@@ -190,9 +190,17 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
             <Text style={[styles.progressPercentage, { color: colors.mutedForeground }]}>{progress}%</Text>
           </View>
         ) : (
-          <Text style={[styles.priceTextLarge, { color: colors.foreground }]}>
-            {course.isFree ? "Free" : `₹${course.price}`}
-          </Text>
+          <View style={styles.actionRow}>
+            <Text style={[styles.priceTextLarge, { color: colors.foreground }]}>
+              {course.isFree ? "Free" : `₹${course.price}`}
+            </Text>
+            <Pressable
+              style={[styles.addBtn, { backgroundColor: colors.secondary }]}
+              onPress={() => router.push({ pathname: "/course/[id]", params: { id: course.id } })}
+            >
+              <Feather name="plus" size={13} color="#FFF" />
+            </Pressable>
+          </View>
         )}
       </View>
     </Pressable>
@@ -289,6 +297,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     marginTop: 4,
+    flex: 1,
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+    gap: 6,
+  },
+  addBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   progressContainerBottom: {
     flexDirection: "row",

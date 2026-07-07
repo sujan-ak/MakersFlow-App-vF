@@ -5,13 +5,16 @@ import {
   WatchLaterLesson,
   FavoritesStorage,
 } from "@/lib/favoritesStorage";
+import { supabase } from "@/lib/supabase";
 
 interface FavoritesContextType {
   favoriteCourses: FavoriteCourse[];
   watchLaterLessons: WatchLaterLesson[];
   downloadedLessons: WatchLaterLesson[];
+  wishlistProductIds: string[];
   isFavoriteCourse: (courseId: string) => boolean;
   isInWatchLater: (lessonId: string) => boolean;
+  isProductInWishlist: (productId: string) => boolean;
   toggleFavoriteCourse: (course: {
     id: string;
     title: string;
@@ -39,6 +42,7 @@ interface FavoritesContextType {
   removeFavoriteCourse: (courseId: string) => Promise<void>;
   removeFromWatchLater: (lessonId: string) => Promise<void>;
   removeDownloadedLesson: (lessonId: string) => Promise<void>;
+  toggleWishlistProduct: (productId: string) => Promise<void>;
 }
 
 const FavoritesContext = createContext<FavoritesContextType | null>(null);
@@ -50,6 +54,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   const [favoriteCourses, setFavoriteCourses] = useState<FavoriteCourse[]>([]);
   const [watchLaterLessons, setWatchLaterLessons] = useState<WatchLaterLesson[]>([]);
   const [downloadedLessons, setDownloadedLessons] = useState<WatchLaterLesson[]>([]);
+  const [wishlistProductIds, setWishlistProductIds] = useState<string[]>([]);
 
   // The reliable user ID: prefer profile user.id, fall back to session user id
   const userId = user?.id ?? session?.user?.id ?? null;
@@ -68,6 +73,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       setFavoriteCourses([]);
       setWatchLaterLessons([]);
       setDownloadedLessons([]);
+      setWishlistProductIds([]);
     }
   }, [userId]);
 
@@ -81,6 +87,15 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
       setFavoriteCourses(courses);
       setWatchLaterLessons(lessons);
       setDownloadedLessons(downloads);
+
+      // Load product wishlist from Supabase
+      const { data: wishlistData, error: wishlistError } = await supabase
+        .from('wishlist')
+        .select('product_id')
+        .eq('user_id', uid);
+      if (!wishlistError && wishlistData) {
+        setWishlistProductIds(wishlistData.map((w: any) => String(w.product_id)));
+      }
     } catch (error) {
       console.error("Failed to load favorites:", error);
     }
@@ -253,20 +268,58 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  function isProductInWishlist(productId: string): boolean {
+    return wishlistProductIds.includes(String(productId));
+  }
+
+  async function toggleWishlistProduct(productId: string): Promise<void> {
+    if (!userId) return;
+    const isWishlisted = isProductInWishlist(productId);
+    
+    // Update state immediately for instant feedback
+    if (isWishlisted) {
+      setWishlistProductIds(wishlistProductIds.filter(id => id !== String(productId)));
+      try {
+        await supabase
+          .from('wishlist')
+          .delete()
+          .eq('user_id', userId)
+          .eq('product_id', Number(productId));
+      } catch (err) {
+        console.error("Failed to delete from wishlist:", err);
+      }
+    } else {
+      setWishlistProductIds([...wishlistProductIds, String(productId)]);
+      try {
+        await supabase
+          .from('wishlist')
+          .insert({
+            user_id: userId,
+            product_id: Number(productId)
+          });
+      } catch (err) {
+        console.error("Failed to insert into wishlist:", err);
+      }
+    }
+  }
+
   return (
     <FavoritesContext.Provider
       value={{
         favoriteCourses,
         watchLaterLessons,
         downloadedLessons,
+        wishlistProductIds,
         isFavoriteCourse,
         isInWatchLater,
+        isProductInWishlist,
         toggleFavoriteCourse,
         toggleWatchLater,
         addDownloadedLesson,
         removeFavoriteCourse,
         removeFromWatchLater,
         removeDownloadedLesson,
+        toggleWishlistProduct,
       }}
     >
       {children}
