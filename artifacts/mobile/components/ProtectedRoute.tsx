@@ -1,19 +1,39 @@
-import { Redirect, useSegments } from 'expo-router';
-import React from 'react';
-import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
+import { useSegments, router } from 'expo-router';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, View, StyleSheet, Text, Pressable } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContextSupabase';
+import { useRequireAuth } from '@/context/AuthRequireContext';
 import { useColors } from '@/hooks/useColors';
-
-// Routes accessible without authentication
-const PUBLIC_ROUTES = [
-  'settings/privacy-policy',
-  'settings/terms-of-service',
-];
+import { PROTECTED_ROUTES } from '@/lib/protectedRoutes';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const { requireAuth } = useRequireAuth();
   const segments = useSegments();
   const colors = useColors();
+
+  const inAuthGroup = segments[0] === '(auth)';
+  const currentPath = segments.join('/');
+  
+  const isProtectedRoute = PROTECTED_ROUTES.some((route) => {
+    return (segments as any).includes(route) || currentPath.startsWith(route);
+  });
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && isProtectedRoute && !inAuthGroup) {
+      requireAuth(() => {
+        router.replace(('/' + currentPath) as any);
+      });
+    }
+  }, [isLoading, isAuthenticated, isProtectedRoute, inAuthGroup, currentPath]);
+
+  // Safe redirect outside the rendering flow to prevent React warning side-effects
+  useEffect(() => {
+    if (isAuthenticated && inAuthGroup) {
+      router.replace("/(tabs)");
+    }
+  }, [isAuthenticated, inAuthGroup]);
 
   if (isLoading) {
     return (
@@ -24,19 +44,41 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const inAuthGroup = segments[0] === '(auth)';
-  // e.g. segments = ['settings', 'privacy-policy'] → 'settings/privacy-policy'
-  const currentPath = segments.join('/');
-  const isPublicRoute = PUBLIC_ROUTES.some((route) => currentPath === route || currentPath.startsWith(route));
+  // Fallback screen for protected tab items
+  if (!isAuthenticated && isProtectedRoute && !inAuthGroup) {
+    return (
+      <View style={[styles.placeholderContainer, { backgroundColor: colors.background }]}>
+        <View style={styles.content}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.accent }]}>
+            <Feather name="lock" size={32} color={colors.primary} />
+          </View>
+          <Text style={[styles.title, { color: colors.foreground }]}>Sign in to continue</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+            Create a free account to enroll in courses, track progress, and purchase kits.
+          </Text>
+          
+          <View style={styles.actions}>
+            <Pressable
+              style={[styles.button, styles.primaryButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/(auth)/login")}
+            >
+              <Text style={styles.primaryButtonText}>Sign In</Text>
+            </Pressable>
 
-  // If not authenticated, not in auth group, and not a public route → redirect to login
-  if (!isAuthenticated && !inAuthGroup && !isPublicRoute) {
-    return <Redirect href="/(auth)/login" />;
+            <Pressable
+              style={[styles.button, styles.secondaryButton, { borderColor: colors.border }]}
+              onPress={() => router.push("/(auth)/register")}
+            >
+              <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>Create Account</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
   }
 
-  // If authenticated and in auth group, redirect to home
   if (isAuthenticated && inAuthGroup) {
-    return <Redirect href="/(tabs)" />;
+    return null;
   }
 
   return <>{children}</>;
@@ -47,5 +89,67 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  content: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  subtitle: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+  actions: {
+    width: '100%',
+    gap: 12,
+  },
+  button: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    minHeight: 48,
+  },
+  primaryButton: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  secondaryButton: {
+    borderWidth: 1,
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

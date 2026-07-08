@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContextSupabase";
+import { AuthRequireProvider } from "@/context/AuthRequireContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { CartProvider } from "@/context/CartContext";
 import { ProgressProvider } from "@/context/ProgressContext";
@@ -58,6 +59,7 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding/index" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="course/[id]" options={{ headerShown: false }} />
@@ -108,15 +110,17 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <FavoritesProvider>
-                  <ProgressProvider>
-                    <ProtectedRoute>
-                      <CartProvider>
-                        <RootLayoutNav />
-                      </CartProvider>
-                    </ProtectedRoute>
-                  </ProgressProvider>
-                </FavoritesProvider>
+                <AuthRequireProvider>
+                  <ProtectedRoute>
+                    <CartProvider>
+                      <FavoritesProvider>
+                        <ProgressProvider>
+                          <RootLayoutNav />
+                        </ProgressProvider>
+                      </FavoritesProvider>
+                    </CartProvider>
+                  </ProtectedRoute>
+                </AuthRequireProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

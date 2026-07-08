@@ -1,33 +1,51 @@
 import { router } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Text } from "react-native";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+import { hasSeenOnboarding } from "@/lib/onboardingStorage";
 
 export default function SplashRedirect() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const colors = useColors();
+  const hasNavigated = useRef(false);
+  const [isOnboardingCheckDone, setIsOnboardingCheckDone] = useState(false);
+  const [onboardingSeen, setOnboardingSeen] = useState(false);
 
   useEffect(() => {
-    if (!isLoading) {
+    async function checkOnboarding() {
+      const seen = await hasSeenOnboarding();
+      setOnboardingSeen(seen);
+      setIsOnboardingCheckDone(true);
+    }
+    checkOnboarding();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthLoading && isOnboardingCheckDone) {
+      if (hasNavigated.current) return;
+      hasNavigated.current = true;
+
       if (user) {
-        // Profile still missing onboarding details (e.g. Google sign-ins never
-        // pass through the register form) → collect age / grade / school first.
-        if (!user.grade && !user.school) {
+        if (!user.onboarding_completed) {
           router.replace("/(auth)/onboarding");
         } else {
           router.replace("/(tabs)");
         }
       } else {
-        router.replace("/(auth)/login");
+        if (!onboardingSeen) {
+          router.replace("/onboarding");
+        } else {
+          router.replace("/(tabs)");
+        }
       }
     }
-  }, [isLoading, user]);
+  }, [isAuthLoading, isOnboardingCheckDone, user, onboardingSeen]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.primary }]}>
-      <ActivityIndicator color="#ffffff" size="large" />
-      <Text style={{ marginTop: 12, color: "#ffffff", fontWeight: "500" }}>Loading...</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ActivityIndicator color={colors.primary} size="large" />
+      <Text style={{ marginTop: 12, color: colors.foreground, fontWeight: "500" }}>Loading...</Text>
     </View>
   );
 }

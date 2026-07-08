@@ -8,6 +8,7 @@ import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
 import { FavoriteButton } from "./FavoriteButton";
+import { useRequireAuth } from "@/context/AuthRequireContext";
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
@@ -22,6 +23,7 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
   const colors = useColors();
   const { addToCart } = useCart();
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
+  const { requireAuth } = useRequireAuth();
   const [isAdding, setIsAdding] = useState(false);
   const discount = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
   const isWishlisted = isProductInWishlist(product.id);
@@ -45,8 +47,10 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
   const handleToggleWishlist = async (e: any) => {
     e.preventDefault();
     e.stopPropagation();
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await toggleWishlistProduct(product.id);
+    requireAuth(async () => {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await toggleWishlistProduct(product.id);
+    });
   };
 
   const handleAddToCart = async (e: any) => {
@@ -55,19 +59,21 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
     
     if (isAdding) return;
     
-    setIsAdding(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    addToCart(product);
-    
-    if (onAddedToCart) {
-      onAddedToCart();
-    }
-    
-    if (Platform.OS !== "web") {
-      Alert.alert("Added to cart", `${product.title} has been added to your cart`);
-    }
-    
-    setTimeout(() => setIsAdding(false), 500);
+    requireAuth(async () => {
+      setIsAdding(true);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      addToCart(product);
+      
+      if (onAddedToCart) {
+        onAddedToCart();
+      }
+      
+      if (Platform.OS !== "web") {
+        Alert.alert("Added to cart", `${product.title} has been added to your cart`);
+      }
+      
+      setTimeout(() => setIsAdding(false), 500);
+    });
   };
 
   return (

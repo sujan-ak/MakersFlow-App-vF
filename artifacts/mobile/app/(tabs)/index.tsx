@@ -112,11 +112,47 @@ function CategoryGrid({ categories, colors, onCategoryPress }: CategoryGridProps
   );
 }
 
+interface GuestWelcomeCardProps {
+  colors: any;
+  onSignIn: () => void;
+  onBrowseCourses: () => void;
+}
+
+function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCardProps) {
+  return (
+    <View style={[styles.guestCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.guestIconContainer, { backgroundColor: colors.accent }]}>
+        <Feather name="award" size={32} color={colors.primary} />
+      </View>
+      <Text style={[styles.guestTitle, { color: colors.foreground }]}>Welcome to Edodwaja</Text>
+      <Text style={[styles.guestSubtitleText, { color: colors.mutedForeground }]}>
+        Sign in to track your progress, earn certificates, and continue where you left off.
+      </Text>
+      <View style={styles.guestActions}>
+        <Pressable
+          style={[styles.guestPrimaryBtn, { backgroundColor: colors.primary }]}
+          onPress={onSignIn}
+        >
+          <Text style={styles.guestPrimaryBtnText}>Sign In</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.guestSecondaryBtn, { borderColor: colors.border }]}
+          onPress={onBrowseCourses}
+        >
+          <Text style={[styles.guestSecondaryBtnText, { color: colors.foreground }]}>Browse Courses</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { watchlist } = useProgress();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [popularCoursesY, setPopularCoursesY] = useState(0);
 
   const [courses, setCourses] = useState<any[]>([]);
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
@@ -162,11 +198,6 @@ export default function HomeScreen() {
           .select('*')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
-        // BUG FIX (promotions add/delete not reflected):
-        // Previously setPromotions was only called when the query succeeded
-        // AND returned data, so after an admin deleted/deactivated banners
-        // (or the query errored) the OLD banners stayed on screen forever.
-        // Now the state always mirrors the latest fetch result.
         if (promoError) {
           console.error("Failed to load promotions:", promoError);
           setPromotions([]);
@@ -250,8 +281,6 @@ export default function HomeScreen() {
       if (user?.id) {
         const enrollments = await fetchEnrolledCourses(user.id);
         const mappedEnrolled = await Promise.all(
-          // Defensive: skip enrollments whose course was deleted/unpublished
-          // (null join) so one bad row can't blank the whole section.
           enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
             const c = enr.courses;
             const prog = await fetchCourseProgress(user.id, String(c.id));
@@ -262,7 +291,6 @@ export default function HomeScreen() {
         );
         setEnrolledCourses(mappedEnrolled);
 
-        // Fetch lesson progress for calculating real streak
         // Fetch lesson progress for calculating real streak
         const { data: lpData } = await supabase
           .from('lesson_progress')
@@ -294,6 +322,8 @@ export default function HomeScreen() {
         } catch {
           setLongestStreak(0);
         }
+      } else {
+        setEnrolledCourses([]);
       }
 
       // Fetch distinct categories from courses table
@@ -382,10 +412,6 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // BUG FIX: when the promotions list shrinks (admin deleted/deactivated a
-  // banner), the carousel could be left scrolled past the end of the new list
-  // — showing a blank banner — and the active dot index pointed out of range.
-  // Reset to the first banner whenever the list changes.
   useEffect(() => {
     setActiveBannerIndex(0);
     if (promotions.length > 0) {
@@ -398,8 +424,6 @@ export default function HomeScreen() {
     if (promotions.length <= 1) return;
 
     const timer = setInterval(() => {
-      // Clamp against the CURRENT list length so a shrunk list can never
-      // produce an out-of-range scrollToIndex.
       const safeCurrent = Math.min(activeBannerIndex, promotions.length - 1);
       const nextIndex = (safeCurrent + 1) % promotions.length;
       setActiveBannerIndex(nextIndex);
@@ -487,6 +511,7 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={{ paddingTop: 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
@@ -495,61 +520,64 @@ export default function HomeScreen() {
         }
       >
 
-      {/* Stats Banner */}
-      <View style={[styles.statsBanner, { backgroundColor: colors.primary }]}>
-        {enrolledCourses.length === 0 ? (
-          <View style={styles.emptyStateContainer}>
-            <Text style={styles.emptyStateIcon}></Text>
-            <Text style={[styles.emptyStateTitle, { color: colors.foreground }]}>No courses yet</Text>
-            <Text style={styles.emptyStateSubtitle}>Explore courses and begin your learning journey</Text>
-          </View>
-        ) : (
-          <>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{enrolledCourses.length}</Text>
-              <Text style={styles.statLabel}>Courses Enrolled</Text>
-            </View>
-            <View style={[styles.statDivider]} />
-            <View style={styles.statItem}>
-              {completedCount === 0 ? (
-                <>
-                  <Text style={styles.statNumber}>0</Text>
-                  <Text style={styles.statLabel}>Complete Your First</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.statNumber}>{completedCount}</Text>
-                  <Text style={styles.statLabel}>Courses Completed</Text>
-                </>
-              )}
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              {avgProgress === 0 ? (
-                <>
-                  <Text style={styles.statNumber}>0%</Text>
-                  <Text style={styles.statLabel}>Begin Progress</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.statNumber}>{avgProgress}%</Text>
-                  <Text style={styles.statLabel}>Average Progress</Text>
-                </>
-              )}
-            </View>
-          </>
-        )}
-      </View>
-
-      {/* Learning Streak Carousel */}
-      {enrolledCourses.length > 0 && (
-        <StreakCarousel
-          learningStreak={learningStreak}
-          longestStreak={longestStreak}
-          totalLessonsCompleted={totalLessonsCompleted}
-          totalHoursLearned={totalHoursLearned}
+      {/* Guest Welcome Card or User Stats */}
+      {!user ? (
+        <GuestWelcomeCard
           colors={colors}
+          onSignIn={() => router.push("/(auth)/login")}
+          onBrowseCourses={() => {
+            scrollViewRef.current?.scrollTo({ y: popularCoursesY, animated: true });
+          }}
         />
+      ) : (
+        <>
+          {/* Stats Banner */}
+          <View style={[styles.statsBanner, { backgroundColor: colors.primary }]}>
+            {enrolledCourses.length === 0 ? (
+              <View style={styles.emptyStateContainer}>
+                <Text style={styles.emptyStateIcon}></Text>
+                <Text style={[styles.emptyStateTitle, { color: colors.foreground }]}>No courses yet</Text>
+                <Text style={styles.emptyStateSubtitle}>Explore courses and begin your learning journey</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{enrolledCourses.length}</Text>
+                  <Text style={styles.statLabel}>Courses Enrolled</Text>
+                </View>
+                {completedCount > 0 && (
+                  <>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                      <Text style={styles.statNumber}>{completedCount}</Text>
+                      <Text style={styles.statLabel}>Courses Completed</Text>
+                    </View>
+                  </>
+                )}
+                {avgProgress > 0 && (
+                  <>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                      <Text style={styles.statNumber}>{avgProgress}%</Text>
+                      <Text style={styles.statLabel}>Average Progress</Text>
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+          </View>
+
+          {/* Learning Streak Carousel */}
+          {enrolledCourses.length > 0 && (
+            <StreakCarousel
+              learningStreak={learningStreak}
+              longestStreak={longestStreak}
+              totalLessonsCompleted={totalLessonsCompleted}
+              totalHoursLearned={totalHoursLearned}
+              colors={colors}
+            />
+          )}
+        </>
       )}
 
       {/* Banner Carousel */}
@@ -569,16 +597,12 @@ export default function HomeScreen() {
               index,
             })}
             onScrollToIndexFailed={() => {
-              // List changed under us (banner deleted) — snap back to start.
               bannerFlatListRef.current?.scrollToOffset({ offset: 0, animated: false });
               setActiveBannerIndex(0);
             }}
             renderItem={({ item }) => (
               <Pressable
                 onPress={() => {
-                  // BUG FIX: the promotions table column is `link` (see
-                  // docs/migrations/2026-07_premium_features.sql) — the code
-                  // read `action_url`, so tapping a banner never navigated.
                   const target = item.link ?? item.action_url;
                   if (target) {
                     router.push(target);
@@ -622,7 +646,7 @@ export default function HomeScreen() {
       )}
 
       {/* Continue Learning */}
-      {watchlist.length > 0 && (
+      {user && watchlist.length > 0 && (
         <View style={styles.section}>
           <SectionHeader 
             title="Continue Watching" 
@@ -643,7 +667,10 @@ export default function HomeScreen() {
 
       {/* Popular Courses Section */}
       {popularCourses.length > 0 && (
-        <View style={styles.section}>
+        <View 
+          style={styles.section}
+          onLayout={(e) => setPopularCoursesY(e.nativeEvent.layout.y)}
+        >
           <SectionHeader 
             title="Popular Courses" 
             onSeeAll={() => router.push({ pathname: "/(tabs)/store", params: { category: "Courses" } })} 
@@ -716,7 +743,6 @@ export default function HomeScreen() {
             Discover the brands and partners that make up the MakersFlow ecosystem
           </Text>
           <View style={styles.brandsContainer}>
-            {/* Brand logos will be added here */}
             <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <Feather name="image" size={24} color={colors.mutedForeground} />
             </View>
@@ -1013,6 +1039,73 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  guestCard: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  guestIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  guestTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+  guestSubtitleText: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
+  guestActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  guestPrimaryBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  guestPrimaryBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  guestSecondaryBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestSecondaryBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
 });
 
 interface StreakCarouselProps {
@@ -1038,17 +1131,17 @@ function StreakCarousel({
       title: "Current Streak",
       value: `${learningStreak} days`,
       icon: "zap",
-      iconColor: "#F97316", // orange
-      bgColor: "#FFF7ED", // light orange
+      iconColor: "#F97316",
+      bgColor: "#FFF7ED",
       label: "Active Days"
     },
     {
       id: "longest_streak",
       title: "Longest Streak",
       value: `${longestStreak} days`,
-      icon: "award", // trophy icon
-      iconColor: "#4F46E5", // indigo
-      bgColor: "#EEF2FF", // light indigo
+      icon: "award",
+      iconColor: "#4F46E5",
+      bgColor: "#EEF2FF",
       label: "Personal Best"
     },
     {
@@ -1056,8 +1149,8 @@ function StreakCarousel({
       title: "Lessons Completed",
       value: `${totalLessonsCompleted} lessons`,
       icon: "book-open",
-      iconColor: "#F97316", // orange
-      bgColor: "#FFF7ED", // light orange
+      iconColor: "#F97316",
+      bgColor: "#FFF7ED",
       label: "Lessons Done"
     },
     {
@@ -1065,8 +1158,8 @@ function StreakCarousel({
       title: "Learning Time",
       value: `${totalHoursLearned} hrs`,
       icon: "clock",
-      iconColor: "#4F46E5", // indigo
-      bgColor: "#EEF2FF", // light indigo
+      iconColor: "#4F46E5",
+      bgColor: "#EEF2FF",
       label: "Hours Learned"
     }
   ];
@@ -1099,7 +1192,6 @@ function StreakCarousel({
           </View>
         )}
       />
-      {/* Dot Indicators */}
       <View style={styles.streakDotsContainer}>
         {streakData.map((_, idx) => (
           <View

@@ -6,6 +6,7 @@
 // - Category filter chips (Robotics, AI, Electronics, etc.)
 // - Full course catalog browsing
 // - Search functionality across all courses
+// // TODO: Extract reviews aggregation to a shared lib/reviewsService.ts to avoid duplication across screens
 // ═══════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
@@ -38,39 +39,41 @@ export default function CoursesScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async (isRefreshing = false) => {
-    if (!user?.id) {
-      setIsLoading(false);
-      return;
-    }
     if (!isRefreshing) {
       setIsLoading(true);
     }
     try {
-      // 1. Fetch enrolled courses
-      const enrollments = await fetchEnrolledCourses(user.id);
-      const enrolledMapped = await Promise.all(
-        enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
-          const c = enr.courses;
-          const prog = await fetchCourseProgress(user.id, String(c.id));
-          return {
-            courseId: String(c.id),
-            courseTitle: c.title,
-            instructor: c.courses?.profiles?.full_name || "",
-            thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-            progress: prog.percentage,
-            totalModules: prog.total,
-            completedModules: prog.completed,
-            lastAccessedAt: enr.enrolled_at || new Date().toISOString(),
-            timeSpent: 0,
-          };
-        })
-      );
-      setEnrolledCourses(enrolledMapped);
+      let enrolledMapped: any[] = [];
+      
+      // 1. Fetch enrolled courses if logged in
+      if (user?.id) {
+        const enrollments = await fetchEnrolledCourses(user.id);
+        enrolledMapped = await Promise.all(
+          enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
+            const c = enr.courses;
+            const prog = await fetchCourseProgress(user.id, String(c.id));
+            return {
+              courseId: String(c.id),
+              courseTitle: c.title,
+              instructor: c.courses?.profiles?.full_name || "",
+              thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+              progress: prog.percentage,
+              totalModules: prog.total,
+              completedModules: prog.completed,
+              lastAccessedAt: enr.enrolled_at || new Date().toISOString(),
+              timeSpent: 0,
+            };
+          })
+        );
+        setEnrolledCourses(enrolledMapped);
+      } else {
+        setEnrolledCourses([]);
+      }
 
-      // 2. Fetch all published courses to filter out enrolled ones
+      // 2. Fetch all published courses
       const allPub = await fetchAllCourses();
       
-      // Load real review aggregations client-side
+      // TODO: Extract reviews aggregation to a shared lib/reviewsService.ts to avoid duplication across screens
       let reviewStats: Record<string, { ratingSum: number; count: number }> = {};
       try {
         const { data: reviewsData } = await supabase
@@ -120,6 +123,7 @@ export default function CoursesScreen() {
       console.error('[CoursesScreen] Error fetching courses:', err);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   }, [user?.id]);
 
@@ -155,9 +159,11 @@ export default function CoursesScreen() {
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <View>
-            <Text style={[styles.pageTitle, { color: colors.foreground }]}>My Courses</Text>
+            <Text style={[styles.pageTitle, { color: colors.foreground }]}>
+              {user ? "My Courses" : "Explore Courses"}
+            </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-              {totalEnrolled} enrolled
+              {user ? `${totalEnrolled} enrolled` : "Explore our technical catalog"}
             </Text>
           </View>
           <Pressable
@@ -188,8 +194,23 @@ export default function CoursesScreen() {
           </View>
         ) : (
           <>
-            {/* MY COURSES SUBSECTION */}
-            {totalEnrolled === 0 ? (
+            {!user ? (
+              <View style={[styles.guestBanner, { backgroundColor: colors.accent, borderColor: colors.border }]}>
+                <View style={styles.guestBannerHeader}>
+                  <Feather name="info" size={18} color={colors.primary} />
+                  <Text style={[styles.guestBannerTitle, { color: colors.foreground }]}>Sign in to track progress</Text>
+                </View>
+                <Text style={[styles.guestBannerText, { color: colors.mutedForeground }]}>
+                  Log in to see your enrolled courses, certificates, and continue learning where you left off.
+                </Text>
+                <Pressable
+                  style={[styles.guestBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => router.push("/(auth)/login")}
+                >
+                  <Text style={styles.guestBtnText}>Sign In</Text>
+                </Pressable>
+              </View>
+            ) : totalEnrolled === 0 ? (
               <View style={[styles.emptyEnrolledCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Feather name="book-open" size={32} color={colors.mutedForeground} style={{ opacity: 0.5, marginBottom: 8 }} />
                 <Text style={[styles.emptyEnrolledText, { color: colors.mutedForeground }]}>
@@ -311,7 +332,7 @@ export default function CoursesScreen() {
             {browseMoreCourses.length > 0 && (
               <View style={[styles.browseSection, { marginTop: 24 }]}>
                 <Text style={[styles.browseTitle, { color: colors.foreground }]}>
-                  Browse More Courses
+                  {user ? "Browse More Courses" : "Explore Courses"}
                 </Text>
                 <View style={styles.gridContainer}>
                   {browseMoreCourses.map((course) => (
@@ -465,5 +486,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     justifyContent: "space-between",
     rowGap: 16,
+  },
+  guestBanner: {
+    marginHorizontal: 20,
+    marginVertical: 12,
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+  },
+  guestBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  guestBannerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  guestBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  guestBtn: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  guestBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFF",
   },
 });

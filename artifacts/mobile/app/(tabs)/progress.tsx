@@ -93,13 +93,7 @@ export default function ProgressScreen() {
       // Fetch enrollments
       const enrollments = await fetchEnrolledCourses(user.id);
 
-      // BUG 3 fix: Query exact enrolled count from supabase
-      const { count } = await supabase
-        .from('enrollments')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-      
-      const totalCoursesEnrolled = count ?? 0;
+      const totalCoursesEnrolled = enrollments.length;
       setEnrolledCount(totalCoursesEnrolled);
 
       // Fetch lesson progress

@@ -80,6 +80,7 @@ export async function updateProfile(
     school?: string | null;
     avatar_url?: string | null;
     age?: number | null;
+    onboarding_completed?: boolean;
   }
 ) {
   return await supabase

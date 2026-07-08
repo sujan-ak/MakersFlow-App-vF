@@ -30,6 +30,7 @@ import { useAuth } from "@/context/AuthContextSupabase";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
 import { supabase } from "@/lib/supabase";
+import { useRequireAuth } from "@/context/AuthRequireContext";
 import { getCourseById, getCourseModules } from "@/services/courseDataProvider";
 import { enrollInCourse, isEnrolled as checkEnrollment, getEnrollment, isExpired } from "@/services/enrollmentService";
 import { fetchCourseLessonsProgress } from "@/lib/progressStorage";
@@ -42,6 +43,7 @@ export default function CourseDetailScreen() {
   const { user } = useAuth();
   const { isFavoriteCourse, toggleFavoriteCourse } = useFavorites();
   const { addToCart, items: cartItems } = useCart();
+  const { requireAuth } = useRequireAuth();
 
   const [course, setCourse] = useState<any>(null);
   const [modules, setModules] = useState<any[]>([]); // flat lessons
@@ -217,25 +219,28 @@ export default function CourseDetailScreen() {
 
   const handleFavoriteToggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const wasAdded = !isFavorite;
-    toggleFavoriteCourse({
-      id: course.id,
-      title: course.title,
-      thumbnail: course.thumbnail,
-      category: course.category,
-      price: course.price,
-      isFree: course.isFree,
+    requireAuth(() => {
+      const wasAdded = !isFavorite;
+      toggleFavoriteCourse({
+        id: course.id,
+        title: course.title,
+        thumbnail: course.thumbnail,
+        category: course.category,
+        price: course.price,
+        isFree: course.isFree,
+      });
+      showToast(wasAdded ? 'Added to Favorites' : 'Removed from Favorites');
     });
-    showToast(wasAdded ? 'Added to Favorites' : 'Removed from Favorites');
   };
 
   const handleEnrollNow = async () => {
-    if (!course || !user?.id) return;
+    if (!course) return;
+    requireAuth(async () => {
+      if (!user?.id) return;
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setIsEnrolling(true);
 
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsEnrolling(true);
-
-    try {
+      try {
       // ── BUG FIX (paid enrollment never visible) ────────────────────────────
       // Previously paid courses were "enrolled" instantly with
       // payment_status: 'pending' and the UI flipped to enrolled with a
@@ -323,6 +328,7 @@ export default function CourseDetailScreen() {
     } finally {
       setIsEnrolling(false);
     }
+    });
   };
 
   const handleSubmitReview = async () => {

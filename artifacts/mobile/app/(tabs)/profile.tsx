@@ -133,15 +133,15 @@ export default function ProfileScreen() {
         try {
           const { data: enrollData, error: countError } = await supabase
             .from("enrollments")
-            .select("course_id, payment_status, courses(id)")
+            .select("course_id, payment_status, courses(id, is_free)")
             .eq("user_id", user.id);
 
           if (!countError && enrollData) {
             const valid = enrollData.filter(
               (enr: any) =>
                 enr.courses &&
-                enr.payment_status !== 'pending' &&
-                enr.payment_status !== 'failed'
+                (['completed', 'free'].includes(enr.payment_status) ||
+                  enr.courses.is_free === true)
             );
             setEnrolledCount(valid.length);
             setValidCourseIds(valid.map((enr) => String(enr.course_id)));
@@ -150,10 +150,17 @@ export default function ProfileScreen() {
 
           const { data: enrollments } = await supabase
             .from("enrollments")
-            .select("course_id, completed_at, enrolled_at, courses(title)")
+            .select("course_id, completed_at, enrolled_at, payment_status, courses(title, is_free)")
             .eq("user_id", user.id);
 
           if (!enrollments) { setCertsLoading(false); return; }
+
+          const validEnrollments = enrollments.filter(
+            (enr: any) =>
+              enr.courses &&
+              (['completed', 'free'].includes(enr.payment_status) ||
+                enr.courses.is_free === true)
+          );
 
           const { data: progressData } = await supabase
             .from("lesson_progress")
@@ -163,7 +170,7 @@ export default function ProfileScreen() {
           const progressList = progressData ?? [];
           const results: CompletedCourse[] = [];
 
-          for (const enr of enrollments) {
+          for (const enr of validEnrollments) {
             const courseId = String(enr.course_id);
             const courseTitle = (enr.courses as any)?.title ?? "Unknown Course";
 

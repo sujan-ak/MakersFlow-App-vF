@@ -2,6 +2,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useFavorites } from "@/context/FavoritesContext";
 import { router, useLocalSearchParams } from "expo-router";
+import { useRequireAuth } from "@/context/AuthRequireContext";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Alert,
@@ -81,12 +82,15 @@ export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { addToCart, items } = useCart();
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
+  const { requireAuth } = useRequireAuth();
 
   const isWishlisted = isProductInWishlist(String(id));
 
   const handleToggleWishlist = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleWishlistProduct(String(id));
+    requireAuth(async () => {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await toggleWishlistProduct(String(id));
+    });
   };
 
   const handleShare = async () => {
@@ -167,12 +171,14 @@ export default function ProductDetailScreen() {
 
   function handleAddToCart() {
     if (!product) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addToCart(product);
-    Alert.alert("Added to Cart", `${product.title} has been added to your cart.`, [
-      { text: "Continue Shopping", style: "cancel" },
-      { text: "Checkout", onPress: () => router.push("/store/checkout") },
-    ]);
+    requireAuth(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      addToCart(product);
+      Alert.alert("Added to Cart", `${product.title} has been added to your cart.`, [
+        { text: "Continue Shopping", style: "cancel" },
+        { text: "Checkout", onPress: () => router.push("/store/checkout") },
+      ]);
+    });
   }
 
   return (

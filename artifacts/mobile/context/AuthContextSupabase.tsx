@@ -31,6 +31,7 @@ export interface User {
   age?: number;
   role: string;
   joinedDate: string;
+  onboarding_completed?: boolean;
 }
 
 interface AuthContextType {
@@ -247,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           month: 'short',
           year: 'numeric',
         }),
+        onboarding_completed: profile.onboarding_completed || false,
       });
     } catch (error: any) {
       devError('[Auth] Error loading profile:', error.message);
@@ -571,6 +573,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (updates.school !== undefined) profileUpdates.school = updates.school;
       if (updates.avatar !== undefined) profileUpdates.avatar_url = updates.avatar;
       if (updates.age !== undefined) profileUpdates.age = updates.age;
+      if (updates.onboarding_completed !== undefined) profileUpdates.onboarding_completed = updates.onboarding_completed;
 
       const { error } = await authService.updateProfile(user.id, profileUpdates);
 
@@ -586,6 +589,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (updates.school !== undefined) updatedUser.school = updates.school;
       if (updates.avatar !== undefined) updatedUser.avatar = updates.avatar;
       if (updates.age !== undefined) updatedUser.age = updates.age;
+      if (updates.onboarding_completed !== undefined) updatedUser.onboarding_completed = updates.onboarding_completed;
       
       setUser(updatedUser);
       devLog('[Auth] Profile updated successfully:', updatedUser);

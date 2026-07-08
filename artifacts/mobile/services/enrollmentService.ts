@@ -49,25 +49,29 @@ export async function fetchEnrolledCourses(userId: string) {
   // 2. Paid enrollments stuck at payment_status 'pending'/'failed' (payment
   //    never completed) must not appear as enrolled courses. Legacy rows with
   //    a null payment_status are kept for backwards compatibility.
+  // 3. Fix enrolled count bug: only count enrollments where payment_status is completed/free or the course is free.
   return (data ?? []).filter(
     (enr: any) =>
       enr.courses &&
-      enr.payment_status !== 'pending' &&
-      enr.payment_status !== 'failed',
+      ((['completed', 'free'].includes(enr.payment_status)) ||
+        enr.courses.is_free === true),
   );
 }
 
 export async function isEnrolled(userId: string, courseId: string): Promise<boolean> {
   const { data } = await supabase
     .from('enrollments')
-    .select('id, payment_status')
+    .select('id, payment_status, courses(is_free)')
     .eq('user_id', userId)
     .eq('course_id', Number(courseId))
     .maybeSingle();
   // BUG FIX: a 'pending'/'failed' (unpaid) enrollment row must not unlock the
   // course — previously any row at all counted as enrolled.
   if (!data) return false;
-  return data.payment_status !== 'pending' && data.payment_status !== 'failed';
+  return (
+    ['completed', 'free'].includes(data.payment_status) ||
+    (data.courses as any)?.is_free === true
+  );
 }
 
 export async function getEnrollment(userId: string, courseId: string) {

@@ -66,7 +66,13 @@ export default function OnboardingScreen() {
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const result = await updateUser({ name: fullName.trim(), age: parsedAge, grade: grade.trim(), school: school.trim() });
+    const result = await updateUser({
+      name: fullName.trim(),
+      age: parsedAge,
+      grade: grade.trim(),
+      school: school.trim(),
+      onboarding_completed: true,
+    });
     setLoading(false);
 
     if (result.success) {
@@ -76,7 +82,10 @@ export default function OnboardingScreen() {
     }
   }
 
-  function handleSkip() {
+  async function handleSkip() {
+    setLoading(true);
+    await updateUser({ onboarding_completed: true });
+    setLoading(false);
     router.replace("/(tabs)");
   }
 
