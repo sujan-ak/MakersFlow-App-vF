@@ -211,7 +211,7 @@ export default function ProfileScreen() {
     if (Platform.OS === "web") {
       const confirmed = window.confirm("Are you sure you want to sign out?");
       if (confirmed) {
-        logout().then(() => { window.location.href = "/"; }).catch(() => {
+        logout().catch(() => {
           alert("Failed to sign out. Please try again.");
         });
       }
@@ -228,7 +228,8 @@ export default function ProfileScreen() {
               try {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 await logout();
-                router.replace("/(auth)/login");
+                // Stay on the current screen — app remains browsable just like before login
+                router.replace("/(tabs)");
               } catch (error) {
                 console.error("Logout error:", error);
               }
@@ -283,7 +284,7 @@ export default function ProfileScreen() {
 
       setDeleteModalVisible(false);
       await logout();
-      router.replace("/(auth)/login");
+      router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Delete account error:", err);
       setDeleteError(err.message || "Failed to delete account. Please contact support.");
@@ -333,6 +334,63 @@ export default function ProfileScreen() {
       month: "short",
       year: "numeric",
     });
+
+  // ── Guest / signed-out state ─────────────────────────────────────────────────
+  if (!user) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, flex: 1 }]}>
+        {/* Header */}
+        <View style={{ paddingTop: topPad + 16, paddingHorizontal: 20, paddingBottom: 8 }}>
+          <Text style={[styles.pageTitle, { color: '#0F2A3D' }]}>Profile</Text>
+        </View>
+
+        {/* Guest Banner */}
+        <View style={{ marginHorizontal: 20, borderRadius: 20, backgroundColor: '#0B6FAD', padding: 28, alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+            <Ionicons name="person" size={36} color="#fff" />
+          </View>
+          <Text style={{ fontFamily: 'Fredoka_700Bold', fontSize: 22, color: '#fff', textAlign: 'center' }}>Welcome to MakersFlow</Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', lineHeight: 20 }}>
+            Sign in to access your profile, track courses, and manage your learning journey.
+          </Text>
+          <Pressable
+            style={{ marginTop: 4, backgroundColor: '#fff', borderRadius: 28, paddingVertical: 13, paddingHorizontal: 36, alignItems: 'center', width: '100%' }}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#0B6FAD' }}>Sign In</Text>
+          </Pressable>
+          <Pressable
+            style={{ borderRadius: 28, paddingVertical: 13, paddingHorizontal: 36, alignItems: 'center', width: '100%', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' }}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>Create Account</Text>
+          </Pressable>
+        </View>
+
+        {/* Teaser menu items (non-interactive) */}
+        <View style={{ marginHorizontal: 20, gap: 10 }}>
+          {[
+            { icon: 'book-outline', label: 'My Courses' },
+            { icon: 'stats-chart-outline', label: 'My Progress' },
+            { icon: 'heart-outline', label: 'Favorites & Watch Later' },
+            { icon: 'cart-outline', label: 'Store' },
+          ].map((item) => (
+            <Pressable
+              key={item.label}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: '#D6E9F2', paddingVertical: 14, paddingHorizontal: 16, gap: 14, opacity: 0.55 }}
+              onPress={() => router.push('/(auth)/login')}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#DCF7F4', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name={item.icon as any} size={17} color="#0B6FAD" />
+              </View>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.foreground, flex: 1 }}>{item.label}</Text>
+              <Ionicons name="lock-closed-outline" size={15} color={colors.mutedForeground} />
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView

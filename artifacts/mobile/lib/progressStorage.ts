@@ -333,7 +333,11 @@ export async function fetchRemoteProgress(userId: string): Promise<UserCoursePro
         }
       });
 
-      courseProgressObj.progress = totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0;
+      if (enrollment.completed_at) {
+        courseProgressObj.progress = 100;
+      } else {
+        courseProgressObj.progress = totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0;
+      }
       if (courseProgressObj.progress === 100 && !courseProgressObj.completedAt) {
         courseProgressObj.completedAt = courseProgressObj.lastAccessedAt;
       }

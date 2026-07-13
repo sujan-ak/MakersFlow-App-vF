@@ -55,6 +55,7 @@ export default function ProgressScreen() {
   const [courses, setCourses] = useState<any[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [enrolledCount, setEnrolledCount] = useState(0);
+  const [enrolledCoursesProgress, setEnrolledCoursesProgress] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<any>({
     totalCoursesEnrolled: 0,
@@ -152,16 +153,36 @@ export default function ProgressScreen() {
       const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
 
       let progressSum = 0;
+      const enrolledProgressList = [];
       for (const enr of enrollments) {
         const courseId = String(enr.course_id);
-        const courseModules = await getCachedModules(courseId) || [];
-        const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
-        if (lessonIds.length > 0) {
-          const courseProg = courseProgressListMap.get(courseId) ?? [];
-          const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
-          progressSum += Math.round((completedLessons / lessonIds.length) * 100);
+        const courseDetails = mapped.find((c: any) => c.id === courseId);
+        if (!courseDetails) continue;
+
+        let courseProgPct = 0;
+        if (enr.completed_at) {
+          courseProgPct = 100;
+        } else {
+          const courseModules = await getCachedModules(courseId) || [];
+          const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
+          if (lessonIds.length > 0) {
+            const courseProg = courseProgressListMap.get(courseId) ?? [];
+            const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
+            courseProgPct = Math.round((completedLessons / lessonIds.length) * 100);
+          }
         }
+
+        progressSum += courseProgPct;
+
+        enrolledProgressList.push({
+          courseId,
+          courseTitle: courseDetails.title,
+          thumbnail: courseDetails.thumbnail,
+          progress: courseProgPct,
+        });
       }
+      setEnrolledCoursesProgress(enrolledProgressList);
+
       const averageProgress = totalCoursesEnrolled > 0 ? Math.round(progressSum / totalCoursesEnrolled) : 0;
       const totalTimeSpent = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
       const learningStreak = ProgressCalculator.calculateStreak(progressList);
@@ -247,22 +268,48 @@ export default function ProgressScreen() {
   };
 
   const coursesWithProgress = useMemo(() => {
-    const enrollMap = new Map(watchlist.map(w => [w.courseId, w]));
-    return courses.filter(c => enrollMap.has(c.id)).map(c => {
-      const w = enrollMap.get(c.id);
-      return {
-        courseId: c.id,
-        courseTitle: c.title,
-        thumbnail: c.thumbnail,
-        progress: w ? Math.round(w.courseProgress || 0) : 0,
-      };
-    });
-  }, [watchlist, courses]);
+    return enrolledCoursesProgress;
+  }, [enrolledCoursesProgress]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   if (isLoadingCourses) {
     return <HomeSkeleton />;
+  }
+
+  // Guest / signed-out state — mirrors the pre-login browsing experience
+  if (!user) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={{ paddingTop: topPad + 16, paddingHorizontal: 20 }}>
+          <Text style={[styles.pageTitle, { color: '#0F2A3D' }]}>Your Progress</Text>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Track your learning journey</Text>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 }}>
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: '#DCF7F4', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+            <Ionicons name="stats-chart" size={40} color="#0B6FAD" />
+          </View>
+          <Text style={{ fontFamily: 'Fredoka_700Bold', fontSize: 22, color: '#0F2A3D', textAlign: 'center' }}>
+            Track Your Progress
+          </Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.mutedForeground, textAlign: 'center', lineHeight: 22 }}>
+            Sign in to see your enrolled courses, learning streaks, weekly activity, and completion stats.
+          </Text>
+          <Pressable
+            style={{ marginTop: 8, backgroundColor: '#0B6FAD', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', width: '100%' }}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>Sign In</Text>
+          </Pressable>
+          <Pressable
+            style={{ borderRadius: 28, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', width: '100%', borderWidth: 1.5, borderColor: '#D6E9F2' }}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#0B6FAD' }}>Create Account</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
   }
 
   const maxMinutes = Math.max(...stats.weeklyActivity.map((d: any) => d.minutes), 1);

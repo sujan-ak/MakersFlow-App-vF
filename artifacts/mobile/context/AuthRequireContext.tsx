@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContextSupabase';
 import { AuthPromptModal } from '@/components/AuthPromptModal';
-import { useSegments, router } from 'expo-router';
-import { PROTECTED_ROUTES } from '@/lib/protectedRoutes';
 
 interface AuthRequireContextType {
   requireAuth: (action: () => void | Promise<void>) => void;
@@ -14,7 +12,6 @@ const AuthRequireContext = createContext<AuthRequireContextType | null>(null);
 
 export function AuthRequireProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const segments = useSegments();
   const [modalVisible, setModalVisible] = useState(false);
   const pendingActionRef = useRef<(() => void | Promise<void>) | null>(null);
 
@@ -37,19 +34,9 @@ export function AuthRequireProvider({ children }: { children: React.ReactNode })
   const handleModalClose = useCallback(() => {
     setModalVisible(false);
     pendingActionRef.current = null;
+    // User dismissed — stay on the current screen so they can keep browsing,
+    // just like they could before ever signing in.
   }, []);
-
-  const handleUserDismiss = useCallback(() => {
-    setModalVisible(false);
-    pendingActionRef.current = null;
-    const currentPath = segments.join('/');
-    const isProtectedRoute = PROTECTED_ROUTES.some((route) => {
-      return (segments as any).includes(route) || currentPath.startsWith(route);
-    });
-    if (isProtectedRoute) {
-      router.replace("/(tabs)");
-    }
-  }, [segments]);
 
   // Execute the pending action once authenticated
   useEffect(() => {
@@ -75,13 +62,13 @@ export function AuthRequireProvider({ children }: { children: React.ReactNode })
       value={{
         requireAuth,
         showModal,
-        hideModal: handleUserDismiss,
+        hideModal: handleModalClose,
       }}
     >
       {children}
       <AuthPromptModal
         visible={modalVisible}
-        onClose={handleUserDismiss}
+        onClose={handleModalClose}
       />
     </AuthRequireContext.Provider>
   );
