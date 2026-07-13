@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -12,10 +12,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { getCourseModules } from "@/services/courseDataProvider";
+import { TEXT_STYLES, TYPOGRAPHY } from "@/constants/typography";
 
 interface CompletedCourse {
   courseId: string;
@@ -92,9 +94,6 @@ export default function AchievementsScreen() {
             );
 
             if (allDone) {
-              const lastCompleted = progressList
-                .filter((p) => String(p.course_id) === courseId && p.is_completed)
-                .sort((a: any, b: any) => 0)[0];
               results.push({
                 courseId,
                 courseTitle,
@@ -121,19 +120,23 @@ export default function AchievementsScreen() {
       year: "numeric",
     });
 
+  const badges = [
+    { id: "1", title: "First Steps", description: "Completed 1st course", icon: "trophy", unlocked: completedCourses.length >= 1 },
+    { id: "2", title: "Scholar", description: "Completed 3 courses", icon: "medal", unlocked: completedCourses.length >= 3 },
+    { id: "3", title: "Streak Master", description: "Maintained a streak", icon: "flash", unlocked: true },
+    { id: "4", title: "Perfect Score", description: "Got 100% on a quiz", icon: "ribbon", unlocked: true },
+    { id: "5", title: "LMS Champion", description: "Completed 5 courses", icon: "school", unlocked: completedCourses.length >= 5 },
+  ];
+
+  const earnedBadgesCount = badges.filter(b => b.unlocked).length;
+  const totalBadgesCount = badges.length;
+  const learningPoints = completedCourses.length * 100 + 50; // base points
+  const progressPercent = Math.min((completedCourses.length / 3) * 100, 100);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: topPad + 8,
-            backgroundColor: colors.card,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable
           onPress={() => {
             if (router.canGoBack()) router.back();
@@ -141,9 +144,9 @@ export default function AchievementsScreen() {
           }}
           style={styles.backBtn}
         >
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
+          <Feather name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+        <Text style={[styles.headerTitle, TEXT_STYLES.pageTitle, { color: colors.foreground, fontSize: 18 }]}>
           Achievements
         </Text>
         <View style={{ width: 40 }} />
@@ -154,74 +157,143 @@ export default function AchievementsScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
         </View>
-      ) : completedCourses.length === 0 ? (
-        <View style={styles.center}>
-          <Feather name="award" size={64} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            No certificates yet
-          </Text>
-          <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
-            Complete a course to earn your first certificate!
-          </Text>
-          <Pressable
-            style={[styles.exploreBtn, { backgroundColor: colors.primary }]}
-            onPress={() => router.push("/(tabs)/courses")}
-          >
-            <Text style={styles.exploreBtnText}>Browse Courses</Text>
-          </Pressable>
-        </View>
       ) : (
         <ScrollView
           contentContainerStyle={{
             padding: 20,
-            gap: 16,
+            gap: 20,
             paddingBottom: Platform.OS === "web" ? 80 : insets.bottom + 80,
           }}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-            {completedCourses.length} CERTIFICATE{completedCourses.length !== 1 ? "S" : ""} EARNED
-          </Text>
-
-          {completedCourses.map((course) => (
-            <View
-              key={course.courseId}
-              style={[styles.card, { backgroundColor: colors.card, borderColor: "#10B981" }]}
-            >
-              {/* Certificate icon */}
-              <View style={styles.iconWrapper}>
-                <View style={styles.iconBg}>
-                  <Feather name="award" size={28} color="#F59E0B" />
-                </View>
-              </View>
-
-              <View style={styles.cardBody}>
-                <Text style={[styles.cardTitle, { color: colors.foreground }]} numberOfLines={2}>
-                  {course.courseTitle}
-                </Text>
-                <Text style={[styles.cardDate, { color: colors.mutedForeground }]}>
-                  Completed · {formatDate(course.completedAt)}
-                </Text>
-
-                <Pressable
-                  style={[styles.viewCertBtn, { backgroundColor: "#10B981" }]}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/certificate",
-                      params: {
-                        courseName: course.courseTitle,
-                        studentName: user?.name ?? "",
-                        completionDate: course.completedAt,
-                      },
-                    })
-                  }
-                >
-                  <Feather name="download" size={14} color="#FFF" />
-                  <Text style={styles.viewCertText}>View & Download</Text>
-                </Pressable>
-              </View>
+          {/* Deep Sea Stat Card */}
+          <LinearGradient
+            colors={[colors.primary, colors.deepSeaDark || "#085380"]}
+            style={styles.statsCard}
+          >
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>BADGES</Text>
+              <Text style={styles.statValue}>{earnedBadgesCount}/{totalBadgesCount}</Text>
             </View>
-          ))}
+            <View style={styles.statDivider} />
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>POINTS</Text>
+              <Text style={styles.statValue}>{learningPoints} XP</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Progress Bar */}
+          <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.progressHeader}>
+              <Text style={[styles.progressTitle, TEXT_STYLES.cardTitle, { color: colors.foreground }]}>Next Rank Progress</Text>
+              <Text style={[styles.progressText, TEXT_STYLES.label, { color: colors.primary }]}>{Math.round(progressPercent)}%</Text>
+            </View>
+            <View style={[styles.progressBarTrack, { backgroundColor: colors.muted }]}>
+              <View style={[styles.progressBarFill, { width: `${Math.max(progressPercent, 5)}%`, backgroundColor: colors.primary }]} />
+            </View>
+          </View>
+
+          {/* Badges Section */}
+          <Text style={[styles.sectionTitle, TEXT_STYLES.sectionTitle, { color: colors.foreground }]}>Badges</Text>
+          <View style={styles.badgesGrid}>
+            {badges.map((badge) => {
+              if (badge.unlocked) {
+                return (
+                  <View key={badge.id} style={styles.badgeItem}>
+                    <LinearGradient
+                      colors={["#DCF7F4", "#B2F1EA"]}
+                      style={styles.badgeIconCircle}
+                    >
+                      <Ionicons name={badge.icon as any} size={28} color={colors.primary} />
+                    </LinearGradient>
+                    <Text style={[styles.badgeName, TEXT_STYLES.cardTitle, { color: colors.foreground }]} numberOfLines={1}>
+                      {badge.title}
+                    </Text>
+                    <Text style={[styles.badgeDesc, TYPOGRAPHY.caption, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      {badge.description}
+                    </Text>
+                  </View>
+                );
+              } else {
+                return (
+                  <View key={badge.id} style={[styles.badgeItem, { opacity: 0.4 }]}>
+                    <View style={[styles.badgeIconCircle, { backgroundColor: "#E6EDF0" }]}>
+                      <Ionicons name={badge.icon as any} size={28} color="#8A9CA6" />
+                      <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.1)" }]}>
+                        <Ionicons name="lock-closed" size={14} color="#FFF" />
+                      </View>
+                    </View>
+                    <Text style={[styles.badgeName, TEXT_STYLES.cardTitle, { color: colors.foreground }]} numberOfLines={1}>
+                      {badge.title}
+                    </Text>
+                    <Text style={[styles.badgeDesc, TYPOGRAPHY.caption, { color: colors.mutedForeground }]} numberOfLines={2}>
+                      {badge.description}
+                    </Text>
+                  </View>
+                );
+              }
+            })}
+          </View>
+
+          {/* Certificates Section */}
+          <Text style={[styles.sectionTitle, TEXT_STYLES.sectionTitle, { color: colors.foreground, marginTop: 12 }]}>Certificates</Text>
+
+          {completedCourses.length === 0 ? (
+            <View style={[styles.emptyCertCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Feather name="award" size={48} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
+              <Text style={[styles.emptyTitle, TEXT_STYLES.cardTitle, { color: colors.foreground }]}>
+                No certificates yet
+              </Text>
+              <Text style={[styles.emptySubtitle, TEXT_STYLES.description, { color: colors.mutedForeground }]}>
+                Complete a course to earn your first certificate!
+              </Text>
+              <Pressable
+                style={[styles.exploreBtn, { backgroundColor: colors.primary }]}
+                onPress={() => router.push("/(tabs)/courses")}
+              >
+                <Text style={[styles.exploreBtnText, TEXT_STYLES.button, { color: "#FFF", fontSize: 13 }]}>Browse Courses</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ gap: 16 }}>
+              {completedCourses.map((course) => (
+                <View
+                  key={course.courseId}
+                  style={[styles.certCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  <View style={[styles.certIconBg, { backgroundColor: colors.accent }]}>
+                    <Feather name="award" size={24} color="#F59E0B" />
+                  </View>
+
+                  <View style={styles.certBody}>
+                    <Text style={[styles.certTitle, TEXT_STYLES.cardTitle, { color: colors.foreground }]} numberOfLines={2}>
+                      {course.courseTitle}
+                    </Text>
+                    <Text style={[styles.certDate, TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>
+                      Completed · {formatDate(course.completedAt)}
+                    </Text>
+
+                    <Pressable
+                      style={[styles.viewCertBtn, { backgroundColor: colors.primary }]}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/certificate",
+                          params: {
+                            courseName: course.courseTitle,
+                            studentName: user?.name ?? "",
+                            completionDate: course.completedAt,
+                          },
+                        })
+                      }
+                    >
+                      <Feather name="download" size={12} color="#FFF" style={{ marginRight: 4 }} />
+                      <Text style={[styles.viewCertText, TEXT_STYLES.label, { color: "#FFF", fontSize: 12 }]}>View & Download</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
     </View>
@@ -236,7 +308,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    gap: 8,
   },
   backBtn: {
     width: 40,
@@ -246,89 +317,182 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: 17,
-    fontWeight: "700",
     textAlign: "center",
+    fontWeight: "700",
   },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 40,
-    gap: 16,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    textAlign: "center",
+  statsCard: {
+    flexDirection: "row",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
   },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
+  statCol: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
   },
-  exploreBtn: {
-    marginTop: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  exploreBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFF",
-  },
-  sectionLabel: {
+  statLabel: {
+    color: "rgba(255, 255, 255, 0.7)",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1,
+  },
+  statValue: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  statDivider: {
+    width: 1,
+    height: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  progressCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  progressTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
     marginBottom: 4,
   },
-  card: {
+  badgesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  badgeItem: {
+    width: "47%",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    borderWidth: 2,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E6EDF0",
+    gap: 6,
+  },
+  badgeIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  lockOverlay: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeName: {
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  badgeDesc: {
+    fontSize: 11,
+    textAlign: "center",
+  },
+  emptyCertCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  exploreBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  exploreBtnText: {
+    fontWeight: "700",
+  },
+  certCard: {
+    borderRadius: 16,
+    borderWidth: 1,
     padding: 16,
     flexDirection: "row",
     gap: 14,
     alignItems: "flex-start",
   },
-  iconWrapper: {
-    paddingTop: 2,
-  },
-  iconBg: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "#FFFBEB",
+  certIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  cardBody: {
+  certBody: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
-  cardTitle: {
-    fontSize: 15,
+  certTitle: {
+    fontSize: 14,
     fontWeight: "700",
-    lineHeight: 20,
+    lineHeight: 18,
   },
-  cardDate: {
+  certDate: {
     fontSize: 12,
-    fontWeight: "500",
   },
   viewCertBtn: {
-    marginTop: 8,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
     alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 6,
   },
   viewCertText: {
-    fontSize: 13,
     fontWeight: "700",
-    color: "#FFF",
   },
 });

@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+import { TEXT_STYLES } from "@/constants/typography";
 
 export default function VerifyOtpScreen() {
   const colors = useColors();
@@ -27,6 +28,7 @@ export default function VerifyOtpScreen() {
   const [error, setError] = useState("");
   const [resendCountdown, setResendCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (resendCountdown > 0) {
@@ -74,6 +76,9 @@ export default function VerifyOtpScreen() {
     }
   }
 
+  const otpArray = otpCode.split("");
+  const inputs = Array(6).fill(0);
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
@@ -85,8 +90,8 @@ export default function VerifyOtpScreen() {
           <Feather name="smartphone" size={32} color={colors.primary} />
         </View>
 
-        <Text style={[styles.title, { color: colors.foreground }]}>Verify your number</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+        <Text style={[styles.title, TEXT_STYLES.pageTitle, { color: colors.foreground }]}>Verify your number</Text>
+        <Text style={[styles.subtitle, TEXT_STYLES.description, { color: colors.mutedForeground }]}>
           Enter the 6-digit code sent to {phone}
         </Text>
 
@@ -98,27 +103,50 @@ export default function VerifyOtpScreen() {
             </View>
           ) : null}
 
-          <View style={[styles.otpInputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* OTP 6-Box Row */}
+          <Pressable onPress={() => inputRef.current?.focus()} style={styles.otpRow}>
+            {inputs.map((_, idx) => {
+              const digit = otpArray[idx] || "";
+              const isFocused = idx === otpArray.length;
+              const isFilled = idx < otpArray.length;
+
+              return (
+                <View
+                  key={idx}
+                  style={[
+                    styles.otpBox,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: isFocused ? colors.primary : colors.border,
+                      borderWidth: isFocused ? 2 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.otpDigit, TEXT_STYLES.pageTitle, { color: colors.foreground, fontSize: 24, textAlign: "center" }]}>
+                    {digit}
+                  </Text>
+                </View>
+              );
+            })}
             <TextInput
-              style={[styles.otpInput, { color: colors.foreground }]}
+              ref={inputRef}
+              style={styles.hiddenInput}
               value={otpCode}
               onChangeText={(text) => {
                 setOtpCode(text.replace(/[^0-9]/g, ""));
                 setError("");
               }}
-              placeholder="000000"
-              placeholderTextColor={colors.mutedForeground}
               keyboardType="number-pad"
               maxLength={6}
               autoFocus
             />
-          </View>
+          </Pressable>
 
           <Pressable
             style={({ pressed }) => [
               styles.verifyBtn,
               { 
-                backgroundColor: otpCode.length === 6 ? colors.primary : colors.mutedForeground,
+                backgroundColor: otpCode.length === 6 ? colors.primary : colors.muted,
                 opacity: pressed ? 0.85 : 1 
               }
             ]}
@@ -128,7 +156,13 @@ export default function VerifyOtpScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.verifyBtnText}>Verify & Continue</Text>
+              <View style={styles.btnContent}>
+                <Feather name="check" size={16} color={otpCode.length === 6 ? "#FFF" : colors.mutedForeground} style={{ marginRight: 6 }} />
+                <Text style={[styles.verifyBtnText, TEXT_STYLES.button, { color: otpCode.length === 6 ? "#FFF" : colors.mutedForeground }]}>
+                  Verify & Continue
+                </Text>
+                <Feather name="chevron-right" size={16} color={otpCode.length === 6 ? "#FFF" : colors.mutedForeground} style={{ marginLeft: 6 }} />
+              </View>
             )}
           </Pressable>
 
@@ -137,7 +171,7 @@ export default function VerifyOtpScreen() {
             disabled={!canResend}
             style={styles.resendBtn}
           >
-            <Text style={[styles.resendText, { color: canResend ? colors.primary : colors.mutedForeground }]}>
+            <Text style={[styles.resendText, TEXT_STYLES.link, { color: canResend ? colors.primary : colors.mutedForeground }]}>
               {canResend ? "Resend code" : `Resend in ${resendCountdown}s`}
             </Text>
           </Pressable>
@@ -160,25 +194,38 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: "800", marginBottom: 8 },
   subtitle: { fontSize: 15, lineHeight: 22, marginBottom: 28 },
-  form: { gap: 16 },
+  form: { gap: 24 },
   errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10 },
   errorText: { fontSize: 13, color: "#DC2626", flex: 1 },
-  otpInputWrapper: {
-    paddingHorizontal: 14,
-    paddingVertical: 20,
+  otpRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    position: "relative",
+    height: 60,
+  },
+  otpBox: {
+    width: "14%",
+    height: 56,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
-  otpInput: {
-    fontSize: 28,
+  otpDigit: {
+    fontSize: 22,
     fontWeight: "700",
-    letterSpacing: 12,
-    textAlign: "center",
-    width: "100%",
   },
-  verifyBtn: { paddingVertical: 16, borderRadius: 14, alignItems: "center" },
-  verifyBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  hiddenInput: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    opacity: 0,
+  },
+  verifyBtn: { height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  btnContent: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  verifyBtnText: { fontSize: 15, fontWeight: "700" },
   resendBtn: { alignItems: "center", paddingVertical: 12 },
   resendText: { fontSize: 15, fontWeight: "600" },
 });

@@ -52,48 +52,49 @@ export default function ProfileScreen() {
   const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
-  useEffect(() => {
-    async function loadWishlistProducts() {
-      if (wishlistProductIds.length === 0) {
-        setWishlistProducts([]);
-        return;
-      }
-      setWishlistLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock')
-          .in('id', wishlistProductIds.map(Number));
-        if (!error && data) {
-          const kitFallbacks = [
-            require('@/assets/images/product_kit_1.png'),
-            require('@/assets/images/product_kit_2.png'),
-            require('@/assets/images/product_kit_3.png'),
-          ];
-          const mapped: Product[] = data.map((row: any, idx: number) => ({
-            id: String(row.id),
-            title: row.title || "Untitled Product",
-            category: row.category || 'physical',
-            subcategory: row.subcategory || "Physical Kits",
-            price: Number(row.price) || 0,
-            originalPrice: Number(row.original_price) || Number(row.price) || 0,
-            thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
-            description: row.description || "No description available.",
-            rating: 0,
-            reviews: 0,
-            inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
-            features: [],
-          }));
-          setWishlistProducts(mapped);
-        }
-      } catch (err) {
-        console.error("[Profile] Error loading wishlist products:", err);
-      } finally {
-        setWishlistLoading(false);
-      }
+  const loadWishlistProducts = useCallback(async () => {
+    if (wishlistProductIds.length === 0) {
+      setWishlistProducts([]);
+      return;
     }
-    loadWishlistProducts();
+    setWishlistLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock')
+        .in('id', wishlistProductIds.map(Number));
+      if (!error && data) {
+        const kitFallbacks = [
+          require('@/assets/images/product_kit_1.png'),
+          require('@/assets/images/product_kit_2.png'),
+          require('@/assets/images/product_kit_3.png'),
+        ];
+        const mapped: Product[] = data.map((row: any, idx: number) => ({
+          id: String(row.id),
+          title: row.title || "Untitled Product",
+          category: row.category || 'physical',
+          subcategory: row.subcategory || "Physical Kits",
+          price: Number(row.price) || 0,
+          originalPrice: Number(row.original_price) || Number(row.price) || 0,
+          thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
+          description: row.description || "No description available.",
+          rating: 0,
+          reviews: 0,
+          inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+          features: [],
+        }));
+        setWishlistProducts(mapped);
+      }
+    } catch (err) {
+      console.error("[Profile] Error loading wishlist products:", err);
+    } finally {
+      setWishlistLoading(false);
+    }
   }, [wishlistProductIds]);
+
+  useEffect(() => {
+    loadWishlistProducts();
+  }, [loadWishlistProducts]);
 
   const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
   const [certsLoading, setCertsLoading] = useState(true);
@@ -204,7 +205,8 @@ export default function ProfileScreen() {
         }
       }
       loadCompletedCourses();
-    }, [user?.id])
+      loadWishlistProducts();
+    }, [user?.id, loadWishlistProducts])
   );
 
   function handleLogout() {
@@ -429,6 +431,12 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </View>
+        <Pressable
+          style={styles.editProfileGhostBtn}
+          onPress={() => router.push("/profile/edit")}
+        >
+          <Text style={styles.editProfileGhostBtnText}>Edit Profile</Text>
+        </Pressable>
       </View>
 
       {/* Stats Strip */}
@@ -931,4 +939,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalBtnHalfText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold" },
+  editProfileGhostBtn: {
+    marginTop: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#0B6FAD",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editProfileGhostBtnText: {
+    color: "#0B6FAD",
+    fontSize: 14,
+    fontFamily: "Fredoka_600SemiBold",
+  },
 });

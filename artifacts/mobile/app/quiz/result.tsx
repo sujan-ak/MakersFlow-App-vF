@@ -1,11 +1,13 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { QUIZZES } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
+import { TEXT_STYLES, TYPOGRAPHY } from "@/constants/typography";
 
 export default function QuizResultScreen() {
   const colors = useColors();
@@ -33,19 +35,35 @@ export default function QuizResultScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topPad + 20, paddingBottom: botPad }]}>
       <View style={styles.content}>
-        {/* Score circle */}
-        <View style={[styles.scoreCircle, { borderColor: gradeColor, backgroundColor: gradeBg }]}>
-          <Text style={[styles.scoreNum, { color: gradeColor }]}>{pct}%</Text>
-          <Text style={[styles.scoreLabel, { color: gradeColor }]}>Score</Text>
-        </View>
+        {/* Confetti stars if passed */}
+        {pct >= 70 && (
+          <View style={styles.starsRow}>
+            <Ionicons name="star" size={24} color="#F59E0B" />
+            <Ionicons name="star" size={32} color="#F59E0B" style={{ marginHorizontal: 8, marginTop: -8 }} />
+            <Ionicons name="star" size={24} color="#F59E0B" />
+          </View>
+        )}
+
+        {/* Score circle with LinearGradient */}
+        <LinearGradient
+          colors={[colors.gradientStart || "#0B6FAD", colors.gradientEnd || "#17E5D3"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.scoreCircleGradient}
+        >
+          <View style={[styles.scoreCircleInner, { backgroundColor: colors.card }]}>
+            <Text style={[styles.scoreNum, TEXT_STYLES.pageTitle, { color: colors.primary, fontSize: 40 }]}>{pct}%</Text>
+            <Text style={[styles.scoreLabel, TEXT_STYLES.label, { color: colors.mutedForeground }]}>Score</Text>
+          </View>
+        </LinearGradient>
 
         {/* Grade badge */}
         <View style={[styles.gradeBadge, { backgroundColor: gradeColor }]}>
-          <Text style={styles.gradeText}>{grade}</Text>
+          <Text style={[styles.gradeText, TEXT_STYLES.label, { color: "#FFF" }]}>{grade}</Text>
         </View>
 
-        <Text style={[styles.title, { color: colors.foreground }]}>{quiz?.title ?? "Quiz"}</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+        <Text style={[styles.title, TEXT_STYLES.sectionTitle, { color: colors.foreground }]}>{quiz?.title ?? "Quiz"}</Text>
+        <Text style={[styles.subtitle, TEXT_STYLES.description, { color: colors.mutedForeground }]}>
           You answered {scoreNum} out of {totalNum} questions correctly
         </Text>
 
@@ -58,8 +76,8 @@ export default function QuizResultScreen() {
           ].map((s, idx) => (
             <React.Fragment key={s.label}>
               <View style={styles.statItem}>
-                <Text style={[styles.statNum, { color: s.color }]}>{s.value}</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
+                <Text style={[styles.statNum, TEXT_STYLES.pageTitle, { color: s.color, fontSize: 22 }]}>{s.value}</Text>
+                <Text style={[styles.statLabel, TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>{s.label}</Text>
               </View>
               {idx < 2 && <View style={[styles.statDiv, { backgroundColor: colors.border }]} />}
             </React.Fragment>
@@ -70,7 +88,7 @@ export default function QuizResultScreen() {
         {pct < 70 && (
           <View style={[styles.tip, { backgroundColor: "#FEF3C7" }]}>
             <Feather name="alert-circle" size={16} color="#D97706" />
-            <Text style={[styles.tipText, { color: "#92400E" }]}>
+            <Text style={[styles.tipText, TEXT_STYLES.description, { color: "#92400E", fontSize: 13 }]}>
               Review the course material and try again. You can retake this quiz anytime.
             </Text>
           </View>
@@ -83,14 +101,14 @@ export default function QuizResultScreen() {
           style={[styles.btn, { backgroundColor: colors.primary }]}
           onPress={() => router.push({ pathname: "/quiz/[id]", params: { id: quizId } })}
         >
-          <Feather name="refresh-cw" size={16} color="#FFF" />
-          <Text style={styles.btnText}>Retake Quiz</Text>
+          <Ionicons name="refresh" size={18} color="#FFF" style={{ marginRight: 6 }} />
+          <Text style={[styles.btnText, TEXT_STYLES.button, { color: "#FFF" }]}>Retake Quiz</Text>
         </Pressable>
         <Pressable
-          style={[styles.outlineBtn, { borderColor: colors.primary }]}
+          style={[styles.outlineBtn, { borderColor: colors.primary, backgroundColor: "#FFFFFF" }]}
           onPress={() => router.push("/(tabs)/courses")}
         >
-          <Text style={[styles.outlineBtnText, { color: colors.primary }]}>Back to Courses</Text>
+          <Text style={[styles.outlineBtnText, TEXT_STYLES.button, { color: colors.primary }]}>Back to Courses</Text>
         </Pressable>
       </View>
     </View>
@@ -100,14 +118,22 @@ export default function QuizResultScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 24 },
   content: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
-  scoreCircle: {
+  starsRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  scoreCircleGradient: {
     width: 140,
     height: 140,
     borderRadius: 70,
-    borderWidth: 6,
+    padding: 6,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
+  },
+  scoreCircleInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 64,
+    alignItems: "center",
+    justifyContent: "center",
   },
   scoreNum: { fontSize: 40, fontWeight: "800" },
   scoreLabel: { fontSize: 14, fontWeight: "600", marginTop: -4 },
@@ -125,19 +151,19 @@ const styles = StyleSheet.create({
   statItem: { flex: 1, alignItems: "center" },
   statNum: { fontSize: 22, fontWeight: "800" },
   statLabel: { fontSize: 12, marginTop: 2 },
-  statDiv: { width: 1 },
+  statDiv: { width: 1, height: "100%" },
   tip: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, alignItems: "flex-start" },
   tipText: { fontSize: 13, lineHeight: 18, flex: 1 },
-  actions: { gap: 12 },
+  actions: { gap: 12, width: "100%", paddingBottom: 16 },
   btn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    height: 48,
+    borderRadius: 24,
+    width: "100%",
   },
-  btnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
-  outlineBtn: { paddingVertical: 14, borderRadius: 14, borderWidth: 2, alignItems: "center" },
-  outlineBtnText: { fontSize: 16, fontWeight: "700" },
+  btnText: { fontSize: 15, fontWeight: "700", color: "#FFF" },
+  outlineBtn: { height: 48, borderRadius: 24, borderWidth: 1.5, alignItems: "center", justifyContent: "center", width: "100%" },
+  outlineBtnText: { fontSize: 15, fontWeight: "700" },
 });

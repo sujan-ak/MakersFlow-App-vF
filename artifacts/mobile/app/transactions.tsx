@@ -1,5 +1,5 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
@@ -33,12 +33,12 @@ export default function TransactionsScreen() {
       setIsLoading(true);
     }
     try {
-      // Fetch only completed or paid orders
+      // Fetch completed, paid or refunded orders
       const { data, error } = await supabase
         .from("orders")
         .select("*")
         .eq("user_id", user.id)
-        .in("status", ["paid", "completed"])
+        .in("status", ["paid", "completed", "refunded"])
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -81,9 +81,11 @@ export default function TransactionsScreen() {
     }
   }, [user?.id]);
 
-  useEffect(() => {
-    loadTransactions();
-  }, [loadTransactions]);
+  useFocusEffect(
+    useCallback(() => {
+      loadTransactions(false);
+    }, [loadTransactions])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -146,43 +148,53 @@ export default function TransactionsScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.transactionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={[styles.transactionId, { color: colors.mutedForeground }]}>
-                  TXN ID: #{item.id}
-                </Text>
-                <Text style={[styles.transactionDate, { color: colors.mutedForeground }]}>
-                  {item.date}
+        renderItem={({ item }) => {
+          const isCredit = item.status === "refunded";
+          return (
+            <View style={[styles.transactionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconCircle, { backgroundColor: isCredit ? "#DCF7F4" : "#E8F4F9" }]}>
+                  <Ionicons
+                    name={isCredit ? "arrow-down-circle" : "arrow-up-circle"}
+                    size={22}
+                    color={isCredit ? "#17E5D3" : "#0B6FAD"}
+                  />
+                </View>
+                <View style={styles.cardHeaderDetails}>
+                  <Text style={[styles.transactionId, { color: colors.mutedForeground }]}>
+                    TXN ID: #{item.id}
+                  </Text>
+                  <Text style={[styles.transactionDate, { color: colors.mutedForeground }]}>
+                    {item.date}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: isCredit ? "#FEE2E2" : "#DCF7F4" }]}>
+                  <Text style={[styles.statusText, { color: isCredit ? "#EF4444" : "#0B6FAD" }]}>
+                    {item.status ? item.status.toUpperCase() : "PAID"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.cardBody}>
+                <Text style={[styles.itemsLabel, { color: colors.mutedForeground }]}>Purchased Items</Text>
+                <Text style={[styles.itemsValue, { color: colors.foreground }]} numberOfLines={2}>
+                  {item.items || "MakersFlow Kit/Resource"}
                 </Text>
               </View>
-              <View style={[styles.statusBadge, { backgroundColor: "#DCFCE7" }]}>
-                <Text style={[styles.statusText, { color: "#16A34A" }]}>
-                  {item.status ? item.status.toUpperCase() : "PAID"}
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.cardFooter}>
+                <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>Amount Paid</Text>
+                <Text style={[styles.amountValue, { color: isCredit ? "#10B981" : colors.foreground }]}>
+                  {isCredit ? "+" : "-"}₹{item.total.toLocaleString("en-IN")}
                 </Text>
               </View>
             </View>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.cardBody}>
-              <Text style={[styles.itemsLabel, { color: colors.mutedForeground }]}>Purchased Items</Text>
-              <Text style={[styles.itemsValue, { color: colors.foreground }]} numberOfLines={2}>
-                {item.items || "MakersFlow Kit/Resource"}
-              </Text>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.cardFooter}>
-              <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>Amount Paid</Text>
-              <Text style={[styles.amountValue, { color: colors.primary }]}>
-                ₹{item.total.toLocaleString("en-IN")}
-              </Text>
-            </View>
-          </View>
-        )}
+          );
+        }}
       />
     </View>
   );
@@ -235,6 +247,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardHeaderDetails: {
+    flex: 1,
+    marginLeft: 12,
+  },
   transactionId: { fontSize: 11, fontWeight: "600" },
   transactionDate: { fontSize: 13, fontWeight: "500", marginTop: 2 },
   statusBadge: {

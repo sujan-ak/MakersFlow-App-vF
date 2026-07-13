@@ -11,6 +11,8 @@ import {
   Image,
   RefreshControl,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useProgress } from "@/context/ProgressContext";
 import { fetchAllCourses, getCourseModules } from "@/services/courseDataProvider";
@@ -401,7 +403,12 @@ export default function ProgressScreen() {
                       <Text style={styles.courseProgressTitle}>{c.courseTitle}</Text>
                       <View style={styles.courseProgressRow}>
                         <View style={styles.courseProgressTrack}>
-                          <View style={[styles.courseProgressFill, { width: `${c.progress}%` }]} />
+                          <LinearGradient
+                            colors={["#0B6FAD", "#17E5D3"]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={[styles.courseProgressFill, { width: `${c.progress}%` }]}
+                          />
                         </View>
                         <Text style={styles.courseProgressPct}>{c.progress}%</Text>
                       </View>
@@ -414,6 +421,54 @@ export default function ProgressScreen() {
 
           {currentTab === "stats" && (
             <>
+              {/* Overall Progress Card */}
+              <View style={[styles.overallCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.overallLeft}>
+                  <Text style={[styles.overallLabel, { color: colors.mutedForeground }]}>OVERALL PROGRESS</Text>
+                  <Text style={[styles.overallTitle, { color: colors.foreground }]}>Learning Journey</Text>
+                  <Text style={[styles.overallDesc, { color: colors.mutedForeground }]}>
+                    You've finished {stats.coursesCompleted} of {stats.totalCoursesEnrolled} course{stats.totalCoursesEnrolled !== 1 ? "s" : ""}.
+                  </Text>
+                </View>
+                <View style={styles.overallRight}>
+                  <View style={styles.circleContainer}>
+                    <Svg width={80} height={80} viewBox="0 0 100 100">
+                      <Defs>
+                        <SvgLinearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <Stop offset="0%" stopColor="#0B6FAD" />
+                          <Stop offset="100%" stopColor="#17E5D3" />
+                        </SvgLinearGradient>
+                      </Defs>
+                      <Circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        stroke="#E8F4F9"
+                        strokeWidth="8"
+                        fill="transparent"
+                      />
+                      <Circle
+                        cx="50"
+                        cy="50"
+                        r="40"
+                        stroke="url(#progressGrad)"
+                        strokeWidth="8"
+                        fill="transparent"
+                        strokeDasharray={`${2 * Math.PI * 40}`}
+                        strokeDashoffset={`${2 * Math.PI * 40 * (1 - stats.averageProgress / 100)}`}
+                        strokeLinecap="round"
+                        transform="rotate(-90 50 50)"
+                      />
+                    </Svg>
+                    <View style={styles.circleTextWrapper}>
+                      <Text style={[styles.circleText, { color: colors.foreground }]}>
+                        {stats.averageProgress}%
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
               {/* Progress Statistics Grid */}
               <View style={styles.section}>
                 <ProgressStats
@@ -544,6 +599,52 @@ export default function ProgressScreen() {
                     </View>
                   )}
                 </View>
+              </View>
+
+              {/* Achievement Badges Section */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>Achievement Badges</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.badgesScroll}
+                >
+                  {[
+                    { id: "1", title: "First Step", desc: "Start learning", earned: stats.totalLessonsCompleted > 0, icon: "trophy" },
+                    { id: "2", title: "Streak Master", desc: "3 Days streak", earned: stats.learningStreak >= 3, icon: "ribbon" },
+                    { id: "3", title: "Graduate", desc: "Complete 1 course", earned: stats.coursesCompleted > 0, icon: "medal" },
+                    { id: "4", title: "Fast Track", desc: "Spend 2 hours", earned: stats.totalTimeSpent >= 7200, icon: "star" },
+                  ].map((badge) => (
+                    <View
+                      key={badge.id}
+                      style={[
+                        styles.badgeCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: badge.earned ? "#17E5D3" : colors.border,
+                          opacity: badge.earned ? 1 : 0.55,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.badgeIconCircle,
+                          {
+                            backgroundColor: badge.earned ? "#DCF7F4" : colors.muted,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={badge.icon as any}
+                          size={22}
+                          color={badge.earned ? "#0B6FAD" : colors.mutedForeground}
+                        />
+                      </View>
+                      <Text style={[styles.badgeTitle, { color: colors.foreground }]}>{badge.title}</Text>
+                      <Text style={[styles.badgeDesc, { color: colors.mutedForeground }]}>{badge.desc}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
 
               {/* shortcut */}
@@ -944,5 +1045,88 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#5A7A8C",
     marginTop: 20,
+  },
+  overallCard: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 16,
+    gap: 12,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  overallLeft: {
+    flex: 1,
+    gap: 4,
+  },
+  overallLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 1,
+  },
+  overallTitle: {
+    fontSize: 18,
+    fontFamily: "Fredoka_700Bold",
+  },
+  overallDesc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 16,
+  },
+  overallRight: {
+    width: 80,
+    height: 80,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleContainer: {
+    position: "relative",
+    width: 80,
+    height: 80,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleTextWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  circleText: {
+    fontSize: 16,
+    fontFamily: "Fredoka_700Bold",
+  },
+  badgesScroll: {
+    paddingLeft: 20,
+    paddingRight: 20,
+    gap: 12,
+    paddingVertical: 4,
+  },
+  badgeCard: {
+    width: 120,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  badgeIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeTitle: {
+    fontSize: 12,
+    fontFamily: "Fredoka_600SemiBold",
+    textAlign: "center",
+  },
+  badgeDesc: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    opacity: 0.8,
   },
 });

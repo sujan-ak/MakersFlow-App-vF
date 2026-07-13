@@ -8,6 +8,8 @@ import { SearchBar } from "@/components/SearchBar";
 import { fetchAllNews, type NewsArticle } from "@/services/newsService";
 import { useColors } from "@/hooks/useColors";
 
+import { TEXT_STYLES } from "@/constants/typography";
+
 export default function NewsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -50,12 +52,12 @@ export default function NewsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
-          <Text style={[styles.pageTitle, { color: colors.foreground }]}>News</Text>
+          <Text style={[styles.pageTitle, TEXT_STYLES.pageTitle, { color: colors.foreground }]}>News</Text>
           <Pressable
             style={[styles.cartBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => router.push("/(tabs)/store")}
           >
-            <Ionicons name="cart-outline" size={20} color={colors.foreground} />
+            <Ionicons name="cart" size={20} color={colors.foreground} />
           </Pressable>
         </View>
         <View style={{ paddingHorizontal: 20, marginTop: 8 }}>

@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
+import { TEXT_STYLES } from "@/constants/typography";
 
 export default function QuizScreen() {
   const colors = useColors();
@@ -221,10 +222,10 @@ export default function QuizScreen() {
       return { bg: colors.card, border: colors.border, text: colors.foreground };
     }
     if (idx === question.correctIndex) {
-      return { bg: "#DCFCE7", border: "#16A34A", text: "#15803D" };
+      return { bg: "#DCF7F4", border: "#17E5D3", text: "#063B4F" };
     }
     if (idx === selectedOption) {
-      return { bg: "#FEE2E2", border: "#DC2626", text: "#DC2626" };
+      return { bg: "#FEE2E2", border: "#EF4444", text: "#7F1D1D" };
     }
     return { bg: colors.card, border: colors.border, text: colors.mutedForeground };
   };
@@ -236,12 +237,14 @@ export default function QuizScreen() {
         <Pressable onPress={confirmExit}>
           <Feather name="x" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          {currentIndex + 1} / {questions.length}
-        </Text>
+        <View style={[styles.counterPill, { backgroundColor: colors.accent }]}>
+          <Text style={[styles.counterPillText, TEXT_STYLES.label, { color: colors.primary }]}>
+            {currentIndex + 1} of {questions.length}
+          </Text>
+        </View>
         <View style={[styles.timer, { backgroundColor: timeLeft < 60 ? "#FEE2E2" : colors.accent }]}>
-          <Feather name="clock" size={12} color={timeLeft < 60 ? "#DC2626" : colors.primary} />
-          <Text style={[styles.timerText, { color: timeLeft < 60 ? "#DC2626" : colors.primary }]}>
+          <Ionicons name="time" size={12} color={timeLeft < 60 ? "#DC2626" : colors.primary} />
+          <Text style={[styles.timerText, TEXT_STYLES.label, { color: timeLeft < 60 ? "#DC2626" : colors.primary, fontSize: 13 }]}>
             {mins}:{secs.toString().padStart(2, "0")}
           </Text>
         </View>
@@ -257,8 +260,8 @@ export default function QuizScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
-          <Text style={[styles.questionNum, { color: colors.mutedForeground }]}>Question {currentIndex + 1}</Text>
-          <Text style={[styles.question, { color: colors.foreground }]}>{question.question}</Text>
+          <Text style={[styles.questionNum, TEXT_STYLES.label, { color: colors.mutedForeground }]}>Question {currentIndex + 1}</Text>
+          <Text style={[styles.question, TEXT_STYLES.sectionTitle, { color: colors.foreground, fontSize: 20, lineHeight: 28 }]}>{question.question}</Text>
 
           <View style={styles.options}>
             {question.options.map((opt: string, idx: number) => {
@@ -271,16 +274,16 @@ export default function QuizScreen() {
                   disabled={selectedOption !== null}
                 >
                   <View style={[styles.optionLetter, { backgroundColor: oc.border }]}>
-                    <Text style={[styles.optionLetterText, { color: "#FFF" }]}>
+                    <Text style={[styles.optionLetterText, TEXT_STYLES.label, { color: "#FFF" }]}>
                       {["A", "B", "C", "D"][idx]}
                     </Text>
                   </View>
-                  <Text style={[styles.optionText, { color: oc.text, flex: 1 }]}>{opt}</Text>
+                  <Text style={[styles.optionText, TEXT_STYLES.description, { color: oc.text, flex: 1 }]}>{opt}</Text>
                   {selectedOption !== null && idx === question.correctIndex && (
-                    <Feather name="check-circle" size={18} color="#16A34A" />
+                    <Ionicons name="checkmark-circle" size={20} color="#17E5D3" />
                   )}
                   {selectedOption === idx && idx !== question.correctIndex && (
-                    <Feather name="x-circle" size={18} color="#DC2626" />
+                    <Ionicons name="close-circle" size={20} color="#EF4444" />
                   )}
                 </Pressable>
               );
@@ -289,8 +292,8 @@ export default function QuizScreen() {
 
           {selectedOption !== null && (
             <View style={[styles.explanationBox, { backgroundColor: colors.accent }]}>
-              <Feather name="info" size={16} color={colors.primary} />
-              <Text style={[styles.explanationText, { color: colors.primary, flex: 1 }]}>
+              <Ionicons name="information-circle" size={16} color={colors.primary} style={{ marginRight: 4 }} />
+              <Text style={[styles.explanationText, TEXT_STYLES.description, { color: colors.primary, flex: 1, fontSize: 13 }]}>
                 {question.explanation}
               </Text>
             </View>
@@ -310,10 +313,13 @@ export default function QuizScreen() {
             style={({ pressed }) => [styles.nextBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
             onPress={next}
           >
-            <Text style={styles.nextBtnText}>
-              {currentIndex === questions.length - 1 ? "Finish Quiz" : "Next Question"}
-            </Text>
-            <Feather name="arrow-right" size={18} color="#FFF" />
+            <View style={styles.btnContent}>
+              <Ionicons name="arrow-forward" size={16} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={[styles.nextBtnText, TEXT_STYLES.button, { color: "#FFF" }]}>
+                {currentIndex === questions.length - 1 ? "Finish Quiz" : "Next Question"}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color="#FFF" style={{ marginLeft: 6 }} />
+            </View>
           </Pressable>
         </View>
       )}
@@ -332,6 +338,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 16, fontWeight: "700" },
+  counterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  counterPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
   timer: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   timerText: { fontSize: 13, fontWeight: "600" },
   progressTrack: { height: 4 },
@@ -345,7 +360,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 2,
   },
   optionLetter: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
@@ -362,14 +377,17 @@ const styles = StyleSheet.create({
   explanationText: { fontSize: 13, lineHeight: 18 },
   bottomBtn: { padding: 16, borderTopWidth: 1 },
   nextBtn: {
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
   },
-  nextBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  nextBtnText: { fontSize: 15, fontWeight: "700", color: "#FFF" },
   emptyIconContainer: {
     width: 100,
     height: 100,

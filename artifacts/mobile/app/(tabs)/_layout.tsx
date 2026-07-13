@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Platform } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
@@ -19,11 +19,11 @@ function TabLayout() {
           position: "absolute",
           backgroundColor: colors.card,
           borderTopWidth: 0,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          overflow: "hidden",
-          height: isWeb ? 84 : 72,
-          paddingBottom: Platform.OS === "ios" ? 20 : 12,
+          borderTopLeftRadius: 30,
+          borderTopRightRadius: 30,
+          overflow: Platform.OS === "ios" ? "visible" : "visible", // Ensure FAB is visible when overflow is set
+          height: isWeb ? 84 : 76,
+          paddingBottom: Platform.OS === "ios" ? 24 : 14,
           paddingTop: 10,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: -4 },
@@ -58,7 +58,20 @@ function TabLayout() {
         name="courses"
         options={{
           title: "Courses",
-          tabBarIcon: ({ color }) => <Ionicons name="book" size={22} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <View style={[
+              styles.fabContainer,
+              {
+                backgroundColor: focused ? colors.primaryPressed : colors.primary,
+                borderColor: colors.card
+              }
+            ]}>
+              <Ionicons name="book" size={22} color="#FFF" />
+            </View>
+          ),
+          tabBarLabelStyle: {
+            display: "none" // Hide label for FAB tab
+          },
           tabBarAccessibilityLabel: "Courses tab",
         }}
       />
@@ -95,5 +108,23 @@ function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  fabContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute",
+    top: -22,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
+    borderWidth: 4,
+  },
+});
 
 export default TabLayout;

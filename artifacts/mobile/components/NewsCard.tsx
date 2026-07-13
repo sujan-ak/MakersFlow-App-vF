@@ -1,8 +1,11 @@
 import { router } from "expo-router";
 import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { NewsItem } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
+import { TEXT_STYLES } from "@/constants/typography";
 
 interface NewsCardProps {
   item: NewsItem;
@@ -12,28 +15,45 @@ interface NewsCardProps {
 export function NewsCard({ item, featured = false }: NewsCardProps) {
   const colors = useColors();
 
+  const imageSource = typeof item.thumbnail === "string" ? { uri: item.thumbnail } : item.thumbnail;
+
   if (featured) {
     return (
-      <Pressable
-        style={({ pressed }) => [
-          styles.featuredCard,
-          { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.9 : 1 },
-        ]}
-        onPress={() => router.push({ pathname: "/news/[id]", params: { id: item.id } })}
+      <LinearGradient
+        colors={[colors.gradientStart || "#0B6FAD", colors.gradientEnd || "#17E5D3"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.featuredGradient}
       >
-        <Image source={item.thumbnail} style={styles.featuredImage} />
-        <View style={styles.featuredOverlay}>
-          <View style={[styles.categoryPill, { backgroundColor: colors.secondary }]}>
-            <Text style={styles.categoryPillText}>{item.category}</Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.featuredCard,
+            { backgroundColor: colors.card, opacity: pressed ? 0.9 : 1 },
+          ]}
+          onPress={() => router.push({ pathname: "/news/[id]", params: { id: item.id } })}
+        >
+          <Image source={imageSource} style={styles.featuredImage} />
+          <View style={styles.featuredOverlay}>
+            <View style={[styles.categoryPill, { backgroundColor: colors.secondary }]}>
+              <Text style={[styles.categoryPillText, TEXT_STYLES.label, { color: colors.secondaryForeground }]}>
+                {item.category}
+              </Text>
+            </View>
+            <Text style={[styles.featuredTitle, TEXT_STYLES.cardTitle, { color: "#FFFFFF" }]} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <View style={styles.metaRow}>
+              <Text style={[styles.featuredMeta, TEXT_STYLES.meta]}>
+                {item.author} · {item.date}
+              </Text>
+              <View style={styles.timeRow}>
+                <Ionicons name="time" size={12} color="rgba(255,255,255,0.85)" style={{ marginRight: 3 }} />
+                <Text style={[styles.featuredMeta, TEXT_STYLES.meta]}>{item.readTime}</Text>
+              </View>
+            </View>
           </View>
-          <Text style={styles.featuredTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-          <Text style={styles.featuredMeta}>
-            {item.author} · {item.readTime}
-          </Text>
-        </View>
-      </Pressable>
+        </Pressable>
+      </LinearGradient>
     );
   }
 
@@ -45,20 +65,28 @@ export function NewsCard({ item, featured = false }: NewsCardProps) {
       ]}
       onPress={() => router.push({ pathname: "/news/[id]", params: { id: item.id } })}
     >
-      <Image source={item.thumbnail} style={styles.thumbnail} />
+      <Image source={imageSource} style={styles.thumbnail} />
       <View style={styles.content}>
         <View style={[styles.categoryBadge, { backgroundColor: colors.accent }]}>
-          <Text style={[styles.categoryText, { color: colors.primary }]}>{item.category}</Text>
+          <Text style={[styles.categoryText, TEXT_STYLES.label, { color: colors.primary }]}>
+            {item.category}
+          </Text>
         </View>
-        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={2}>
+        <Text style={[styles.title, TEXT_STYLES.cardTitle, { color: colors.foreground }]} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={[styles.summary, { color: colors.mutedForeground }]} numberOfLines={2}>
+        <Text style={[styles.summary, TEXT_STYLES.description, { color: colors.mutedForeground }]} numberOfLines={2}>
           {item.summary}
         </Text>
-        <Text style={[styles.meta, { color: colors.mutedForeground }]}>
-          {item.author} · {item.date} · {item.readTime}
-        </Text>
+        <View style={styles.metaRow}>
+          <Text style={[styles.meta, TEXT_STYLES.meta, { color: colors.mutedForeground }]}>
+            {item.author} · {item.date}
+          </Text>
+          <View style={styles.timeRow}>
+            <Ionicons name="time" size={12} color={colors.mutedForeground} style={{ marginRight: 3 }} />
+            <Text style={[styles.meta, TEXT_STYLES.meta, { color: colors.mutedForeground }]}>{item.readTime}</Text>
+          </View>
+        </View>
       </View>
     </Pressable>
   );
@@ -66,60 +94,63 @@ export function NewsCard({ item, featured = false }: NewsCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: "row",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: 16,
   },
   thumbnail: {
-    width: 100,
-    height: 100,
+    width: "100%",
+    height: 160,
     resizeMode: "cover",
   },
   content: {
-    flex: 1,
-    padding: 12,
-    gap: 4,
+    padding: 16,
+    gap: 8,
   },
   categoryBadge: {
     alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   categoryText: {
     fontSize: 10,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   title: {
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 20,
     flexShrink: 1,
   },
   summary: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
     flexShrink: 1,
+  },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   meta: {
     fontSize: 11,
-    marginTop: 2,
   },
   // Featured
+  featuredGradient: {
+    borderRadius: 18,
+    padding: 2,
+    marginBottom: 16,
+  },
   featuredCard: {
     borderRadius: 16,
     overflow: "hidden",
-    marginRight: 16,
-    width: 316,
-    height: 200,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    height: 220,
   },
   featuredImage: {
     width: "100%",
@@ -131,30 +162,27 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   categoryPill: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 20,
     marginBottom: 8,
   },
   categoryPillText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#FFFFFF",
   },
   featuredTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    lineHeight: 20,
+    fontSize: 18,
+    lineHeight: 24,
     flexShrink: 1,
   },
   featuredMeta: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
     marginTop: 4,
   },
 });

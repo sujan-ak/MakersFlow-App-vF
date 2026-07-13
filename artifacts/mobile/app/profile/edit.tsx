@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -17,8 +17,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+import { TEXT_STYLES } from "@/constants/typography";
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -31,6 +33,7 @@ export default function EditProfileScreen() {
   const [school, setSchool] = useState(user?.school ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.avatar ?? "");
   const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   async function handleSave() {
@@ -99,14 +102,8 @@ export default function EditProfileScreen() {
           }}>
             <Feather name="x" size={22} color={colors.foreground} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Edit Profile</Text>
-          <Pressable onPress={handleSave} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Text style={[styles.saveText, { color: colors.primary }]}>Save</Text>
-            )}
-          </Pressable>
+          <Text style={[styles.headerTitle, TEXT_STYLES.pageTitle, { color: colors.foreground, fontSize: 18 }]}>Edit Profile</Text>
+          <View style={{ width: 22 }} />
         </View>
 
         <ScrollView
@@ -121,68 +118,109 @@ export default function EditProfileScreen() {
                 <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
               ) : (
                 <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.initials}>{initials || "S"}</Text>
+                  <Text style={[styles.initials, TEXT_STYLES.pageTitle, { color: "#FFF", fontSize: 36 }]}>{initials || "S"}</Text>
                 </View>
               )}
               <View style={[styles.editBadge, { backgroundColor: colors.primary }]}>
-                <Feather name="camera" size={14} color="#FFF" />
+                <Ionicons name="camera" size={16} color="#FFF" />
               </View>
             </Pressable>
-            <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
+            <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: colors.primary }]}>Change Photo</Text>
           </View>
 
           {/* Email (Read-only) */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
+            <Text style={[styles.label, TEXT_STYLES.label, { color: colors.foreground }]}>Email</Text>
             <View style={[styles.inputWrapper, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Feather name="mail" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.disabledText, { color: colors.mutedForeground }]}>{user?.email}</Text>
+              <Ionicons name="mail" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.disabledText, TEXT_STYLES.description, { color: colors.mutedForeground }]}>{user?.email}</Text>
             </View>
           </View>
 
           {/* Phone Number */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Phone Number</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="smartphone" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, TEXT_STYLES.label, { color: colors.foreground }]}>Phone Number</Text>
+            <View style={[styles.inputWrapper, {
+              backgroundColor: colors.card,
+              borderColor: focusedField === "phone" ? colors.primary : colors.border,
+              borderWidth: focusedField === "phone" ? 1.5 : 1
+            }]}>
+              <Ionicons name="call" size={16} color={colors.mutedForeground} />
               <TextInput
-                style={[styles.input, { color: colors.foreground }]}
+                style={[styles.input, TEXT_STYLES.description, { color: colors.foreground }]}
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="+91 98765 43210"
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="phone-pad"
+                onFocus={() => setFocusedField("phone")}
+                onBlur={() => setFocusedField(null)}
               />
             </View>
           </View>
 
           {[
-            { label: "Full Name", value: name, setter: setName, placeholder: "Your full name", keyboard: "default" as const, icon: "user" },
-            { label: "Grade / Class", value: grade, setter: setGrade, placeholder: "e.g. Class 10", keyboard: "default" as const, icon: "book" },
-            { label: "School / Institution", value: school, setter: setSchool, placeholder: "Your school name", keyboard: "default" as const, icon: "home" },
+            { label: "Full Name", key: "name", value: name, setter: setName, placeholder: "Your full name", keyboard: "default" as const, icon: "person" },
+            { label: "Grade / Class", key: "grade", value: grade, setter: setGrade, placeholder: "e.g. Class 10", keyboard: "default" as const, icon: "book" },
+            { label: "School / Institution", key: "school", value: school, setter: setSchool, placeholder: "Your school name", keyboard: "default" as const, icon: "home" },
           ].map((field) => (
             <View key={field.label} style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Feather name={field.icon as any} size={16} color={colors.mutedForeground} />
+              <Text style={[styles.label, TEXT_STYLES.label, { color: colors.foreground }]}>{field.label}</Text>
+              <View style={[styles.inputWrapper, {
+                backgroundColor: colors.card,
+                borderColor: focusedField === field.key ? colors.primary : colors.border,
+                borderWidth: focusedField === field.key ? 1.5 : 1
+              }]}>
+                <Ionicons name={field.icon as any} size={16} color={colors.mutedForeground} />
                 <TextInput
-                  style={[styles.input, { color: colors.foreground }]}
+                  style={[styles.input, TEXT_STYLES.description, { color: colors.foreground }]}
                   value={field.value}
                   onChangeText={field.setter}
                   placeholder={field.placeholder}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType={field.keyboard}
+                  onFocus={() => setFocusedField(field.key)}
+                  onBlur={() => setFocusedField(null)}
                 />
               </View>
             </View>
           ))}
 
-          <Pressable
-            style={[styles.saveBtn, { backgroundColor: colors.primary }]}
-            onPress={handleSave}
-            disabled={loading}
+          {/* Save Changes gradient CTA */}
+          <LinearGradient
+            colors={[colors.gradientStart || "#0B6FAD", colors.gradientEnd || "#17E5D3"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.saveBtnGradient}
           >
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+            <Pressable
+              style={({ pressed }) => [styles.saveBtn, { opacity: pressed ? 0.9 : 1 }]}
+              onPress={handleSave}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={[styles.saveBtnText, TEXT_STYLES.button, { color: "#FFF" }]}>Save Changes</Text>
+              )}
+            </Pressable>
+          </LinearGradient>
+
+          {/* Cancel ghost button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              { borderColor: colors.primary, opacity: pressed ? 0.9 : 1 }
+            ]}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/(tabs)/profile");
+              }
+            }}
+          >
+            <Text style={[styles.cancelBtnText, TEXT_STYLES.button, { color: colors.primary }]}>Cancel</Text>
           </Pressable>
         </ScrollView>
       </View>
@@ -235,7 +273,7 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 6 },
   label: { fontSize: 14, fontWeight: "600" },
   inputWrapper: { 
-    borderRadius: 12, 
+    borderRadius: 16, 
     borderWidth: 1, 
     paddingHorizontal: 14, 
     paddingVertical: 14,
@@ -244,6 +282,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   input: { flex: 1, fontSize: 15 },
-  saveBtn: { paddingVertical: 16, borderRadius: 14, alignItems: "center", marginTop: 8 },
-  saveBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  saveBtnGradient: { height: 48, borderRadius: 24, overflow: "hidden", marginTop: 16 },
+  saveBtn: { height: 48, alignItems: "center", justifyContent: "center", width: "100%" },
+  saveBtnText: { fontSize: 15, fontWeight: "700", color: "#FFF" },
+  cancelBtn: { height: 48, borderRadius: 24, borderWidth: 1.5, alignItems: "center", justifyContent: "center", marginTop: 12, backgroundColor: "#FFFFFF" },
+  cancelBtnText: { fontSize: 15, fontWeight: "700" },
 });

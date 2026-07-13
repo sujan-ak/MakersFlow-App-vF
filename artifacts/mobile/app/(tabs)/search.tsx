@@ -8,7 +8,8 @@ import { ProductCard } from "@/components/ProductCard";
 import { ListSkeleton } from "@/components/SkeletonLoader";
 import { fetchAllCourses } from "@/services/courseDataProvider";
 import { useCart } from "@/context/CartContext";
-import colors from "@/constants/colors";
+import { useColors } from "@/hooks/useColors";
+import ThemeColors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
 
 const POPULAR_TOPICS = ["Robotics", "Arduino", "AI & ML", "IoT", "Python", "Electronics", "Circuits", "3D Printing"];
@@ -44,6 +45,7 @@ const CATEGORIES = [
 ];
 
 export default function SearchScreen() {
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { count } = useCart();
   const params = useLocalSearchParams<{ query?: string; category?: string }>();
@@ -207,27 +209,27 @@ export default function SearchScreen() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.light.background }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <ListSkeleton />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.light.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.light.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.background }]}>
         {showResults ? (
           <Pressable onPress={handleClear} hitSlop={8}>
-            <Ionicons name="arrow-back" size={24} color={colors.light.foreground} />
+            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
           </Pressable>
         ) : null}
-        <View style={[styles.searchBar, isFocused && styles.searchBarFocused]}>
-          <Ionicons name="search" size={20} color={colors.light.mutedForeground} />
+        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: isFocused ? colors.primary : colors.border }]}>
+          <Ionicons name="search" size={20} color={colors.mutedForeground} />
           <TextInput
             ref={inputRef}
-            style={[styles.input, { color: colors.light.foreground }]}
+            style={[styles.input, { color: colors.foreground }]}
             placeholder="What do you want to learn?"
-            placeholderTextColor={colors.light.mutedForeground}
+            placeholderTextColor={colors.mutedForeground}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onFocus={() => setIsFocused(true)}
@@ -237,7 +239,7 @@ export default function SearchScreen() {
           />
           {searchQuery.length > 0 ? (
             <Pressable onPress={handleClear} hitSlop={8}>
-              <Ionicons name="close-circle" size={20} color={colors.light.mutedForeground} />
+              <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
             </Pressable>
           ) : null}
         </View>
@@ -247,9 +249,9 @@ export default function SearchScreen() {
             hitSlop={8}
             style={{ position: "relative" }}
           >
-            <Ionicons name="cart-outline" size={24} color={colors.light.foreground} />
+            <Ionicons name="cart" size={24} color={colors.foreground} />
             {count > 0 && (
-              <View style={styles.cartBadge}>
+              <View style={[styles.cartBadge, { backgroundColor: colors.primary }]}>
                 <Text style={styles.cartBadgeText}>{count}</Text>
               </View>
             )}
@@ -265,37 +267,37 @@ export default function SearchScreen() {
         {showIdle && (
           <>
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.light.foreground }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                 Popular with students
               </Text>
               <View style={styles.chipWrap}>
                 {POPULAR_TOPICS.map((topic) => (
                   <Pressable
                     key={topic}
-                    style={styles.chip}
+                    style={[styles.chip, { backgroundColor: `${colors.primary}19`, borderColor: colors.primary }]}
                     onPress={() => handleChipPress(topic)}
                   >
-                    <Text style={styles.chipText}>{topic}</Text>
+                    <Text style={[styles.chipText, { color: colors.primary }]}>{topic}</Text>
                   </Pressable>
                 ))}
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.light.foreground }]}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                 Explore by subject
               </Text>
               {CATEGORIES.map((cat, idx) => (
                 <Pressable
                   key={cat.name}
-                  style={[styles.categoryRow, idx < CATEGORIES.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.light.border }]}
+                  style={[styles.categoryRow, idx < CATEGORIES.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
                   onPress={() => handleCategoryPress(cat.name)}
                 >
                   <View style={styles.categoryLeft}>
                     <Text style={styles.emoji}>{cat.emoji}</Text>
-                    <Text style={[styles.categoryName, { color: colors.light.foreground }]}>{cat.name}</Text>
+                    <Text style={[styles.categoryName, { color: colors.foreground }]}>{cat.name}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={colors.light.mutedForeground} />
+                  <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
                 </Pressable>
               ))}
             </View>
@@ -304,7 +306,7 @@ export default function SearchScreen() {
 
         {showTyping && (
           <View style={styles.hintContainer}>
-            <Text style={[styles.hint, { color: colors.light.mutedForeground }]}>
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
               Searching in courses and products...
             </Text>
           </View>
@@ -312,15 +314,17 @@ export default function SearchScreen() {
 
         {showResults && !hasResults && (
           <View style={styles.empty}>
-            <Ionicons name="search" size={64} color={colors.light.primary} style={{ opacity: 0.3 }} />
-            <Text style={[styles.emptyTitle, { color: colors.light.foreground }]}>
+            <View style={[styles.emptyIconCircle, { backgroundColor: "#DCF7F4" }]}>
+              <Ionicons name="search" size={40} color="#0B6FAD" />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
               No results for '{searchQuery}'
             </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.light.mutedForeground }]}>
+            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
               Try Robotics, AI, or Electronics
             </Text>
             <Pressable
-              style={[styles.browseBtn, { backgroundColor: colors.light.primary }]}
+              style={[styles.browseBtn, { backgroundColor: colors.primary }]}
               onPress={() => router.push("/(tabs)/courses")}
             >
               <Text style={styles.browseBtnText}>Browse all courses</Text>
@@ -332,7 +336,7 @@ export default function SearchScreen() {
           <View style={styles.results}>
             {filteredCourses.length > 0 && (
               <View style={styles.resultSection}>
-                <Text style={[styles.resultTitle, { color: colors.light.secondary }]}>
+                <Text style={[styles.resultTitle, { color: colors.secondary }]}>
                   Courses ({filteredCourses.length})
                 </Text>
                 {filteredCourses.map((course) => (
@@ -343,7 +347,7 @@ export default function SearchScreen() {
 
             {filteredProducts.length > 0 && (
               <View style={styles.resultSection}>
-                <Text style={[styles.resultTitle, { color: colors.light.secondary }]}>
+                <Text style={[styles.resultTitle, { color: colors.secondary }]}>
                   Products ({filteredProducts.length})
                 </Text>
                 <ScrollView
@@ -380,13 +384,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: ThemeColors.light.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 10,
   },
   searchBarFocused: {
-    borderColor: colors.light.primary,
+    borderColor: ThemeColors.light.primary,
   },
   input: {
     flex: 1,
@@ -410,9 +414,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   chip: {
-    backgroundColor: `${colors.light.primary}19`,
+    backgroundColor: `${ThemeColors.light.primary}19`,
     borderWidth: 1,
-    borderColor: colors.light.primary,
+    borderColor: ThemeColors.light.primary,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -420,7 +424,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.light.primary,
+    color: ThemeColors.light.primary,
   },
   categoryRow: {
     flexDirection: "row",
@@ -453,6 +457,15 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     paddingHorizontal: 40,
     gap: 12,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCF7F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
@@ -496,7 +509,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.light.primary,
+    backgroundColor: ThemeColors.light.primary,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 3,

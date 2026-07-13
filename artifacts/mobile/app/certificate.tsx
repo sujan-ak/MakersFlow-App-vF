@@ -1,9 +1,10 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Application from 'expo-application';
+import { TEXT_STYLES, TYPOGRAPHY } from '@/constants/typography';
 
 // Lazy-load: this expo-media-library version needs the ExpoMediaLibraryNext
 // native module, which Expo Go doesn't include — top-level import crashes.
@@ -189,7 +190,7 @@ export default function CertificateScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={20} color={colors.foreground} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Certificate</Text>
+        <Text style={[styles.headerTitle, TEXT_STYLES.pageTitle, { color: colors.foreground, fontSize: 18 }]}>Certificate</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -197,44 +198,72 @@ export default function CertificateScreen() {
         {/* Certificate card */}
         <View style={[styles.cert, { borderColor: colors.primary }]}>
           <View style={[styles.certInner, { borderColor: '#C7D2FE' }]}>
-            <Text style={[styles.brand, { color: colors.primary }]}>MAKERSFLOW</Text>
-            <Text style={[styles.certTitle, { color: colors.foreground }]}>Certificate</Text>
-            <Text style={[styles.certSubtitle, { color: colors.mutedForeground }]}>OF COMPLETION</Text>
+            <Text style={[styles.brand, TEXT_STYLES.label, { color: colors.primary }]}>MAKERSFLOW</Text>
+            <Text style={[styles.certTitle, TEXT_STYLES.pageTitle, { color: colors.foreground, fontSize: 32 }]}>Certificate</Text>
+            <Text style={[styles.certSubtitle, TEXT_STYLES.label, { color: colors.mutedForeground, letterSpacing: 3 }]}>OF COMPLETION</Text>
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-            <Text style={[styles.presented, { color: colors.mutedForeground }]}>This is to certify that</Text>
-            <Text style={[styles.studentName, { color: colors.primary }]}>{studentName ?? 'Student'}</Text>
+            <Text style={[styles.presented, TEXT_STYLES.description, { color: colors.mutedForeground }]}>This is to certify that</Text>
+            <Text style={[styles.studentName, TEXT_STYLES.pageTitle, { color: colors.primary, fontSize: 28 }]}>{studentName ?? 'Student'}</Text>
 
-            <Text style={[styles.completed, { color: colors.mutedForeground }]}>has successfully completed</Text>
-            <Text style={[styles.courseName, { color: colors.foreground }]}>{courseName ?? 'Course'}</Text>
+            <Text style={[styles.completed, TEXT_STYLES.description, { color: colors.mutedForeground }]}>has successfully completed</Text>
+            <Text style={[styles.courseName, TEXT_STYLES.cardTitle, { color: colors.foreground, fontSize: 18 }]}>{courseName ?? 'Course'}</Text>
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             <View style={styles.awardRow}>
               <Feather name="award" size={20} color="#F59E0B" />
-              <Text style={[styles.dateText, { color: colors.mutedForeground }]}>{displayDate}</Text>
+              <Text style={[styles.dateText, TEXT_STYLES.meta, { color: colors.mutedForeground }]}>{displayDate}</Text>
             </View>
 
-            <Text style={[styles.footerBrand, { color: colors.mutedForeground }]}>MakersFlow · Learn · Explore · Excel</Text>
+            <Text style={[styles.footerBrand, TYPOGRAPHY.caption, { color: colors.mutedForeground }]}>MakersFlow · Learn · Explore · Excel</Text>
           </View>
         </View>
 
-        {/* Actions */}
-        <Pressable
-          style={[styles.btn, { backgroundColor: colors.primary, opacity: isGenerating ? 0.7 : 1 }]}
-          onPress={handleDownload}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Feather name="download" size={18} color="#fff" />
-              <Text style={styles.btnText}>Download PDF</Text>
-            </>
-          )}
-        </Pressable>
+        {/* Actions Row */}
+        <View style={styles.actionsRow}>
+          <Pressable
+            style={[styles.btn, { flex: 1, backgroundColor: colors.primary, opacity: isGenerating ? 0.7 : 1 }]}
+            onPress={handleDownload}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="download" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={[styles.btnText, TEXT_STYLES.button, { color: "#FFF", fontSize: 14 }]}>Download PDF</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={[styles.shareBtn, { borderColor: colors.primary }]}
+            onPress={async () => {
+              if (Platform.OS === 'web') {
+                Alert.alert("Share", "Sharing is not supported on web. Please download the PDF.");
+                return;
+              }
+              try {
+                // Generate PDF URI first, then share
+                const { uri } = await Print.printToFileAsync({ html: getCertificateHtml() });
+                const canShare = await Sharing.isAvailableAsync();
+                if (canShare) {
+                  await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Certificate' });
+                } else {
+                  Alert.alert('Saved', 'Sharing is not available. PDF generated successfully.');
+                }
+              } catch (err) {
+                console.error("[Certificate] Share error:", err);
+                Alert.alert("Error", "Could not share certificate.");
+              }
+            }}
+          >
+            <Ionicons name="share-social" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+            <Text style={[styles.shareBtnText, TEXT_STYLES.button, { color: colors.primary, fontSize: 14 }]}>Share</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );
@@ -259,6 +288,9 @@ const styles = StyleSheet.create({
   awardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   dateText: { fontSize: 13 },
   footerBrand: { fontSize: 11, marginTop: 8 },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 14 },
+  actionsRow: { flexDirection: "row", gap: 12, marginTop: 16, width: "100%" },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 24, height: 48 },
   btnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 24, borderWidth: 1.5, backgroundColor: '#FFFFFF', height: 48, flex: 1 },
+  shareBtnText: { fontSize: 16, fontWeight: '700' },
 });

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -80,9 +80,11 @@ export default function OrdersScreen() {
     }
   }, [user?.id]);
 
-  useEffect(() => {
-    loadOrders(false);
-  }, [loadOrders]);
+  useFocusEffect(
+    useCallback(() => {
+      loadOrders(false);
+    }, [loadOrders])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

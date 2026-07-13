@@ -4,12 +4,14 @@ import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  ToastAndroid,
   View,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -172,6 +174,43 @@ export default function NotificationsScreen() {
     }
   }
 
+  const showToast = (message: string) => {
+    if (Platform.OS === "android") {
+      ToastAndroid.show(message, ToastAndroid.SHORT);
+    } else {
+      Alert.alert("", message);
+    }
+  };
+
+  async function handleDelete(n: AppNotification) {
+    if (!user?.id) return;
+
+    const previousItems = [...items];
+
+    // Optimistic Update
+    setItems((prev) => prev.filter((x) => x.id !== n.id));
+
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      // Ignore haptics error on web/simulator
+    }
+
+    if (!n.isAnnouncement) {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", n.id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        setItems(previousItems);
+        showToast("Failed to delete notification");
+        if (__DEV__) console.error("[Notifications] delete failed:", error);
+      }
+    }
+  }
+
   const unreadCount = items.filter((n) => !n.is_read).length;
 
   return (
@@ -228,8 +267,7 @@ export default function NotificationsScreen() {
             />
           }
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => handlePress(item)}
+            <View
               style={[
                 styles.card,
                 {
@@ -238,43 +276,59 @@ export default function NotificationsScreen() {
                 },
               ]}
             >
-              <View style={[
-                styles.typeIcon,
-                {
-                  backgroundColor: TYPE_BG[item.type ?? "system"] ?? "#E8F4F9",
-                }
-              ]}>
-                <Ionicons
-                  name={(TYPE_ICON[item.type ?? "system"] ?? "notifications") as any}
-                  size={16}
-                  color={TYPE_COLOR[item.type ?? "system"] ?? "#0B6FAD"}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.cardTopRow}>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      {
-                        color: colors.foreground,
-                        fontFamily: item.is_read ? "Inter_400Regular" : "Fredoka_600SemiBold",
-                        fontWeight: item.is_read ? "500" : "700",
-                      }
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {item.title}
-                  </Text>
-                  {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: "#0B6FAD" }]} />}
+              <Pressable
+                onPress={() => handlePress(item)}
+                style={{ flex: 1, flexDirection: "row", gap: 12 }}
+              >
+                <View style={[
+                  styles.typeIcon,
+                  {
+                    backgroundColor: TYPE_BG[item.type ?? "system"] ?? "#E8F4F9",
+                  }
+                ]}>
+                  <Ionicons
+                    name={(TYPE_ICON[item.type ?? "system"] ?? "notifications") as any}
+                    size={16}
+                    color={TYPE_COLOR[item.type ?? "system"] ?? "#0B6FAD"}
+                  />
                 </View>
-                {!!item.body && (
-                  <Text style={[styles.cardBody, { color: colors.mutedForeground }]} numberOfLines={3}>
-                    {item.body}
-                  </Text>
-                )}
-                <Text style={[styles.cardTime, { color: colors.mutedForeground }]}>{timeAgo(item.created_at)}</Text>
-              </View>
-            </Pressable>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.cardTopRow}>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        {
+                          color: colors.foreground,
+                          fontFamily: item.is_read ? "Inter_400Regular" : "Fredoka_600SemiBold",
+                          fontWeight: item.is_read ? "500" : "700",
+                        }
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {item.title}
+                    </Text>
+                    {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: "#0B6FAD" }]} />}
+                  </View>
+                  {!!item.body && (
+                    <Text style={[styles.cardBody, { color: colors.mutedForeground }]} numberOfLines={3}>
+                      {item.body}
+                    </Text>
+                  )}
+                  <Text style={[styles.cardTime, { color: colors.mutedForeground }]}>{timeAgo(item.created_at)}</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleDelete(item)}
+                style={({ pressed }) => [
+                  styles.deleteBtn,
+                  { opacity: pressed ? 0.6 : 1 }
+                ]}
+                hitSlop={12}
+              >
+                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              </Pressable>
+            </View>
           )}
         />
       )}
@@ -333,4 +387,10 @@ const styles = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: 4 },
   cardBody: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, marginTop: 3 },
   cardTime: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 6 },
+  deleteBtn: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: 4,
+    paddingRight: 2,
+  },
 });
