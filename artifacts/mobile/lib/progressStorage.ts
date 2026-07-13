@@ -139,7 +139,7 @@ export async function markLessonComplete(userId: string, courseId: string, lesso
     {
       user_id: userId,
       lesson_id: Number(lessonId),
-      course_id: courseId,
+      course_id: Number(courseId),
       is_completed: true,
       watch_percentage: 100,
       last_watched_at: new Date().toISOString(),
@@ -175,7 +175,7 @@ export async function upsertLessonProgress(
     {
       user_id: userId,
       lesson_id: Number(lessonId),
-      course_id: courseId,
+      course_id: Number(courseId),
       current_time_secs: Math.floor(currentTimeSecs),
       watch_percentage: finalPct,
       time_spent_secs: Math.floor(currentTimeSecs),
