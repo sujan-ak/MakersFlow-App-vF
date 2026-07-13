@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -19,30 +19,50 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-/** Same idea as the web app's notifications_last_seen — per-device read state
- *  for broadcast announcements (no per-user read table needed). */
 export const ANNOUNCEMENTS_LAST_SEEN_KEY = "announcements_last_seen";
 
 type AppNotification = {
   id: string;
   title: string;
   body: string | null;
-  type: string | null; // 'course' | 'order' | 'offer' | 'system' | 'announcement'
-  link: string | null; // optional in-app route e.g. /course/123
+  type: string | null;
+  link: string | null;
   is_read: boolean;
   created_at: string;
   isAnnouncement?: boolean;
 };
 
-const TYPE_ICON: Record<string, keyof typeof Feather.glyphMap> = {
-  course: "book-open",
-  order: "shopping-bag",
-  offer: "tag",
-  system: "info",
-  announcement: "radio",
-  info: "info",
-  warning: "alert-triangle",
-  success: "check-circle",
+const TYPE_ICON: Record<string, string> = {
+  course: "book",
+  order: "cart",
+  offer: "pricetag",
+  system: "information-circle",
+  announcement: "megaphone",
+  info: "information-circle",
+  warning: "warning",
+  success: "checkmark-circle",
+};
+
+const TYPE_BG: Record<string, string> = {
+  course: "#E8F4F9",
+  order: "#FFFBEB",
+  offer: "#FDF2F8",
+  system: "#F0FDF4",
+  announcement: "#DCF7F4",
+  info: "#F0FDF4",
+  warning: "#FEF2F2",
+  success: "#F0FDF4",
+};
+
+const TYPE_COLOR: Record<string, string> = {
+  course: "#0B6FAD",
+  order: "#F59E0B",
+  offer: "#EC4899",
+  system: "#10B981",
+  announcement: "#0B6FAD",
+  info: "#10B981",
+  warning: "#EF4444",
+  success: "#10B981",
 };
 
 function timeAgo(iso: string): string {
@@ -76,7 +96,6 @@ export default function NotificationsScreen() {
     try {
       const lastSeen = await AsyncStorage.getItem(ANNOUNCEMENTS_LAST_SEEN_KEY);
 
-      // Per-user notifications + admin broadcast announcements, in parallel
       const [personal, broadcast] = await Promise.all([
         supabase
           .from("notifications")
@@ -101,7 +120,6 @@ export default function NotificationsScreen() {
         link: a.link_url,
         created_at: a.created_at,
         isAnnouncement: true,
-        // read = older than the last time this device opened this screen
         is_read: lastSeen ? new Date(a.created_at) <= new Date(lastSeen) : false,
       }));
 
@@ -110,7 +128,6 @@ export default function NotificationsScreen() {
       );
       setItems(merged);
 
-      // Opening the screen marks all broadcasts as seen (mirrors web behavior)
       await AsyncStorage.setItem(ANNOUNCEMENTS_LAST_SEEN_KEY, new Date().toISOString());
     } catch (e) {
       if (__DEV__) console.error("[Notifications] load failed:", e);
@@ -150,7 +167,7 @@ export default function NotificationsScreen() {
       try {
         router.push(n.link as any);
       } catch {
-        // invalid link — stay on this screen
+        // invalid link
       }
     }
   }
@@ -167,14 +184,14 @@ export default function NotificationsScreen() {
       >
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
-          style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.iconBtn, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}
         >
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Notifications</Text>
         {unreadCount > 0 ? (
           <Pressable onPress={markAllRead} hitSlop={8}>
-            <Text style={[styles.markAll, { color: colors.primary }]}>Mark all read</Text>
+            <Text style={[styles.markAll, { color: "#0B6FAD" }]}>Mark all read</Text>
           </Pressable>
         ) : (
           <View style={{ width: 80 }} />
@@ -183,12 +200,12 @@ export default function NotificationsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
+          <ActivityIndicator color="#0B6FAD" size="large" />
         </View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
-          <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-            <Feather name="bell-off" size={28} color={colors.mutedForeground} />
+          <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+            <Ionicons name="notifications-off" size={40} color="#0B6FAD" />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No notifications yet</Text>
           <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
@@ -207,7 +224,7 @@ export default function NotificationsScreen() {
                 setRefreshing(true);
                 load();
               }}
-              tintColor={colors.primary}
+              colors={['#0B6FAD']}
             />
           }
           renderItem={({ item }) => (
@@ -216,27 +233,39 @@ export default function NotificationsScreen() {
               style={[
                 styles.card,
                 {
-                  backgroundColor: item.is_read ? colors.card : colors.muted,
-                  borderColor: colors.border,
+                  backgroundColor: item.is_read ? colors.card : "#DCF7F4",
+                  borderColor: "#D6E9F2",
                 },
               ]}
             >
-              <View style={[styles.typeIcon, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <Feather
-                  name={TYPE_ICON[item.type ?? "system"] ?? "bell"}
+              <View style={[
+                styles.typeIcon,
+                {
+                  backgroundColor: TYPE_BG[item.type ?? "system"] ?? "#E8F4F9",
+                }
+              ]}>
+                <Ionicons
+                  name={(TYPE_ICON[item.type ?? "system"] ?? "notifications") as any}
                   size={16}
-                  color={item.is_read ? colors.mutedForeground : colors.primary}
+                  color={TYPE_COLOR[item.type ?? "system"] ?? "#0B6FAD"}
                 />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.cardTopRow}>
                   <Text
-                    style={[styles.cardTitle, { color: colors.foreground, fontWeight: item.is_read ? "500" : "700" }]}
+                    style={[
+                      styles.cardTitle,
+                      {
+                        color: colors.foreground,
+                        fontFamily: item.is_read ? "Inter_400Regular" : "Fredoka_600SemiBold",
+                        fontWeight: item.is_read ? "500" : "700",
+                      }
+                    ]}
                     numberOfLines={2}
                   >
                     {item.title}
                   </Text>
-                  {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
+                  {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: "#0B6FAD" }]} />}
                 </View>
                 {!!item.body && (
                   <Text style={[styles.cardBody, { color: colors.mutedForeground }]} numberOfLines={3}>
@@ -269,26 +298,26 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  markAll: { fontSize: 13, fontWeight: "600" },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  markAll: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
   },
-  emptyTitle: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
-  emptySub: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+  emptyTitle: { fontSize: 16, fontFamily: "Fredoka_700Bold", marginBottom: 6 },
+  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
   card: {
     flexDirection: "row",
     gap: 12,
-    borderWidth: 1,
-    borderRadius: 14,
+    borderWidth: 1.5,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 10,
   },
@@ -298,11 +327,10 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
   },
   cardTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   cardTitle: { fontSize: 14, flex: 1 },
   unreadDot: { width: 8, height: 8, borderRadius: 4 },
-  cardBody: { fontSize: 13, lineHeight: 18, marginTop: 3 },
-  cardTime: { fontSize: 11, marginTop: 6 },
+  cardBody: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, marginTop: 3 },
+  cardTime: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 6 },
 });

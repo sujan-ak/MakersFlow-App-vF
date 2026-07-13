@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, ActivityIndicator, Modal, TextInput } from "react-native";
@@ -100,7 +100,6 @@ export default function OrdersScreen() {
 
     setIsSubmittingRefund(true);
     try {
-      // 1. Insert into refund_requests
       const { error: refundError } = await supabase
         .from('refund_requests')
         .insert({
@@ -112,7 +111,6 @@ export default function OrdersScreen() {
 
       if (refundError) throw refundError;
 
-      // 2. Update order status to 'refund_requested'
       const { error: orderError } = await supabase
         .from('orders')
         .update({ status: 'refund_requested' })
@@ -122,7 +120,6 @@ export default function OrdersScreen() {
 
       Alert.alert('Submitted', 'Your refund request has been submitted. Our team will review it shortly.');
       
-      // Update local state to reflect status change
       setOrders(prev => prev.map(o => o.id === refundOrderId ? { ...o, status: 'Refund Requested', rawStatus: 'refund_requested' } : o));
       
       setShowRefundModal(false);
@@ -159,17 +156,31 @@ export default function OrdersScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
+        <ActivityIndicator size="large" color="#0B6FAD" />
+        <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Loading...</Text>
       </View>
     );
   }
+
+  const getStatusStyle = (status: string) => {
+    const s = status.toLowerCase();
+    if (s === "paid") {
+      return { bg: "#E8F4F9", text: "#0B6FAD" };
+    }
+    if (s === "completed" || s === "delivered") {
+      return { bg: "#DCF7F4", text: "#10B981" };
+    }
+    if (s === "failed" || s === "refunded" || s === "refund requested" || s === "refund_requested") {
+      return { bg: "#FEE2E2", text: "#DC2626" };
+    }
+    return { bg: "#FEF3C7", text: "#D97706" };
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>My Orders</Text>
         <View style={{ width: 22 }} />
@@ -182,91 +193,100 @@ export default function OrdersScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            colors={['#0B6FAD']}
           />
         }
       >
         {orders.length === 0 ? (
           <View style={styles.empty}>
-            <Feather name="package" size={48} color={colors.mutedForeground} />
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="cube" size={40} color="#0B6FAD" />
+            </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No orders yet</Text>
           </View>
         ) : (
-          orders.map((order) => (
-            <View key={order.id} style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: (order.status === "Delivered" || order.status === "Completed" || order.status === "Paid") ? "#DCFCE7" : "#FEF3C7" },
-                  ]}
-                >
-                  <Text
+          orders.map((order) => {
+            const statusStyle = getStatusStyle(order.status);
+            return (
+              <View key={order.id} style={[styles.orderCard, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View
                     style={[
-                      styles.statusText,
-                      { color: (order.status === "Delivered" || order.status === "Completed" || order.status === "Paid") ? "#16A34A" : "#D97706" },
+                      styles.statusBadge,
+                      { backgroundColor: statusStyle.bg },
                     ]}
                   >
-                    {order.status}
-                  </Text>
-                </View>
-                <Text style={[styles.date, { color: colors.mutedForeground }]}>{order.date}</Text>
-              </View>
-              <Text style={[styles.orderId, { color: colors.mutedForeground }]}>Order #{order.id.toUpperCase()}</Text>
-              {order.items.map((item: string, i: number) => (
-                <Text key={i} style={[styles.item, { color: colors.foreground }]}>
-                  · {item}
-                </Text>
-              ))}
-              <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
-                <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Total Paid</Text>
-                <Text style={[styles.totalAmount, { color: colors.primary }]}>₹{order.total}</Text>
-              </View>
-              {order.tax > 0 && (
-                <Text style={[styles.date, { color: colors.mutedForeground }]}>
-                  Includes GST: ₹{order.tax}
-                </Text>
-              )}
-              {order.shipping?.address && (
-                <View style={{ marginTop: 6 }}>
-                  <Text style={[styles.date, { color: colors.mutedForeground, fontWeight: "600" }]}>
-                    Ship to: {order.shipping.name}
-                  </Text>
-                  <Text style={[styles.date, { color: colors.mutedForeground }]}>
-                    {order.shipping.address}{order.shipping.city ? `, ${order.shipping.city}` : ""}
-                  </Text>
-                  {order.shipping.phone && (
-                    <Text style={[styles.date, { color: colors.mutedForeground }]}>
-                      {order.shipping.phone}
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: statusStyle.text },
+                      ]}
+                    >
+                      {order.status}
                     </Text>
+                  </View>
+                  <Text style={[styles.date, { color: colors.mutedForeground }]}>{order.date}</Text>
+                </View>
+                <Text style={[styles.orderId, { color: colors.mutedForeground }]}>Order #{order.id.toUpperCase()}</Text>
+                {order.items.map((item: string, i: number) => (
+                  <Text key={i} style={[styles.item, { color: colors.foreground }]}>
+                    · {item}
+                  </Text>
+                ))}
+                <View style={[styles.totalRow, { borderTopColor: "#D6E9F2" }]}>
+                  <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Total Paid</Text>
+                  <Text style={[styles.totalAmount, { color: "#0B6FAD" }]}>₹{order.total}</Text>
+                </View>
+                {order.tax > 0 && (
+                  <Text style={[styles.date, { color: colors.mutedForeground, marginTop: 4 }]}>
+                    Includes GST: ₹{order.tax}
+                  </Text>
+                )}
+                {order.shipping?.address && (
+                  <View style={{ marginTop: 6, gap: 2 }}>
+                    <Text style={[styles.date, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                      Ship to: {order.shipping.name}
+                    </Text>
+                    <Text style={[styles.date, { color: colors.mutedForeground }]}>
+                      {order.shipping.address}{order.shipping.city ? `, ${order.shipping.city}` : ""}
+                    </Text>
+                    {order.shipping.phone && (
+                      <Text style={[styles.date, { color: colors.mutedForeground }]}>
+                        {order.shipping.phone}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={[styles.invoiceBtn, { borderColor: "#D6E9F2", backgroundColor: "#FFFFFF" }]}
+                    onPress={() => generateInvoice(order)}
+                    disabled={sharingId === order.id}
+                  >
+                    <Ionicons name="download" size={14} color="#0B6FAD" />
+                    <Text style={[styles.invoiceBtnText, { color: "#0B6FAD" }]}>
+                      {sharingId === order.id ? 'Generating...' : 'Invoice'}
+                    </Text>
+                  </Pressable>
+                  
+                  {(order.rawStatus === 'completed' || order.rawStatus === 'failed') && (
+                    <Pressable
+                      style={[styles.refundBtn, { borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }]}
+                      onPress={() => {
+                        setRefundOrderId(order.id);
+                        setRefundReason("");
+                        setShowRefundModal(true);
+                      }}
+                    >
+                      <Ionicons name="refresh" size={14} color="#DC2626" />
+                      <Text style={[styles.refundBtnText]}>Refund</Text>
+                    </Pressable>
                   )}
                 </View>
-              )}
-              <Pressable
-                style={[styles.invoiceBtn, { borderColor: colors.border }]}
-                onPress={() => generateInvoice(order)}
-                disabled={sharingId === order.id}
-              >
-                <Feather name="download" size={14} color={colors.primary} />
-                <Text style={[styles.invoiceBtnText, { color: colors.primary }]}>
-                  {sharingId === order.id ? 'Generating...' : 'Download Invoice'}
-                </Text>
-              </Pressable>
-              {(order.rawStatus === 'completed' || order.rawStatus === 'failed') && (
-                <Pressable
-                  style={[styles.refundBtn, { borderColor: '#FCA5A5' }]}
-                  onPress={() => {
-                    setRefundOrderId(order.id);
-                    setRefundReason("");
-                    setShowRefundModal(true);
-                  }}
-                >
-                  <Feather name="rotate-ccw" size={14} color="#DC2626" />
-                  <Text style={[styles.refundBtnText]}>Request Refund</Text>
-                </Pressable>
-              )}
-            </View>
-          ))
+              </View>
+            );
+          })
         )}
       </ScrollView>
 
@@ -290,7 +310,7 @@ export default function OrdersScreen() {
               Please describe your reason for requesting a refund (max 200 characters).
             </Text>
             <TextInput
-              style={[styles.textArea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
+              style={[styles.textArea, { color: colors.foreground, borderColor: "#D6E9F2", backgroundColor: "#FFFFFF" }]}
               multiline
               numberOfLines={4}
               value={refundReason}
@@ -308,7 +328,7 @@ export default function OrdersScreen() {
 
             <View style={styles.modalBtnRow}>
               <Pressable
-                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+                style={[styles.modalBtn, { backgroundColor: "#0B6FAD" }]}
                 onPress={submitRefundRequest}
                 disabled={isSubmittingRefund}
               >
@@ -347,23 +367,37 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  empty: { alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: "700" },
-  orderCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 14, gap: 8 },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  empty: { alignItems: "center", paddingTop: 80, gap: 12 },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCF7F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  orderCard: { borderRadius: 16, borderWidth: 1.5, padding: 16, marginBottom: 14, gap: 8 },
   orderHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  orderId: { fontSize: 13, fontWeight: "600" },
+  orderId: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText: { fontSize: 12, fontWeight: "700" },
-  date: { fontSize: 12 },
-  item: { fontSize: 14 },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 10, borderTopWidth: 1, marginTop: 4 },
-  totalLabel: { fontSize: 13 },
-  totalAmount: { fontSize: 16, fontWeight: "700" },
-  invoiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start' },
-  invoiceBtnText: { fontSize: 13, fontWeight: '600' },
-  refundBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start', backgroundColor: '#FEF2F2' },
-  refundBtnText: { fontSize: 13, fontWeight: '600', color: '#DC2626' },
+  statusText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  date: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  item: { fontSize: 14, fontFamily: "Fredoka_600SemiBold" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 10, borderTopWidth: 1.5, marginTop: 4 },
+  totalLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  totalAmount: { fontSize: 16, fontFamily: "Fredoka_700Bold" },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  invoiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1.5 },
+  invoiceBtnText: { fontSize: 13, fontFamily: 'Fredoka_600SemiBold' },
+  refundBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1.5 },
+  refundBtnText: { fontSize: 13, fontFamily: 'Fredoka_600SemiBold', color: '#DC2626' },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -375,30 +409,33 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 400,
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: 24,
     gap: 16,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
   modalSubtitle: {
     fontSize: 13,
     lineHeight: 18,
+    fontFamily: "Inter_400Regular",
   },
   textArea: {
-    borderWidth: 1,
-    borderRadius: 10,
+    borderWidth: 1.5,
+    borderRadius: 12,
     padding: 12,
     height: 100,
     textAlignVertical: "top",
     fontSize: 14,
+    fontFamily: "Inter_400Regular",
   },
   charCount: {
     alignSelf: "flex-end",
     fontSize: 11,
     marginTop: -8,
+    fontFamily: "Inter_400Regular",
   },
   modalBtnRow: {
     flexDirection: "row",
@@ -406,14 +443,14 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
   modalBtnText: {
     color: "#FFF",
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     fontSize: 14,
   },
 });

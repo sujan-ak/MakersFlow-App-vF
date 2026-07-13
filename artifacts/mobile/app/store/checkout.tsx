@@ -1,4 +1,5 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState, useEffect } from "react";
@@ -42,9 +43,9 @@ export default function CheckoutScreen() {
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState("");
-  // Shipping config — same `settings` keys the web checkout uses
   const [shippingConfig, setShippingConfig] = useState({ fee: 49, remoteFee: 149, threshold: 999 });
   const [gstRates, setGstRates] = useState<Map<string, number>>(new Map());
+  
   useEffect(() => {
     supabase
       .from("settings")
@@ -60,7 +61,7 @@ export default function CheckoutScreen() {
         });
       });
   }, []);
-  // Per-item GST rates from the products table (same source as web)
+  
   useEffect(() => {
     if (items.length === 0) return;
     supabase
@@ -74,12 +75,11 @@ export default function CheckoutScreen() {
 
   const [appliedPromo, setAppliedPromo] = useState<{
     code: string;
-    discount: number; // absolute ₹ amount from validate-coupon (handles % AND fixed coupons)
+    discount: number;
     label: string;
     id: string;
   } | null>(null);
 
-  // Saved Addresses
   const [addresses, setAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -92,7 +92,6 @@ export default function CheckoutScreen() {
   const [formPostalCode, setFormPostalCode] = useState("");
   const [formPhone, setFormPhone] = useState("");
 
-  // Razorpay states
   const [showPayment, setShowPayment] = useState(false);
   const [razorpayParams, setRazorpayParams] = useState<RazorpayPaymentParams | null>(null);
   const [pendingAddress, setPendingAddress] = useState<any>(null);
@@ -100,7 +99,6 @@ export default function CheckoutScreen() {
   const discount = appliedPromo ? Math.min(appliedPromo.discount, total) : 0;
   const hasPhysical = items.some((i) => i.product.category === "physical");
 
-  // Remote states/UTs with higher delivery cost (mirrors web checkout)
   const REMOTE_STATES = new Set([
     "Arunachal Pradesh", "Assam", "Manipur", "Meghalaya", "Mizoram",
     "Nagaland", "Sikkim", "Tripura",
@@ -108,7 +106,6 @@ export default function CheckoutScreen() {
     "Jammu and Kashmir", "Ladakh",
   ]);
   const taxable = Math.max(0, total - discount);
-  // Per-item GST on the discounted share — identical math to the web app
   const taxAmount = Math.round(
     items.reduce((sum, item) => {
       const itemSubtotal = item.product.price * item.quantity;
@@ -160,8 +157,6 @@ export default function CheckoutScreen() {
   }
 
   useEffect(() => { loadAddresses(); }, [user?.id]);
-
-  // ── Address form ────────────────────────────────────────────────────────────
 
   const resetAddressForm = () => {
     setEditingAddressId(null);
@@ -215,17 +210,12 @@ export default function CheckoutScreen() {
     await loadAddresses();
   };
 
-  // ── Promo code ──────────────────────────────────────────────────────────────
-
   async function handleApplyPromo() {
     const code = promoCode.trim().toUpperCase();
     if (!code) return;
     setPromoError("");
     setPromoLoading(true);
     try {
-      // Same server-side validation the web app uses — checks the `coupons`
-      // table the admin panel manages (active/expiry/usage-limit/min-order/
-      // item restrictions/per-user usage all enforced server-side).
       const { data, error } = await supabase.functions.invoke("validate-coupon", {
         body: {
           code,
@@ -251,8 +241,6 @@ export default function CheckoutScreen() {
       setPromoLoading(false);
     }
   }
-
-  // ── STEP 1: Tap "Pay" → call edge fn → open WebView ────────────────────────
 
   async function handlePay() {
     const selectedAddress = addresses.find((a) => String(a.id) === selectedAddressId);
@@ -305,8 +293,6 @@ export default function CheckoutScreen() {
     }
   }
 
-  // ── STEP 2: Payment successful → verify → save order ───────────────────────
-
   async function handlePaymentSuccess(
     paymentId: string,
     orderId: string,
@@ -335,10 +321,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Look up course flags for all items in one query — the shared
-      // razorpay-webhook parses order.items expecting the web app's shape
-      // ({id, qty, is_course, course_id}); with this shape our orders also get
-      // order_items + course_purchases + stock decrements, exactly like web.
       const { data: prodFlags } = await supabase
         .from("products")
         .select("id, is_course, course_id")
@@ -377,9 +359,6 @@ export default function CheckoutScreen() {
         items: orderItems,
       };
 
-      // Preferred path: single DB transaction (order + enrollments + promo
-      // counter succeed or fail together). Falls back to the legacy multi-step
-      // writes if the `complete_paid_order` function isn't deployed yet.
       const { error: rpcError } = await supabase.rpc("complete_paid_order", {
         p_order: orderPayload,
         p_product_ids: items.map((i) => String(i.product.id)),
@@ -387,14 +366,8 @@ export default function CheckoutScreen() {
       });
 
       if (rpcError) {
-        // Always log WHY the transactional path failed — this was previously
-        // dev-only, which made "order saving failed" impossible to debug.
         console.error("[Checkout] complete_paid_order RPC failed, using legacy path:", rpcError.message);
 
-        // BUG FIX (PGRST204 "Could not find the 'items' column of 'orders'"):
-        // if the live orders table is missing a column, keep stripping the
-        // column PostgREST names and retrying — a captured payment must NEVER
-        // be lost because of schema drift. Permanent fix: PAYMENT_ORDERS_FIX.sql.
         let payload: Record<string, any> = { ...orderPayload };
         let orderError: any = null;
         for (let attempt = 0; attempt < 6; attempt++) {
@@ -431,18 +404,15 @@ export default function CheckoutScreen() {
             );
           }
         }
-
-        // Coupon usage is recorded server-side by verify-razorpay-payment
-        // (coupon_usage insert + increment_coupon_usage RPC) — nothing to do here.
       }
 
       try {
         const ordId = Date.now().toString();
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
           <style>body{font-family:Arial,sans-serif;padding:40px;color:#111}
-          h1{color:#4F46E5}table{width:100%;border-collapse:collapse;margin:20px 0}
+          h1{color:#0B6FAD}table{width:100%;border-collapse:collapse;margin:20px 0}
           th,td{padding:10px;border:1px solid #e5e7eb;text-align:left}th{background:#f3f4f6}
-          .total{font-size:18px;font-weight:bold;color:#4F46E5}
+          .total{font-size:18px;font-weight:bold;color:#0B6FAD}
           .footer{margin-top:40px;font-size:12px;color:#9ca3af}</style></head><body>
           <h1>MAKERSFLOW</h1><p>Tax Invoice</p>
           <p><strong>Payment ID:</strong> ${paymentId}</p>
@@ -454,7 +424,7 @@ export default function CheckoutScreen() {
           <p>Subtotal: ₹${total}</p>
           <p>GST: ₹${taxAmount}</p>
           ${shippingFee > 0 ? `<p>Shipping: ₹${shippingFee}</p>` : ''}
-          ${appliedPromo ? `<p style="color:#10B981">Promo (${appliedPromo.code}): -₹${discount}</p>` : ""}
+          ${appliedPromo ? `<p style="color:#17E5D3">Promo (${appliedPromo.code}): -₹${discount}</p>` : ""}
           <p class="total">Total Paid: ₹${finalTotal}</p>
           <div class="footer">MakersFlow · Learn · Explore · Excel<br/>Razorpay Payment ID: ${paymentId}</div>
           </body></html>`;
@@ -498,8 +468,6 @@ export default function CheckoutScreen() {
     }
   }
 
-  // ── STEP 3: Payment failed ──────────────────────────────────────────────────
-
   function handlePaymentFailure(reason: string) {
     setShowPayment(false);
     setRazorpayParams(null);
@@ -514,11 +482,11 @@ export default function CheckoutScreen() {
     return (
       <View style={[styles.empty, { backgroundColor: colors.background, paddingTop: topPad + 20 }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
-        <Feather name="shopping-bag" size={48} color={colors.mutedForeground} />
+        <Ionicons name="cart" size={48} color={colors.mutedForeground} />
         <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your cart is empty</Text>
-        <Pressable style={[styles.shopBtn, { backgroundColor: colors.primary }]} onPress={() => router.push("/(tabs)/store")}>
+        <Pressable style={[styles.shopBtn, { backgroundColor: "#0B6FAD" }]} onPress={() => router.push("/(tabs)/store")}>
           <Text style={styles.shopBtnText}>Browse Store</Text>
         </Pressable>
       </View>
@@ -530,10 +498,53 @@ export default function CheckoutScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <Pressable onPress={() => router.back()}>
-            <Feather name="arrow-left" size={22} color={colors.foreground} />
+            <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Checkout</Text>
           <View style={{ width: 22 }} />
+        </View>
+
+        {/* Step Indicator */}
+        <View style={styles.stepIndicatorContainer}>
+          {[
+            { id: 1, label: "Cart", status: "done" },
+            { id: 2, label: "Checkout", status: "current" },
+            { id: 3, label: "Payment", status: "upcoming" }
+          ].map((step, idx) => (
+            <React.Fragment key={step.id}>
+              <View style={styles.stepItem}>
+                <View style={[
+                  styles.stepCircle,
+                  {
+                    backgroundColor: step.status === "done" || step.status === "current" ? "#0B6FAD" : "#E8F4F9",
+                  }
+                ]}>
+                  {step.status === "done" ? (
+                    <Ionicons name="checkmark" size={12} color="#FFF" />
+                  ) : (
+                    <Text style={[styles.stepNum, { color: step.status === "current" ? "#FFF" : "#5A7A8C" }]}>{step.id}</Text>
+                  )}
+                </View>
+                <Text style={[
+                  styles.stepLabel,
+                  {
+                    color: step.status === "current" || step.status === "done" ? "#0B6FAD" : "#5A7A8C",
+                    fontFamily: step.status === "current" ? "Inter_600SemiBold" : "Inter_400Regular"
+                  }
+                ]}>
+                  {step.label}
+                </Text>
+              </View>
+              {idx < 2 && (
+                <View style={[
+                  styles.stepLine,
+                  {
+                    backgroundColor: step.status === "done" ? "#0B6FAD" : "#D6E9F2"
+                  }
+                ]} />
+              )}
+            </React.Fragment>
+          ))}
         </View>
 
         <ScrollView
@@ -542,7 +553,7 @@ export default function CheckoutScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Order Summary</Text>
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
             {items.map((item) => (
               <View key={item.product.id} style={styles.orderItem}>
                 <Image
@@ -559,22 +570,22 @@ export default function CheckoutScreen() {
                   <Text style={[styles.orderItemName, { color: colors.foreground }]} numberOfLines={1}>
                     {item.product.title}
                   </Text>
-                  <Text style={[styles.orderItemPrice, { color: colors.primary }]}>
+                  <Text style={[styles.orderItemPrice, { color: "#0B6FAD" }]}>
                     ₹{item.product.price}
                   </Text>
                 </View>
-                <View style={[styles.controlsContainer, { borderColor: colors.border }]}>
+                <View style={[styles.controlsContainer, { borderColor: "#D6E9F2" }]}>
                   <Pressable onPress={() => decrementQuantity(String(item.product.id))} style={styles.controlBtn} hitSlop={8}>
-                    <Feather name={item.quantity <= 1 ? "trash-2" : "minus"} size={14} color={item.quantity <= 1 ? "#ef4444" : colors.foreground} />
+                    <Ionicons name={item.quantity <= 1 ? "trash" : "remove"} size={14} color={item.quantity <= 1 ? "#ef4444" : colors.foreground} />
                   </Pressable>
                   <Text style={[styles.qtyText, { color: colors.foreground }]}>{item.quantity}</Text>
                   <Pressable onPress={() => addToCart(item.product)} style={styles.controlBtn} hitSlop={8}>
-                    <Feather name="plus" size={14} color={colors.foreground} />
+                    <Ionicons name="add" size={14} color={colors.foreground} />
                   </Pressable>
                 </View>
               </View>
             ))}
-            <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
+            <View style={[styles.totalRow, { borderTopColor: "#D6E9F2" }]}>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>Subtotal</Text>
               <Text style={[styles.totalAmount, { color: colors.foreground }]}>₹{total}</Text>
             </View>
@@ -598,24 +609,24 @@ export default function CheckoutScreen() {
                 </Text>
               </View>
             )}
-            <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
+            <View style={[styles.totalRow, { borderTopColor: "#D6E9F2" }]}>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total</Text>
-              <Text style={[styles.totalAmount, { color: colors.primary }]}>₹{finalTotal}</Text>
+              <Text style={[styles.totalAmount, { color: "#0B6FAD" }]}>₹{finalTotal}</Text>
             </View>
           </View>
 
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Promo Code</Text>
           {appliedPromo ? (
-            <View style={[styles.promoApplied, { backgroundColor: "#DCFCE7", borderColor: "#10B981" }]}>
-              <Feather name="check-circle" size={16} color="#10B981" />
+            <View style={[styles.promoApplied, { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" }]}>
+              <Ionicons name="checkmark-circle" size={16} color="#0B6FAD" />
               <Text style={styles.promoAppliedText}>{appliedPromo.code} — {appliedPromo.label} applied!</Text>
               <Pressable onPress={() => { setAppliedPromo(null); setPromoCode(""); }} hitSlop={8}>
-                <Feather name="x" size={16} color="#6B7280" />
+                <Ionicons name="close-circle" size={18} color="#0B6FAD" />
               </Pressable>
             </View>
           ) : (
             <View style={styles.promoRow}>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: promoError ? "#DC2626" : colors.border, flex: 1 }]}>
+              <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: promoError ? "#DC2626" : "#D6E9F2", flex: 1 }]}>
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   value={promoCode}
@@ -625,7 +636,7 @@ export default function CheckoutScreen() {
                   autoCapitalize="characters"
                 />
               </View>
-              <Pressable style={[styles.promoBtn, { backgroundColor: colors.primary, opacity: promoLoading ? 0.7 : 1 }]} onPress={handleApplyPromo} disabled={promoLoading}>
+              <Pressable style={[styles.promoBtn, { backgroundColor: "#0B6FAD", opacity: promoLoading ? 0.7 : 1 }]} onPress={handleApplyPromo} disabled={promoLoading}>
                 {promoLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.promoBtnText}>Apply</Text>}
               </Pressable>
             </View>
@@ -637,23 +648,23 @@ export default function CheckoutScreen() {
               <View style={styles.sectionHeaderRow}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Shipping Address</Text>
                 <Pressable onPress={() => { resetAddressForm(); setShowAddressForm(true); }} style={styles.addAddrBtn}>
-                  <Feather name="plus" size={14} color={colors.primary} />
-                  <Text style={[styles.addAddrBtnText, { color: colors.primary }]}>Add New</Text>
+                  <Ionicons name="add" size={14} color="#0B6FAD" />
+                  <Text style={[styles.addAddrBtnText, { color: "#0B6FAD" }]}>Add New</Text>
                 </Pressable>
               </View>
               {addresses.map((addr) => {
                 const isSelected = String(addr.id) === selectedAddressId;
                 return (
                   <Pressable key={addr.id} onPress={() => setSelectedAddressId(String(addr.id))}
-                    style={[styles.addressCard, { backgroundColor: colors.card, borderColor: isSelected ? colors.primary : colors.border, borderWidth: isSelected ? 2 : 1 }]}>
+                    style={[styles.addressCard, { backgroundColor: "#FFFFFF", borderColor: isSelected ? "#0B6FAD" : "#D6E9F2", borderWidth: isSelected ? 1.5 : 1 }]}>
                     <View style={styles.addressCardHeader}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Feather name={isSelected ? "check-circle" : "circle"} size={18} color={isSelected ? colors.primary : colors.mutedForeground} />
+                        <Ionicons name="location" size={16} color="#0B6FAD" />
                         <Text style={[styles.addressName, { color: colors.foreground }]}>{addr.full_name}</Text>
                         {addr.is_default && <View style={styles.defaultBadge}><Text style={styles.defaultBadgeText}>Default</Text></View>}
                       </View>
                       <Pressable onPress={() => handleEditAddress(addr)} hitSlop={8}>
-                        <Feather name="edit-2" size={14} color={colors.primary} />
+                        <Ionicons name="create" size={16} color="#0B6FAD" />
                       </Pressable>
                     </View>
                     <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ""}</Text>
@@ -663,8 +674,8 @@ export default function CheckoutScreen() {
                 );
               })}
               {addresses.length === 0 && (
-                <View style={[styles.emptyAddressesCard, { borderColor: colors.border }]}>
-                  <Feather name="map-pin" size={24} color={colors.mutedForeground} style={{ marginBottom: 4 }} />
+                <View style={[styles.emptyAddressesCard, { borderColor: "#D6E9F2" }]}>
+                  <Ionicons name="location" size={24} color={colors.mutedForeground} style={{ marginBottom: 4 }} />
                   <Text style={[styles.emptyAddressesText, { color: colors.mutedForeground }]}>No saved addresses. Please add a shipping address.</Text>
                 </View>
               )}
@@ -678,7 +689,7 @@ export default function CheckoutScreen() {
               ].map((field) => (
                 <View key={field.label} style={styles.fieldGroup}>
                   <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
                     <TextInput
                       style={[styles.input, { color: colors.foreground }]}
                       value={field.value}
@@ -694,26 +705,39 @@ export default function CheckoutScreen() {
           )}
 
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment</Text>
-          <View style={[styles.paymentCard, { backgroundColor: colors.accent, borderColor: colors.primary }]}>
-            <Feather name="credit-card" size={20} color={colors.primary} />
-            <Text style={[styles.paymentText, { color: colors.primary }]}>UPI / Debit / Credit Card (Razorpay)</Text>
-            <Feather name="lock" size={16} color={colors.primary} />
+          <View style={[styles.paymentCard, { backgroundColor: "#DCF7F4", borderColor: "#0B6FAD" }]}>
+            <Ionicons name="card" size={20} color="#0B6FAD" />
+            <Text style={[styles.paymentText, { color: "#0B6FAD" }]}>UPI / Debit / Credit Card (Razorpay)</Text>
+            <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
           </View>
         </ScrollView>
 
         <View style={[styles.cta, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === "web" ? 20 : insets.bottom + 8 }]}>
-          <Pressable style={[styles.orderBtn, { backgroundColor: colors.primary }]} onPress={handlePay} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <>
-                <Feather name="credit-card" size={18} color="#FFF" />
-                <Text style={styles.orderBtnText}>Pay ₹{finalTotal} · Razorpay</Text>
-                <Feather name="arrow-right" size={18} color="#FFF" />
-              </>
-            )}
+          <Pressable
+            style={{ width: "100%", height: 56 }}
+            onPress={handlePay}
+            disabled={loading}
+          >
+            <LinearGradient
+              colors={["#0B6FAD", "#17E5D3"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.payGradientBtn}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="lock-closed" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.payBtnText}>Pay ₹{finalTotal}</Text>
+                  <Ionicons name="chevron-forward" size={18} color="#FFF" style={{ marginLeft: "auto" }} />
+                </>
+              )}
+            </LinearGradient>
           </Pressable>
-          <Text style={[styles.secureNote, { color: colors.mutedForeground }]}>🔒 Secured by Razorpay · 100% Safe</Text>
+          <Text style={[styles.secureNote, { color: colors.mutedForeground }]}>
+            <Ionicons name="lock-closed" size={11} color={colors.mutedForeground} /> Secured by Razorpay · 100% Safe
+          </Text>
         </View>
       </View>
 
@@ -745,14 +769,14 @@ export default function CheckoutScreen() {
                 ].map((field) => (
                   <View key={field.label} style={styles.fieldGroup}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
-                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                    <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
                       <TextInput style={[styles.input, { color: colors.foreground }]} value={field.value} onChangeText={field.setter} placeholder={field.placeholder} placeholderTextColor={colors.mutedForeground} keyboardType={(field as any).keyboard ?? "default"} />
                     </View>
                   </View>
                 ))}
               </ScrollView>
               <View style={styles.modalBtnRow}>
-                <Pressable style={[styles.modalBtn, { backgroundColor: colors.primary }]} onPress={handleSaveAddress}>
+                <Pressable style={[styles.modalBtn, { backgroundColor: "#0B6FAD" }]} onPress={handleSaveAddress}>
                   <Text style={styles.modalBtnText}>Save</Text>
                 </Pressable>
                 <Pressable style={[styles.modalBtn, { backgroundColor: colors.muted }]} onPress={() => { setShowAddressForm(false); resetAddressForm(); }}>
@@ -771,59 +795,111 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   empty: { flex: 1, alignItems: "center", paddingHorizontal: 24, gap: 16 },
   backBtn: { alignSelf: "flex-start", marginBottom: 32 },
-  emptyTitle: { fontSize: 20, fontWeight: "700" },
-  shopBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
-  shopBtnText: { fontSize: 15, fontWeight: "700", color: "#FFF" },
+  emptyTitle: { fontSize: 20, fontFamily: "Fredoka_700Bold" },
+  shopBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 24 },
+  shopBtnText: { fontSize: 15, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1 },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  sectionTitle: { fontSize: 17, fontWeight: "700", marginTop: 8, marginBottom: 10 },
-  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 10, marginBottom: 4 },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  sectionTitle: { fontSize: 17, fontFamily: "Fredoka_700Bold", marginTop: 8, marginBottom: 10 },
+  card: { borderRadius: 16, borderWidth: 1.5, padding: 14, gap: 10, marginBottom: 4 },
   orderItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   itemThumbnail: { width: 48, height: 48, borderRadius: 8 },
   itemInfo: { flex: 1, gap: 2 },
-  controlsContainer: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 4, paddingVertical: 2 },
+  controlsContainer: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: "#FFFFFF" },
   controlBtn: { padding: 4 },
-  qtyText: { fontSize: 13, fontWeight: "600", minWidth: 16, textAlign: "center" },
+  qtyText: { fontSize: 13, fontFamily: "Inter_600SemiBold", minWidth: 16, textAlign: "center" },
   removeBtn: { padding: 4 },
-  orderItemName: { fontSize: 14, flex: 1 },
-  orderItemPrice: { fontSize: 14, fontWeight: "600" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, borderTopWidth: 1, marginTop: 4 },
-  totalLabel: { fontSize: 16, fontWeight: "700" },
-  totalAmount: { fontSize: 18, fontWeight: "800" },
+  orderItemName: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", flex: 1 },
+  orderItemPrice: { fontSize: 14, fontFamily: "Fredoka_700Bold" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 12, borderTopWidth: 1.5, marginTop: 4 },
+  totalLabel: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  totalAmount: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
   fieldGroup: { gap: 6, marginBottom: 12 },
-  label: { fontSize: 14, fontWeight: "600" },
-  inputWrapper: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
-  input: { fontSize: 15 },
+  label: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  inputWrapper: { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12 },
+  input: { fontSize: 15, fontFamily: "Inter_400Regular" },
   paymentCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, borderRadius: 12, borderWidth: 2 },
-  paymentText: { flex: 1, fontSize: 14, fontWeight: "600" },
+  paymentText: { flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold" },
   cta: { padding: 16, borderTopWidth: 1 },
-  orderBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 16, borderRadius: 14 },
-  orderBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
-  secureNote: { textAlign: "center", fontSize: 11, marginTop: 6 },
+  secureNote: { textAlign: "center", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 6 },
   promoRow: { flexDirection: "row", gap: 10, alignItems: "center", marginBottom: 4 },
-  promoBtn: { paddingHorizontal: 18, paddingVertical: 14, borderRadius: 12 },
-  promoBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  promoApplied: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 4 },
-  promoAppliedText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#065F46" },
-  promoError: { fontSize: 12, color: "#DC2626", marginTop: 4, marginBottom: 8 },
+  promoBtn: {
+    paddingHorizontal: 20,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#0B6FAD",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  promoBtnText: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", color: "#fff" },
+  promoApplied: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, marginBottom: 4 },
+  promoAppliedText: { flex: 1, fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#0B6FAD" },
+  promoError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#DC2626", marginTop: 4, marginBottom: 8 },
   discountRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
-  discountLabel: { fontSize: 13, color: "#10B981", fontWeight: "600" },
-  discountAmount: { fontSize: 13, color: "#10B981", fontWeight: "700" },
+  discountLabel: { fontSize: 13, color: "#10B981", fontFamily: "Inter_600SemiBold" },
+  discountAmount: { fontSize: 13, color: "#10B981", fontFamily: "Fredoka_700Bold" },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8, marginBottom: 10 },
   addAddrBtn: { flexDirection: "row", alignItems: "center", gap: 4, padding: 6 },
-  addAddrBtnText: { fontSize: 14, fontWeight: "700" },
+  addAddrBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   addressCard: { borderRadius: 14, padding: 14, marginBottom: 10, gap: 4 },
   addressCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  addressName: { fontSize: 15, fontWeight: "700" },
-  defaultBadge: { backgroundColor: "#DCFCE7", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  defaultBadgeText: { color: "#16A34A", fontSize: 10, fontWeight: "700" },
-  addressText: { fontSize: 13, lineHeight: 18 },
-  emptyAddressesCard: { borderRadius: 14, borderWidth: 1, borderStyle: "dashed", padding: 24, alignItems: "center", justifyContent: "center", marginBottom: 10 },
-  emptyAddressesText: { fontSize: 13, textAlign: "center", lineHeight: 18 },
+  addressName: { fontSize: 15, fontFamily: "Fredoka_600SemiBold" },
+  defaultBadge: { backgroundColor: "#DCF7F4", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  defaultBadgeText: { color: "#0B6FAD", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  addressText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  emptyAddressesCard: { borderRadius: 14, borderWidth: 1.5, borderStyle: "dashed", padding: 24, alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  emptyAddressesText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
   modalContent: { width: "100%", maxWidth: 400, maxHeight: "85%", borderRadius: 20, borderWidth: 1, padding: 24, gap: 16 },
-  modalTitle: { fontSize: 18, fontWeight: "700" },
+  modalTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
   modalBtnRow: { flexDirection: "row", gap: 12, marginTop: 8 },
-  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  modalBtnText: { color: "#FFF", fontWeight: "700", fontSize: 14 },
+  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 20, height: 40, alignItems: "center", justifyContent: "center" },
+  modalBtnText: { color: "#FFF", fontFamily: "Fredoka_600SemiBold", fontSize: 14 },
+  stepIndicatorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#D6E9F2",
+    marginBottom: 12,
+  },
+  stepItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  stepCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNum: {
+    fontSize: 11,
+    fontFamily: "Fredoka_700Bold",
+  },
+  stepLabel: {
+    fontSize: 12,
+  },
+  stepLine: {
+    width: 32,
+    height: 2,
+    marginHorizontal: 8,
+  },
+  payGradientBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  payBtnText: {
+    fontSize: 16,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#FFF",
+  },
 });

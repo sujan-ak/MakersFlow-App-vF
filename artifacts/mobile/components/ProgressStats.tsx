@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React from "react";
@@ -37,18 +37,18 @@ export function ProgressStats({
         style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}
       >
         <View style={styles.zeroStateContainer}>
-          <View style={[styles.zeroStateIcon, { backgroundColor: colors.muted }]}>
-            <Feather name="bar-chart-2" size={32} color={colors.mutedForeground} />
+          <View style={[styles.zeroStateIcon, { backgroundColor: "#DCF7F4" }]}>
+            <Ionicons name="stats-chart" size={32} color="#0B6FAD" />
           </View>
           <Text style={[styles.zeroStateTitle, { color: colors.foreground }]}>
             Start your first lesson to see your progress here
           </Text>
           <Pressable
-            style={[styles.zeroStateCTA, { backgroundColor: colors.primary }]}
+            style={[styles.zeroStateCTA, { backgroundColor: "#0B6FAD" }]}
             onPress={handleLessonsPress}
           >
             <Text style={styles.zeroStateCTAText}>Browse Courses</Text>
-            <Feather name="arrow-right" size={16} color="#FFF" />
+            <Ionicons name="chevron-forward" size={16} color="#FFF" />
           </Pressable>
         </View>
       </View>
@@ -57,15 +57,15 @@ export function ProgressStats({
 
   const stats = [
     {
-      icon: "book-open",
+      icon: "book",
       label: "Courses Enrolled",
       value: totalCoursesEnrolled.toString(),
-      color: "#3B82F6",
+      color: "#0B6FAD",
       helperText: null,
       isZero: totalCoursesEnrolled === 0,
     },
     {
-      icon: "check-circle",
+      icon: "checkmark-circle",
       label: "Completed",
       value: coursesCompleted.toString(),
       color: "#10B981",
@@ -83,10 +83,10 @@ export function ProgressStats({
       isZero: coursesInProgress === 0,
     },
     {
-      icon: "award",
+      icon: "trophy",
       label: "Lessons Done",
       value: totalLessonsCompleted.toString(),
-      color: "#8B5CF6",
+      color: "#17E5D3",
       helperText:
         totalLessonsCompleted === 0 ? "Your first lesson awaits" : null,
       onPress: totalLessonsCompleted === 0 ? handleLessonsPress : undefined,
@@ -97,37 +97,25 @@ export function ProgressStats({
   return (
     <View
       style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}
-      accessible={true}
-      accessibilityRole="summary"
-      accessibilityLabel="Learning progress statistics"
     >
       {stats.map((stat, index) => {
         const StatWrapper = stat.onPress ? Pressable : View;
         const wrapperProps = stat.onPress
           ? {
               onPress: stat.onPress,
-              accessible: true,
-              accessibilityRole: "button" as const,
-              accessibilityLabel: `${stat.label}: ${stat.value}. ${stat.helperText}. Tap to browse courses.`,
-              accessibilityHint: "Double tap to browse courses",
             }
-          : {
-              accessible: true,
-              accessibilityRole: "text" as const,
-              accessibilityLabel: `${stat.label}: ${stat.value}`,
-            };
+          : {};
 
         return (
           <React.Fragment key={stat.label}>
             <StatWrapper style={styles.statItem} {...wrapperProps}>
-              <View style={[styles.iconBox, { backgroundColor: `${stat.color}15` }]}>
-                <Feather name={stat.icon as any} size={20} color={stat.color} />
+              <View style={[styles.iconBox, { backgroundColor: "#DCF7F4" }]}>
+                <Ionicons name={stat.icon as any} size={20} color="#0B6FAD" />
               </View>
               <Text style={[
                 styles.value, 
                 { 
-                  color: stat.isZero ? colors.mutedForeground : colors.foreground,
-                  fontWeight: stat.isZero ? "600" : "800",
+                  color: stat.isZero ? colors.mutedForeground : "#0B6FAD",
                 }
               ]}>
                 {stat.value}
@@ -135,8 +123,7 @@ export function ProgressStats({
               <Text style={[
                 styles.label, 
                 { 
-                  color: colors.mutedForeground,
-                  fontWeight: stat.isZero ? "500" : "600",
+                  color: colors.foreground,
                 }
               ]}>
                 {stat.label}
@@ -146,7 +133,7 @@ export function ProgressStats({
                   style={[
                     styles.helperText,
                     {
-                      color: stat.onPress ? colors.primary : colors.mutedForeground,
+                      color: stat.onPress ? "#0B6FAD" : colors.mutedForeground,
                       textDecorationLine: stat.onPress ? "underline" : "none",
                     },
                   ]}
@@ -185,8 +172,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   iconBox: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -194,17 +181,18 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 24,
-    fontWeight: "800",
+    fontFamily: "Fredoka_700Bold",
     marginBottom: 4,
   },
   label: {
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
     textAlign: "center",
     marginBottom: 4,
   },
   helperText: {
     fontSize: 10,
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 14,
     paddingHorizontal: 8,
@@ -238,7 +226,7 @@ const styles = StyleSheet.create({
   },
   zeroStateTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
     textAlign: "center",
     marginBottom: 20,
     lineHeight: 22,
@@ -249,12 +237,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 20, // pill
     minHeight: 44,
   },
   zeroStateCTAText: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
   },
 });

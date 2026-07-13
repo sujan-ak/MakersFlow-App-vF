@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -95,12 +95,13 @@ export default function OnboardingScreen() {
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={[styles.iconWrap, { backgroundColor: colors.primary + "1A" }]}>
-            <Feather name="user-check" size={32} color={colors.primary} />
+          <View style={styles.iconWrap}>
+            <Ionicons name="person-add" size={32} color="#0B6FAD" />
           </View>
-          <Text style={[styles.title, { color: colors.foreground }]}>Complete your profile</Text>
+          <Text style={[styles.title, { color: "#0F2A3D" }]}>Complete your profile</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Help us personalise your learning experience
           </Text>
@@ -108,16 +109,17 @@ export default function OnboardingScreen() {
 
         <View style={styles.form}>
           {error ? (
-            <View style={[styles.errorBox, { backgroundColor: "#FEE2E2" }]}>
-              <Feather name="alert-circle" size={14} color="#DC2626" />
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color="#DC2626" />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
+          {/* Full Name */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Full Name</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: fullNameError ? "#DC2626" : colors.border }]}>
-              <Feather name="user" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Full Name</Text>
+            <View style={[styles.inputWrapper, { borderColor: fullNameError ? "#DC2626" : "#D6E9F2" }]}>
+              <Ionicons name="person" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={fullName}
@@ -130,10 +132,11 @@ export default function OnboardingScreen() {
             {fullNameError ? <Text style={styles.fieldError}>{fullNameError}</Text> : null}
           </View>
 
+          {/* Age */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Age</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: ageError ? "#DC2626" : colors.border }]}>
-              <Feather name="info" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Age</Text>
+            <View style={[styles.inputWrapper, { borderColor: ageError ? "#DC2626" : "#D6E9F2" }]}>
+              <Ionicons name="information-circle" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={age}
@@ -146,10 +149,11 @@ export default function OnboardingScreen() {
             {ageError ? <Text style={styles.fieldError}>{ageError}</Text> : null}
           </View>
 
+          {/* Grade */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Grade / Class</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: gradeError ? "#DC2626" : colors.border }]}>
-              <Feather name="book-open" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Grade / Class</Text>
+            <View style={[styles.inputWrapper, { borderColor: gradeError ? "#DC2626" : "#D6E9F2" }]}>
+              <Ionicons name="book" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={grade}
@@ -161,10 +165,11 @@ export default function OnboardingScreen() {
             {gradeError ? <Text style={styles.fieldError}>{gradeError}</Text> : null}
           </View>
 
+          {/* School Name */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>School Name</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: schoolError ? "#DC2626" : colors.border }]}>
-              <Feather name="home" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>School Name</Text>
+            <View style={[styles.inputWrapper, { borderColor: schoolError ? "#DC2626" : "#D6E9F2" }]}>
+              <Ionicons name="school" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={school}
@@ -176,12 +181,21 @@ export default function OnboardingScreen() {
             {schoolError ? <Text style={styles.fieldError}>{schoolError}</Text> : null}
           </View>
 
+          {/* Submit Button */}
           <Pressable
-            style={({ pressed }) => [styles.btn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+            style={[styles.btn, { backgroundColor: "#0B6FAD" }]}
             onPress={handleSubmit}
             disabled={loading}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Get Started</Text>}
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={styles.btnContent}>
+                <Ionicons name="rocket" size={16} color="#FFF" />
+                <Text style={styles.btnText}>Get Started</Text>
+                <Ionicons name="chevron-forward" size={16} color="#FFF" style={{ marginLeft: "auto" }} />
+              </View>
+            )}
           </Pressable>
 
           <Pressable onPress={handleSkip} style={styles.skipBtn}>
@@ -196,28 +210,59 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 24 },
-  header: { alignItems: "center", marginBottom: 36 },
-  iconWrap: { width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 16 },
-  title: { fontSize: 26, fontWeight: "800", textAlign: "center" },
-  subtitle: { fontSize: 14, marginTop: 6, textAlign: "center" },
+  header: { alignItems: "center", marginBottom: 32 },
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#DCF7F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  title: { fontSize: 24, fontFamily: "Fredoka_700Bold", textAlign: "center" },
+  subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 6, textAlign: "center" },
   form: { gap: 16 },
-  errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10 },
-  errorText: { fontSize: 13, color: "#DC2626", flex: 1 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEE2E2",
+  },
+  errorText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#DC2626", flex: 1 },
   fieldGroup: { gap: 6 },
-  label: { fontSize: 14, fontWeight: "600" },
+  label: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
+    minHeight: 48,
   },
-  input: { flex: 1, fontSize: 15 },
-  btn: { paddingVertical: 16, borderRadius: 14, alignItems: "center", marginTop: 4 },
-  btnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  btn: {
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
+    paddingHorizontal: 20,
+  },
+  btnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    justifyContent: "center",
+    gap: 8,
+  },
+  btnText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
   skipBtn: { alignItems: "center", paddingVertical: 12 },
-  skipText: { fontSize: 14, fontWeight: "600" },
-  fieldError: { fontSize: 12, color: "#DC2626", marginTop: 4 },
+  skipText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  fieldError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#DC2626", marginTop: 4 },
 });

@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Text,
   View,
-  FlatList,
   Alert,
   Share,
   RefreshControl,
@@ -37,13 +36,11 @@ const productFallbacks: Record<string, any[]> = {
 };
 
 function mapSupabaseProduct(row: any, index: number): Product {
-  // ── Determine if this product is a course ────────────────────
   const isCourse =
     row.is_course === true ||
     row.category?.toLowerCase() === 'courses' ||
     row.subcategory?.toLowerCase() === 'courses';
 
-  // ── Determine if this is a physical kit ──────────────────────
   const isPhysical =
     !isCourse &&
     (row.category?.toLowerCase() === 'physical' ||
@@ -51,7 +48,6 @@ function mapSupabaseProduct(row: any, index: number): Product {
       row.subcategory?.toLowerCase() === 'kit' ||
       row.subcategory?.toLowerCase() === 'kits');
 
-  // ── Classify digital vs physical ─────────────────────────────
   const isDigital =
     isCourse ||
     row.category?.toLowerCase() === 'digital' ||
@@ -60,7 +56,6 @@ function mapSupabaseProduct(row: any, index: number): Product {
 
   const category: 'physical' | 'digital' = isPhysical ? 'physical' : isDigital ? 'digital' : 'physical';
 
-  // ── Normalize subcategory for filter matching ─────────────────
   let subcategory: string;
   if (isCourse) {
     subcategory = 'Courses';
@@ -71,7 +66,6 @@ function mapSupabaseProduct(row: any, index: number): Product {
   } else if (row.subcategory?.toLowerCase() === 'premium resources') {
     subcategory = 'Premium Resources';
   } else {
-    // Fallback: use DB value or infer from category
     subcategory = row.subcategory || (category === 'digital' ? 'Notes' : 'Physical Kits');
   }
 
@@ -108,8 +102,6 @@ export default function StoreScreen() {
       const result = await Share.share({ message });
       if (result.action === Share.sharedAction) {
         console.log('[StoreShare] Shared successfully');
-      } else if (result.action === Share.dismissedAction) {
-        console.log('[StoreShare] Share dismissed');
       }
     } catch (error: any) {
       console.error("[StoreShare] Share failed error:", error);
@@ -204,21 +196,21 @@ export default function StoreScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
-          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Store</Text>
+          <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>Store</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
-              style={[styles.shareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={styles.whiteSquareBtn}
               onPress={handleShare}
             >
-              <Feather name="share-2" size={20} color={colors.foreground} />
+              <Ionicons name="share-social" size={20} color="#0B6FAD" />
             </Pressable>
             <Pressable
-              style={[styles.cartBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={styles.whiteSquareBtn}
               onPress={handleCartPress}
             >
-              <Feather name="shopping-bag" size={20} color={colors.foreground} />
+              <Ionicons name="cart" size={20} color="#0B6FAD" />
               {count > 0 && (
-                <View style={[styles.cartBadge, { backgroundColor: colors.secondary }]}>
+                <View style={styles.cartBadge}>
                   <Text style={styles.cartBadgeText}>{count}</Text>
                 </View>
               )}
@@ -235,13 +227,13 @@ export default function StoreScreen() {
               style={[
                 styles.chip,
                 {
-                  backgroundColor: activeCategory === cat ? colors.primary : colors.card,
-                  borderColor: activeCategory === cat ? colors.primary : colors.border,
+                  backgroundColor: activeCategory === cat ? "#0B6FAD" : "#FFFFFF",
+                  borderColor: activeCategory === cat ? "transparent" : "#D6E9F2",
                 },
               ]}
               onPress={() => setActiveCategory(cat)}
             >
-              <Text style={[styles.chipText, { color: activeCategory === cat ? "#FFF" : colors.foreground }]}>{cat}</Text>
+              <Text style={[styles.chipText, { color: activeCategory === cat ? "#FFF" : "#5A7A8C" }]}>{cat}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -251,26 +243,20 @@ export default function StoreScreen() {
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0B6FAD']} />
         }
       >
         {isLoading ? (
-          <>
-            <View style={styles.section}>
-              <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-                <ProductCardSkeleton />
-              </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
-                <ProductCardSkeleton />
-                <ProductCardSkeleton />
-                <ProductCardSkeleton />
-              </ScrollView>
-            </View>
-          </>
+          <View style={styles.section}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
+              <ProductCardSkeleton />
+              <ProductCardSkeleton />
+            </ScrollView>
+          </View>
         ) : products.length === 0 ? (
           <View style={styles.emptyState}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-              <Feather name="shopping-bag" size={40} color={colors.mutedForeground} />
+            <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+              <Ionicons name="cart" size={40} color="#17E5D3" />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No products available</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
@@ -280,8 +266,8 @@ export default function StoreScreen() {
         ) : search || activeCategory !== "All" ? (
           filtered.length === 0 ? (
             <View style={styles.emptyState}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-                <Feather name="search" size={40} color={colors.mutedForeground} />
+              <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+                <Ionicons name="search" size={40} color="#17E5D3" />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No products found</Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
@@ -289,7 +275,7 @@ export default function StoreScreen() {
               </Text>
               {search && (
                 <Pressable
-                  style={[styles.clearBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.clearBtn, { backgroundColor: "#0B6FAD" }]}
                   onPress={handleClearSearch}
                 >
                   <Text style={styles.clearBtnText}>Clear Search</Text>
@@ -337,6 +323,19 @@ export default function StoreScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Cart FAB bottom-right */}
+      {count > 0 && (
+        <Pressable
+          style={styles.cartFab}
+          onPress={handleCartPress}
+        >
+          <Ionicons name="cart" size={24} color="#FFF" />
+          <View style={styles.cartFabBadge}>
+            <Text style={styles.cartFabBadgeText}>{count}</Text>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -351,39 +350,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 4,
   },
-  pageTitle: { fontSize: 26, fontWeight: "800" },
-  cartBtn: {
+  pageTitle: { fontSize: 26, fontFamily: "Fredoka_700Bold" },
+  whiteSquareBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
-  },
-  shareBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
+    borderColor: "#D6E9F2",
   },
   cartBadge: {
     position: "absolute",
     top: -4,
     right: -4,
-    width: 18,
+    minWidth: 18,
     height: 18,
     borderRadius: 9,
+    backgroundColor: "#17E5D3",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 4,
   },
-  cartBadgeText: { fontSize: 10, fontWeight: "700", color: "#FFF" },
+  cartBadgeText: { fontSize: 10, fontFamily: "Fredoka_700Bold", color: "#063B4F" },
   categories: { paddingHorizontal: 20, gap: 8, paddingTop: 12 },
   chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 13, fontWeight: "600" },
+  chipText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   section: { paddingTop: 20, marginBottom: 24 },
-  count: { fontSize: 13, marginBottom: 12, paddingHorizontal: 20 },
+  count: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 12, paddingHorizontal: 20 },
   carouselContent: { paddingLeft: 20, paddingRight: 20 },
   gridContainer: {
     flexDirection: "row",
@@ -410,12 +410,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: "800",
+    fontFamily: "Fredoka_700Bold",
     marginBottom: 8,
     textAlign: "center",
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 24,
@@ -423,12 +424,47 @@ const styles = StyleSheet.create({
   clearBtn: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 24,
     minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   clearBtnText: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
+  },
+  cartFab: {
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#0B6FAD",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cartFabBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#17E5D3",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  cartFabBadgeText: {
+    fontSize: 10,
+    fontFamily: "Fredoka_700Bold",
+    color: "#063B4F",
   },
 });

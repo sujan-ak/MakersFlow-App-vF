@@ -1,4 +1,5 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React from "react";
 import {
@@ -26,7 +27,7 @@ export default function CartScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Shopping Cart</Text>
         <View style={{ width: 40 }} />
@@ -37,16 +38,18 @@ export default function CartScreen() {
         data={items}
         keyExtractor={(item) => item.product.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 140 }]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Feather name="shopping-cart" size={64} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="cart" size={40} color="#0B6FAD" />
+            </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Your cart is empty</Text>
             <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
               Add physical kits or learning resources to your cart to begin.
             </Text>
             <Pressable
-              style={[styles.browseBtn, { backgroundColor: colors.primary }]}
+              style={styles.browseBtn}
               onPress={() => router.push("/(tabs)/store")}
             >
               <Text style={styles.browseBtnText}>Go to Store</Text>
@@ -56,7 +59,7 @@ export default function CartScreen() {
         renderItem={({ item }) => {
           const discount = Math.round(((item.product.originalPrice - item.product.price) / item.product.originalPrice) * 100);
           return (
-            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
               <Image source={item.product.thumbnail} style={styles.thumbnail} />
               
               <View style={styles.cardInfo}>
@@ -68,7 +71,7 @@ export default function CartScreen() {
                 </Text>
 
                 <View style={styles.priceRow}>
-                  <Text style={[styles.price, { color: colors.primary }]}>
+                  <Text style={[styles.price, { color: "#0B6FAD" }]}>
                     ₹{item.product.price}
                   </Text>
                   {discount > 0 && (
@@ -80,21 +83,21 @@ export default function CartScreen() {
 
                 {/* Quantity Controls */}
                 <View style={styles.controlsRow}>
-                  <View style={[styles.quantityBox, { borderColor: colors.border }]}>
+                  <View style={styles.circleStepperContainer}>
                     <Pressable
-                      style={styles.controlBtn}
+                      style={styles.circleStepBtn}
                       onPress={() => decrementQuantity(item.product.id)}
                     >
-                      <Feather name="minus" size={14} color={colors.foreground} />
+                      <Ionicons name="remove" size={12} color="#FFF" />
                     </Pressable>
                     <Text style={[styles.quantityText, { color: colors.foreground }]}>
                       {item.quantity}
                     </Text>
                     <Pressable
-                      style={styles.controlBtn}
+                      style={styles.circleStepBtn}
                       onPress={() => addToCart(item.product)}
                     >
-                      <Feather name="plus" size={14} color={colors.foreground} />
+                      <Ionicons name="add" size={12} color="#FFF" />
                     </Pressable>
                   </View>
 
@@ -102,7 +105,7 @@ export default function CartScreen() {
                     style={styles.removeBtn}
                     onPress={() => removeFromCart(item.product.id)}
                   >
-                    <Feather name="trash-2" size={16} color="#EF4444" />
+                    <Ionicons name="trash" size={18} color="#EF4444" />
                   </Pressable>
                 </View>
               </View>
@@ -119,15 +122,22 @@ export default function CartScreen() {
               <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Total Amount</Text>
               <Text style={[styles.totalCount, { color: colors.mutedForeground }]}>{count} items</Text>
             </View>
-            <Text style={[styles.totalPrice, { color: colors.foreground }]}>₹{total.toLocaleString("en-IN")}</Text>
+            <Text style={[styles.totalPrice, { color: "#0B6FAD" }]}>₹{total.toLocaleString("en-IN")}</Text>
           </View>
 
           <Pressable
-            style={[styles.checkoutBtn, { backgroundColor: colors.primary }]}
+            style={{ width: "100%", height: 56 }}
             onPress={() => router.push("/store/checkout")}
           >
-            <Text style={styles.checkoutBtnText}>Proceed to Checkout</Text>
-            <Feather name="arrow-right" size={18} color="#FFF" />
+            <LinearGradient
+              colors={["#0B6FAD", "#17E5D3"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.checkoutGradientBtn}
+            >
+              <Text style={styles.checkoutBtnText}>Proceed to Checkout</Text>
+              <Ionicons name="chevron-forward" size={18} color="#FFF" style={{ marginLeft: 6 }} />
+            </LinearGradient>
           </Pressable>
         </View>
       )}
@@ -152,12 +162,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
   listContent: { padding: 16, gap: 16 },
   cartCard: {
     flexDirection: "row",
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: 12,
     gap: 12,
   },
@@ -168,29 +178,28 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   cardInfo: { flex: 1, gap: 4 },
-  subcategory: { fontSize: 10, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
-  title: { fontSize: 14, fontWeight: "700", lineHeight: 20 },
+  subcategory: { fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
+  title: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", lineHeight: 20 },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  price: { fontSize: 15, fontWeight: "800" },
-  originalPrice: { fontSize: 12, textDecorationLine: "line-through" },
+  price: { fontSize: 15, fontFamily: "Fredoka_700Bold" },
+  originalPrice: { fontSize: 12, fontFamily: "Inter_400Regular", textDecorationLine: "line-through" },
   controlsRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  quantityBox: {
+  circleStepperContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 8,
-    overflow: "hidden",
+    gap: 12,
   },
-  controlBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  circleStepBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#0B6FAD",
     alignItems: "center",
     justifyContent: "center",
   },
   quantityText: {
-    fontSize: 13,
-    fontWeight: "700",
-    paddingHorizontal: 8,
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   removeBtn: {
     padding: 6,
@@ -198,19 +207,31 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 120,
+    paddingVertical: 100,
     paddingHorizontal: 32,
     gap: 12,
   },
-  emptyTitle: { fontSize: 18, fontWeight: "700" },
-  emptySubtitle: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCF7F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  emptySubtitle: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
   browseBtn: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#0B6FAD",
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 8,
   },
-  browseBtnText: { fontSize: 14, fontWeight: "700", color: "#FFF" },
+  browseBtnText: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -226,16 +247,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  totalLabel: { fontSize: 14, fontWeight: "600" },
-  totalCount: { fontSize: 11, marginTop: 2 },
-  totalPrice: { fontSize: 22, fontWeight: "800" },
-  checkoutBtn: {
+  totalLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  totalCount: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  totalPrice: { fontSize: 22, fontFamily: "Fredoka_700Bold" },
+  checkoutGradientBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 28,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
   },
-  checkoutBtnText: { fontSize: 15, fontWeight: "700", color: "#FFF" },
+  checkoutBtnText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
 });

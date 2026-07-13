@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -16,6 +16,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+
+function getPasswordStrength(pass: string) {
+  if (!pass) return 0;
+  let score = 0;
+  if (pass.length >= 8) score++;
+  if (/[A-Z]/.test(pass)) score++;
+  if (/[0-9]/.test(pass)) score++;
+  if (/[^A-Za-z0-9]/.test(pass)) score++;
+  return score;
+}
 
 export default function RegisterScreen() {
   const colors = useColors();
@@ -37,6 +47,20 @@ export default function RegisterScreen() {
   const [confirmError, setConfirmError] = useState("");
   const [gradeError, setGradeError] = useState("");
   const [schoolError, setSchoolError] = useState("");
+
+  const [nameFocused, setNameFocused] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmFocused, setConfirmFocused] = useState(false);
+  const [gradeFocused, setGradeFocused] = useState(false);
+  const [schoolFocused, setSchoolFocused] = useState(false);
+
+  const strength = getPasswordStrength(password);
+  const getStrengthColor = () => {
+    if (strength <= 1) return "#EF4444";
+    if (strength === 2) return "#F59E0B";
+    return "#17E5D3";
+  };
 
   async function handleGoogleSignup() {
     if (googleLoading) return;
@@ -132,6 +156,7 @@ export default function RegisterScreen() {
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <Pressable
           onPress={() => {
@@ -140,30 +165,35 @@ export default function RegisterScreen() {
           }}
           style={styles.backBtn}
         >
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </Pressable>
 
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Create account</Text>
+          <Text style={[styles.title, { color: "#0F2A3D" }]}>Create account</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Join thousands of students on MAKERSFLOW</Text>
         </View>
 
         <View style={styles.form}>
           {error ? (
-            <View style={[styles.errorBox, { backgroundColor: "#FEE2E2" }]}>
-              <Feather name="alert-circle" size={14} color="#DC2626" />
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color="#DC2626" />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
           {[
-            { label: "Full Name", value: name, setter: setName, icon: "user", placeholder: "Your full name", keyboard: "default" as const, secure: false, error: nameError, setError: setNameError },
-            { label: "Email", value: email, setter: setEmail, icon: "mail", placeholder: "your@email.com", keyboard: "email-address" as const, secure: false, error: emailError, setError: setEmailError },
+            { label: "Full Name", value: name, setter: setName, icon: "person", placeholder: "Your full name", keyboard: "default" as const, secure: false, error: nameError, setError: setNameError, focused: nameFocused, setFocused: setNameFocused },
+            { label: "Email", value: email, setter: setEmail, icon: "mail", placeholder: "your@email.com", keyboard: "email-address" as const, secure: false, error: emailError, setError: setEmailError, focused: emailFocused, setFocused: setEmailFocused },
           ].map((field) => (
             <View style={styles.fieldGroup} key={field.label}>
-              <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: field.error ? "#DC2626" : colors.border }]}>
-                <Feather name={field.icon as any} size={16} color={colors.mutedForeground} />
+              <Text style={[styles.label, { color: "#0F2A3D" }]}>{field.label}</Text>
+              <View style={[
+                styles.inputWrapper, 
+                { 
+                  borderColor: field.error ? "#DC2626" : (field.focused ? "#0B6FAD" : "#D6E9F2"),
+                }
+              ]}>
+                <Ionicons name={field.icon as any} size={16} color="#0B6FAD" />
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   value={field.value}
@@ -171,6 +201,8 @@ export default function RegisterScreen() {
                     field.setter(text);
                     field.setError("");
                   }}
+                  onFocus={() => field.setFocused(true)}
+                  onBlur={() => field.setFocused(false)}
                   placeholder={field.placeholder}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType={field.keyboard}
@@ -181,10 +213,16 @@ export default function RegisterScreen() {
             </View>
           ))}
 
+          {/* Password field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: passwordError ? "#DC2626" : colors.border }]}>
-              <Feather name="lock" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Password</Text>
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={password}
@@ -192,12 +230,14 @@ export default function RegisterScreen() {
                   setPassword(text);
                   setPasswordError("");
                 }}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
                 placeholder="Min 8 characters"
                 placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showPassword}
               />
               <Pressable onPress={() => setShowPassword(!showPassword)}>
-                <Feather name={showPassword ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
+                <Ionicons name={showPassword ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
               </Pressable>
             </View>
             {passwordError ? (
@@ -205,12 +245,33 @@ export default function RegisterScreen() {
             ) : (
               <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>Must be at least 8 characters</Text>
             )}
+            {password && (
+              <View style={styles.strengthBarContainer}>
+                {[1, 2, 3, 4].map((step) => (
+                  <View
+                    key={step}
+                    style={[
+                      styles.strengthSegment,
+                      {
+                        backgroundColor: step <= strength ? getStrengthColor() : "#D6E9F2",
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
           </View>
 
+          {/* Confirm password */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Confirm Password</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: confirmError ? "#DC2626" : colors.border }]}>
-              <Feather name="lock" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Confirm Password</Text>
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: confirmError ? "#DC2626" : (confirmFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={confirm}
@@ -218,6 +279,8 @@ export default function RegisterScreen() {
                   setConfirm(text);
                   setConfirmError("");
                 }}
+                onFocus={() => setConfirmFocused(true)}
+                onBlur={() => setConfirmFocused(false)}
                 placeholder="Repeat password"
                 placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showPassword}
@@ -226,10 +289,16 @@ export default function RegisterScreen() {
             {confirmError ? <Text style={styles.fieldError}>{confirmError}</Text> : null}
           </View>
 
+          {/* Grade field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Grade</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: gradeError ? "#DC2626" : colors.border }]}>
-              <Feather name="book-open" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Grade</Text>
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: gradeError ? "#DC2626" : (gradeFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="book" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={grade}
@@ -237,6 +306,8 @@ export default function RegisterScreen() {
                   setGrade(text);
                   setGradeError("");
                 }}
+                onFocus={() => setGradeFocused(true)}
+                onBlur={() => setGradeFocused(false)}
                 placeholder="e.g., 10th Grade"
                 placeholderTextColor={colors.mutedForeground}
               />
@@ -244,10 +315,16 @@ export default function RegisterScreen() {
             {gradeError ? <Text style={styles.fieldError}>{gradeError}</Text> : null}
           </View>
 
+          {/* School field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>School</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: schoolError ? "#DC2626" : colors.border }]}>
-              <Feather name="home" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>School</Text>
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: schoolError ? "#DC2626" : (schoolFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="school" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={school}
@@ -255,6 +332,8 @@ export default function RegisterScreen() {
                   setSchool(text);
                   setSchoolError("");
                 }}
+                onFocus={() => setSchoolFocused(true)}
+                onBlur={() => setSchoolFocused(false)}
                 placeholder="Your school name"
                 placeholderTextColor={colors.mutedForeground}
               />
@@ -262,29 +341,39 @@ export default function RegisterScreen() {
             {schoolError ? <Text style={styles.fieldError}>{schoolError}</Text> : null}
           </View>
 
+          {/* Create Account button */}
           <Pressable
-            style={({ pressed }) => [styles.btn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+            style={({ pressed }) => [styles.btn, { backgroundColor: "#0B6FAD", opacity: pressed ? 0.85 : 1 }]}
             onPress={handleRegister}
             disabled={loading}
           >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create Account</Text>}
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <View style={styles.primaryButtonContent}>
+                <Ionicons name="person-add" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.btnText}>Create Account</Text>
+                <Ionicons name="chevron-forward" size={18} color="#fff" style={{ marginLeft: "auto" }} />
+              </View>
+            )}
           </Pressable>
 
           <View style={styles.termsRow}>
             <Text style={[styles.termsText, { color: colors.mutedForeground }]}>By signing up, you agree to our </Text>
             <Pressable onPress={() => router.push("/settings/terms-of-service")}>
-              <Text style={[styles.termsLink, { color: colors.primary }]}>Terms of Service</Text>
+              <Text style={[styles.termsLink, { color: "#0B6FAD" }]}>Terms of Service</Text>
             </Pressable>
             <Text style={[styles.termsText, { color: colors.mutedForeground }]}> and </Text>
             <Pressable onPress={() => router.push("/settings/privacy-policy")}>
-              <Text style={[styles.termsLink, { color: colors.primary }]}>Privacy Policy</Text>
+              <Text style={[styles.termsLink, { color: "#0B6FAD" }]}>Privacy Policy</Text>
             </Pressable>
           </View>
 
+          {/* Google signup button */}
           <Pressable
             style={({ pressed }) => [
               styles.googleBtn,
-              { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2", opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={handleGoogleSignup}
             disabled={googleLoading}
@@ -292,10 +381,10 @@ export default function RegisterScreen() {
             {googleLoading ? (
               <ActivityIndicator size="small" color="#1F2937" />
             ) : (
-              <>
-                <Feather name="chrome" size={18} color="#1F2937" />
+              <View style={styles.primaryButtonContent}>
+                <Ionicons name="logo-google" size={18} color="#1F2937" style={{ marginRight: 8 }} />
                 <Text style={[styles.googleBtnText, { color: "#1F2937" }]}>Continue with Google</Text>
-              </>
+              </View>
             )}
           </Pressable>
         </View>
@@ -303,7 +392,7 @@ export default function RegisterScreen() {
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Already have an account? </Text>
           <Pressable onPress={() => router.push("/(auth)/login")}>
-            <Text style={[styles.link, { color: colors.primary }]}>Sign In</Text>
+            <Text style={[styles.link, { color: "#0B6FAD" }]}>Sign In</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -316,32 +405,58 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 24 },
   backBtn: { marginBottom: 24, width: 40 },
   header: { marginBottom: 28 },
-  title: { fontSize: 26, fontWeight: "800" },
-  subtitle: { fontSize: 14, marginTop: 4 },
+  title: { fontSize: 26, fontFamily: "Fredoka_700Bold" },
+  subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: 4 },
   form: { gap: 16 },
-  errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10 },
-  errorText: { fontSize: 13, color: "#DC2626", flex: 1 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEE2E2",
+  },
+  errorText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#DC2626", flex: 1 },
   fieldGroup: { gap: 6 },
-  label: { fontSize: 14, fontWeight: "600" },
+  label: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
+    minHeight: 48,
   },
-  input: { flex: 1, fontSize: 15 },
-  btn: { paddingVertical: 16, borderRadius: 14, alignItems: "center", marginTop: 4 },
-  btnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
-  googleBtn: {
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  btn: {
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
+    justifyContent: "center",
+    marginTop: 4,
+    paddingHorizontal: 20,
   },
-  googleBtnText: { fontSize: 15, fontWeight: "600" },
+  btnText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+  },
+  googleBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  primaryButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    gap: 8,
+  },
   termsRow: { 
     flexDirection: "row", 
     flexWrap: "wrap", 
@@ -349,11 +464,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
   },
-  termsText: { fontSize: 12, textAlign: "center" },
-  termsLink: { fontSize: 12, fontWeight: "600", textDecorationLine: "underline" },
-  footer: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
-  footerText: { fontSize: 14 },
-  link: { fontSize: 14, fontWeight: "700" },
-  fieldError: { fontSize: 12, color: "#DC2626", marginTop: 4 },
-  fieldHint: { fontSize: 12, marginTop: 4 },
+  termsText: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center" },
+  termsLink: { fontSize: 12, fontFamily: "Inter_600SemiBold", textDecorationLine: "underline" },
+  footer: { flexDirection: "row", justifyContent: "center", marginTop: 24, paddingBottom: 24 },
+  footerText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  link: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  fieldError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#DC2626", marginTop: 4 },
+  fieldHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
+  strengthBarContainer: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 6,
+    height: 4,
+    width: "100%",
+  },
+  strengthSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
 });

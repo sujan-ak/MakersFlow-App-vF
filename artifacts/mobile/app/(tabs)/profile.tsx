@@ -1,4 +1,4 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
@@ -32,7 +32,6 @@ interface MenuItem {
   label: string;
   onPress: () => void;
   danger?: boolean;
-  iconLib?: "feather" | "ionicons";
 }
 
 interface CompletedCourse {
@@ -115,7 +114,6 @@ export default function ProfileScreen() {
       ? Math.round(enrolledCourses.reduce((s, c) => s + c.progress, 0) / enrolledCourses.length)
       : 0;
 
-  // Account Deletion State
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -274,18 +272,15 @@ export default function ProfileScreen() {
     setIsDeleting(true);
     setDeleteError("");
     try {
-      // 1. Delete avatar from storage if it exists and is hosted on Supabase
       if (user?.avatar && user.avatar.includes("supabase.co") && user.avatar.includes("avatars")) {
         const urlParts = user.avatar.split("/");
         const filename = urlParts[urlParts.length - 1];
         await supabase.storage.from("avatars").remove([filename]);
       }
 
-      // 2. Call RPC to delete account from auth.users (will cascade delete profiles etc.)
       const { error: rpcError } = await supabase.rpc("delete_account");
       if (rpcError) throw rpcError;
 
-      // 3. Log out and navigate away
       setDeleteModalVisible(false);
       await logout();
       router.replace("/(auth)/login");
@@ -297,22 +292,22 @@ export default function ProfileScreen() {
   };
 
   const learningMenuItems: MenuItem[] = [
-    { icon: "book-open", label: "My Courses", onPress: () => router.push("/(tabs)/courses") },
-    { icon: "trending-up", label: "My Progress", onPress: () => router.push("/(tabs)/progress") },
+    { icon: "book", label: "My Courses", onPress: () => router.push("/(tabs)/courses") },
+    { icon: "stats-chart", label: "My Progress", onPress: () => router.push("/(tabs)/progress") },
     { icon: "heart", label: "Favorites & Watch Later", onPress: () => router.push("/favorites") },
-    { icon: "cart-outline", label: "Store", onPress: () => router.push("/(tabs)/store"), iconLib: "ionicons" as const },
-    { icon: "cart-outline", label: "My Orders", onPress: () => router.push("/store/orders"), iconLib: "ionicons" as const },
-    { icon: "credit-card", label: "My Transactions", onPress: () => router.push("/transactions") },
+    { icon: "cart", label: "Store", onPress: () => router.push("/(tabs)/store") },
+    { icon: "document-text", label: "My Orders", onPress: () => router.push("/store/orders") },
+    { icon: "card", label: "My Transactions", onPress: () => router.push("/transactions") },
   ];
 
   const otherSections: { title: string; items: MenuItem[] }[] = [
     {
       title: "Account",
       items: [
-        { icon: "user", label: "Edit Profile", onPress: () => router.push("/profile/edit") },
+        { icon: "create", label: "Edit Profile", onPress: () => router.push("/profile/edit") },
         { icon: "settings", label: "Settings", onPress: () => router.push("/settings") },
-        { icon: "shield", label: "Privacy Policy", onPress: () => router.push("/settings/privacy-policy") },
-        { icon: "file-text", label: "Terms of Service", onPress: () => router.push("/settings/terms-of-service") },
+        { icon: "shield-checkmark", label: "Privacy Policy", onPress: () => router.push("/settings/privacy-policy") },
+        { icon: "document", label: "Terms of Service", onPress: () => router.push("/settings/terms-of-service") },
       ],
     },
     {
@@ -320,7 +315,7 @@ export default function ProfileScreen() {
       items: [
         { icon: "help-circle", label: "Help & Support", onPress: () => router.push("/settings/help") },
         { icon: "log-out", label: "Sign Out", onPress: handleLogout, danger: true },
-        { icon: "trash-2", label: "Delete Account", onPress: handleDeleteRequest, danger: true },
+        { icon: "trash", label: "Delete Account", onPress: handleDeleteRequest, danger: true },
       ],
     },
   ];
@@ -345,17 +340,25 @@ export default function ProfileScreen() {
       contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.pageTitle, { color: colors.foreground }]}>Profile</Text>
+      <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>Profile</Text>
 
-      {/* Avatar card */}
-      <View style={[styles.profileCard, { backgroundColor: colors.primary }]}>
-        {user?.avatar ? (
-          <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
-        ) : (
-          <View style={styles.avatar}>
-            <Text style={styles.initials}>{initials}</Text>
-          </View>
-        )}
+      {/* User Banner */}
+      <View style={[styles.profileCard, { backgroundColor: "#0B6FAD" }]}>
+        <View style={styles.avatarContainer}>
+          {user?.avatar ? (
+            <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.initials}>{initials}</Text>
+            </View>
+          )}
+          <Pressable
+            style={styles.avatarEditPen}
+            onPress={() => router.push("/profile/edit")}
+          >
+            <Ionicons name="pencil" size={12} color="#0B6FAD" />
+          </Pressable>
+        </View>
         <Text style={styles.name}>{user?.name ?? "Student"}</Text>
         <Text style={styles.email}>{user?.email}</Text>
         <View style={styles.badges}>
@@ -370,52 +373,48 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Stats */}
-      <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {/* Stats Strip */}
+      <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
         <View style={styles.stat}>
-          <Text style={[styles.statNum, { color: colors.foreground }]}>{enrolledCount}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Enrolled</Text>
+          <Text style={styles.statNum}>{enrolledCount}</Text>
+          <Text style={styles.statLabel}>Enrolled</Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={[styles.statDivider, { backgroundColor: "#D6E9F2" }]} />
         <View style={styles.stat}>
           {avgProgress === 0 ? (
             <>
-              <Text style={[styles.statNum, { color: colors.foreground }]}>-</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Start Now</Text>
+              <Text style={styles.statNum}>-</Text>
+              <Text style={styles.statLabel}>Start Now</Text>
             </>
           ) : (
             <>
-              <Text style={[styles.statNum, { color: colors.foreground }]}>{avgProgress}%</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Avg Progress</Text>
+              <Text style={styles.statNum}>{avgProgress}%</Text>
+              <Text style={styles.statLabel}>Avg Progress</Text>
             </>
           )}
         </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={[styles.statDivider, { backgroundColor: "#D6E9F2" }]} />
         <View style={styles.stat}>
-          <Text style={[styles.statNum, { color: colors.foreground }]}>{completedCourses.length}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Certificates</Text>
+          <Text style={styles.statNum}>{completedCourses.length}</Text>
+          <Text style={styles.statLabel}>Certificates</Text>
         </View>
       </View>
 
-      {/* Learning section */}
+      {/* Learning Section */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>Learning</Text>
+        <Text style={styles.sectionTitle}>Learning</Text>
         <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {learningMenuItems.map((item, idx) => (
             <React.Fragment key={item.label}>
               <Pressable
-                style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.75 : 1 }]}
                 onPress={item.onPress}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: colors.accent }]}>
-                  {item.iconLib === "ionicons" ? (
-                    <Ionicons name={item.icon as any} size={16} color={colors.primary} />
-                  ) : (
-                    <Feather name={item.icon as any} size={16} color={colors.primary} />
-                  )}
+                <View style={[styles.menuIconBox, { backgroundColor: "#DCF7F4" }]}>
+                  <Ionicons name={item.icon as any} size={16} color="#0B6FAD" />
                 </View>
                 <Text style={[styles.menuLabel, { color: colors.foreground }]}>{item.label}</Text>
-                <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
               </Pressable>
               {idx < learningMenuItems.length - 1 && (
                 <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -425,13 +424,13 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Achievements & Certificates — inline */}
+      {/* Achievements & Certificates */}
       <View style={styles.section}>
         <View style={styles.achievementsHeader}>
           <View style={styles.achievementsTitleRow}>
-            <Feather name="award" size={16} color={colors.primary} />
-            <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginBottom: 0 }]}>
-              ACHIEVEMENTS & CERTIFICATES
+            <Ionicons name="ribbon" size={16} color="#0B6FAD" />
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+              Achievements & Certificates
             </Text>
           </View>
           {completedCourses.length > 0 && (
@@ -443,20 +442,20 @@ export default function ProfileScreen() {
 
         {certsLoading ? (
           <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={{ marginTop: 8, fontSize: 13, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
+            <ActivityIndicator size="small" color="#0B6FAD" />
+            <Text style={{ marginTop: 8, fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Loading...</Text>
           </View>
         ) : completedCourses.length === 0 ? (
           <View style={[styles.certsCard, styles.emptyCertsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="award" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
-            <Text style={[styles.emptyCertsText, { color: colors.mutedForeground }]}>
+            <Ionicons name="medal" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
+            <Text style={[styles.emptyCertsText, { color: colors.foreground }]}>
               No certificates yet
             </Text>
             <Text style={[styles.emptyCertsSub, { color: colors.mutedForeground }]}>
               Complete a course to earn your certificate
             </Text>
             <Pressable
-              style={[styles.browseCourseBtn, { backgroundColor: colors.primary }]}
+              style={[styles.browseCourseBtn, { backgroundColor: "#0B6FAD" }]}
               onPress={() => router.push("/(tabs)/courses")}
             >
               <Text style={styles.browseCourseBtnText}>Browse Courses</Text>
@@ -467,12 +466,10 @@ export default function ProfileScreen() {
             {completedCourses.map((course, idx) => (
               <React.Fragment key={course.courseId}>
                 <View style={styles.certRow}>
-                  {/* Medal icon */}
                   <View style={styles.medalBox}>
-                    
+                    <Ionicons name="medal" size={20} color="#F59E0B" />
                   </View>
 
-                  {/* Course info */}
                   <View style={styles.certInfo}>
                     <Text style={[styles.certCourseTitle, { color: colors.foreground }]} numberOfLines={2}>
                       {course.courseTitle}
@@ -482,9 +479,8 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
 
-                  {/* Download button */}
                   <Pressable
-                    style={[styles.downloadBtn, { backgroundColor: "#10B981" }]}
+                    style={styles.downloadBtn}
                     onPress={() =>
                       router.push({
                         pathname: "/certificate",
@@ -496,11 +492,11 @@ export default function ProfileScreen() {
                       })
                     }
                   >
-                    <Feather name="download" size={14} color="#FFF" />
+                    <Ionicons name="download" size={14} color="#FFF" />
                   </Pressable>
                 </View>
                 {idx < completedCourses.length - 1 && (
-                  <View style={[styles.menuDivider, { backgroundColor: colors.border, marginLeft: 60 }]} />
+                  <View style={[styles.menuDivider, { backgroundColor: colors.border, marginLeft: 68 }]} />
                 )}
               </React.Fragment>
             ))}
@@ -510,22 +506,22 @@ export default function ProfileScreen() {
 
       {/* Wishlist Section */}
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>MY WISHLIST</Text>
+        <Text style={styles.sectionTitle}>My Wishlist</Text>
         {wishlistLoading ? (
           <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
-            <ActivityIndicator size="small" color={colors.primary} />
+            <ActivityIndicator size="small" color="#0B6FAD" />
           </View>
         ) : wishlistProducts.length === 0 ? (
           <View style={[styles.certsCard, styles.emptyCertsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="heart" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
-            <Text style={[styles.emptyCertsText, { color: colors.mutedForeground }]}>
+            <Ionicons name="heart" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
+            <Text style={[styles.emptyCertsText, { color: colors.foreground }]}>
               Your wishlist is empty
             </Text>
             <Text style={[styles.emptyCertsSub, { color: colors.mutedForeground }]}>
               Explore our store and save products you like
             </Text>
             <Pressable
-              style={[styles.browseCourseBtn, { backgroundColor: colors.primary }]}
+              style={[styles.browseCourseBtn, { backgroundColor: "#0B6FAD" }]}
               onPress={() => router.push("/(tabs)/store")}
             >
               <Text style={styles.browseCourseBtnText}>Visit Store</Text>
@@ -544,28 +540,24 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* Other sections */}
+      {/* Other Sections */}
       {otherSections.map((section) => (
         <View key={section.title} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>{section.title}</Text>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
           <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {section.items.map((item, idx) => (
               <React.Fragment key={item.label}>
                 <Pressable
-                  style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.7 : 1 }]}
+                  style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.75 : 1 }]}
                   onPress={item.onPress}
                 >
-                  <View style={[styles.menuIconBox, { backgroundColor: item.danger ? "#FEE2E2" : colors.accent }]}>
-                    {item.iconLib === "ionicons" ? (
-                      <Ionicons name={item.icon as any} size={16} color={item.danger ? "#DC2626" : colors.primary} />
-                    ) : (
-                      <Feather name={item.icon as any} size={16} color={item.danger ? "#DC2626" : colors.primary} />
-                    )}
+                  <View style={[styles.menuIconBox, { backgroundColor: item.danger ? "#FEE2E2" : "#DCF7F4" }]}>
+                    <Ionicons name={item.icon as any} size={16} color={item.danger ? "#DC2626" : "#0B6FAD"} />
                   </View>
                   <Text style={[styles.menuLabel, { color: item.danger ? "#DC2626" : colors.foreground }]}>
                     {item.label}
                   </Text>
-                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
                 </Pressable>
                 {idx < section.items.length - 1 && (
                   <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
@@ -594,7 +586,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: colors.foreground }]}>Verify Identity</Text>
                   <Pressable onPress={() => setDeleteModalVisible(false)} disabled={isDeleting}>
-                    <Feather name="x" size={24} color={colors.mutedForeground} />
+                    <Ionicons name="close" size={24} color={colors.mutedForeground} />
                   </Pressable>
                 </View>
                 <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
@@ -602,7 +594,7 @@ export default function ProfileScreen() {
                 </Text>
                 
                 <TextInput
-                  style={[styles.modalInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
+                  style={[styles.modalInput, { color: colors.foreground, borderColor: "#D6E9F2", backgroundColor: colors.card }]}
                   placeholder="Password"
                   placeholderTextColor={colors.mutedForeground}
                   secureTextEntry
@@ -615,7 +607,7 @@ export default function ProfileScreen() {
                 {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
                 
                 <Pressable
-                  style={[styles.modalBtn, { backgroundColor: colors.primary, opacity: isDeleting ? 0.7 : 1 }]}
+                  style={[styles.modalBtn, { backgroundColor: "#0B6FAD", opacity: isDeleting ? 0.7 : 1 }]}
                   onPress={handleVerifyPassword}
                   disabled={isDeleting}
                 >
@@ -627,7 +619,7 @@ export default function ProfileScreen() {
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: "#DC2626" }]}>Permanently Delete Account?</Text>
                   <Pressable onPress={() => setDeleteModalVisible(false)} disabled={isDeleting}>
-                    <Feather name="x" size={24} color={colors.mutedForeground} />
+                    <Ionicons name="close" size={24} color={colors.mutedForeground} />
                   </Pressable>
                 </View>
                 <Text style={[styles.modalSubtitle, { color: colors.foreground }]}>
@@ -657,20 +649,39 @@ export default function ProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  pageTitle: { fontSize: 26, fontWeight: "800", paddingHorizontal: 20, marginBottom: 16 },
+  pageTitle: { fontSize: 26, fontFamily: "Fredoka_700Bold", paddingHorizontal: 20, marginBottom: 16 },
   profileCard: {
     marginHorizontal: 20,
     borderRadius: 20,
     padding: 24,
     alignItems: "center",
     marginBottom: 16,
+  },
+  avatarContainer: {
+    position: "relative",
+    marginBottom: 12,
+  },
+  avatarEditPen: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   avatar: {
     width: 72,
@@ -679,12 +690,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
   },
-  avatarImage: { width: 72, height: 72, borderRadius: 36, marginBottom: 12 },
-  initials: { fontSize: 28, fontWeight: "800", color: "#FFF" },
-  name: { fontSize: 20, fontWeight: "800", color: "#FFF", marginBottom: 2 },
-  email: { fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 12 },
+  avatarImage: { width: 72, height: 72, borderRadius: 36 },
+  initials: { fontSize: 28, fontFamily: "Fredoka_700Bold", color: "#FFF" },
+  name: { fontSize: 20, fontFamily: "Fredoka_700Bold", color: "#FFF", marginBottom: 2 },
+  email: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginBottom: 12 },
   badges: { flexDirection: "row", gap: 8 },
   badge: {
     paddingHorizontal: 12,
@@ -692,7 +702,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
   },
-  badgeText: { fontSize: 12, fontWeight: "600", color: "#FFF" },
+  badgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#FFF" },
   statsRow: {
     marginHorizontal: 20,
     borderRadius: 16,
@@ -702,13 +712,14 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   stat: { flex: 1, alignItems: "center" },
-  statNum: { fontSize: 20, fontWeight: "800" },
-  statLabel: { fontSize: 12, marginTop: 2 },
+  statNum: { fontSize: 20, fontFamily: "Fredoka_700Bold", color: "#0B6FAD" },
+  statLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#5A7A8C", marginTop: 2 },
   statDivider: { width: 1 },
   section: { paddingHorizontal: 20, marginBottom: 20 },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
+    color: "#0F2A3D",
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 8,
@@ -728,11 +739,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  menuLabel: { flex: 1, fontSize: 15, fontWeight: "500" },
+  menuLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_600SemiBold" },
   menuDivider: { height: 1, marginLeft: 62 },
-  version: { textAlign: "center", fontSize: 12, paddingBottom: 8 },
+  version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular", paddingBottom: 8 },
 
-  // Achievements section
   achievementsHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -754,7 +764,7 @@ const styles = StyleSheet.create({
   },
   certCountText: {
     fontSize: 12,
-    fontWeight: "800",
+    fontFamily: "Fredoka_700Bold",
     color: "#FFF",
   },
   certsCard: {
@@ -769,11 +779,12 @@ const styles = StyleSheet.create({
   },
   emptyCertsText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
     marginTop: 4,
   },
   emptyCertsSub: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 18,
   },
@@ -781,11 +792,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 20, // pill
   },
   browseCourseBtnText: {
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
   },
   certRow: {
@@ -796,21 +807,21 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   medalBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "#FFFBEB",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FEF3C7",
     alignItems: "center",
     justifyContent: "center",
   },
-  medalEmoji: { fontSize: 22 },
   certInfo: { flex: 1, gap: 3 },
-  certCourseTitle: { fontSize: 14, fontWeight: "700", lineHeight: 19 },
-  certDate: { fontSize: 12 },
+  certCourseTitle: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", lineHeight: 18 },
+  certDate: { fontSize: 12, fontFamily: "Inter_400Regular" },
   downloadBtn: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 18,
+    backgroundColor: "#0B6FAD",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -836,29 +847,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  modalTitle: { fontSize: 20, fontWeight: "700" },
-  modalSubtitle: { fontSize: 15, lineHeight: 22, marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontFamily: "Fredoka_700Bold" },
+  modalSubtitle: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 20 },
   modalInput: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
+    fontFamily: "Inter_400Regular",
     marginBottom: 16,
   },
-  errorText: { color: "#DC2626", fontSize: 14, marginBottom: 16 },
+  errorText: { color: "#DC2626", fontSize: 14, fontFamily: "Inter_400Regular", marginBottom: 16 },
   modalBtn: {
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 24, // pill
     alignItems: "center",
   },
-  modalBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
+  modalBtnText: { color: "#FFF", fontSize: 16, fontFamily: "Fredoka_600SemiBold" },
   modalBtnRow: { flexDirection: "row", gap: 12 },
   modalBtnHalf: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 20, // pill
     alignItems: "center",
   },
-  modalBtnHalfText: { fontSize: 16, fontWeight: "600" },
+  modalBtnHalfText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold" },
 });

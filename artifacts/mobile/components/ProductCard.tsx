@@ -1,4 +1,4 @@
-import { Feather, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -7,7 +7,6 @@ import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
-import { FavoriteButton } from "./FavoriteButton";
 import { useRequireAuth } from "@/context/AuthRequireContext";
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -30,16 +29,16 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
 
   const renderStars = (rating: number) => {
     const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
+    const fullStars = Math.floor(rating || 4.5);
     for (let i = 1; i <= 5; i++) {
-      if (i <= fullStars) {
-        stars.push(<MaterialIcons key={i} name="star" size={11} color="#F59E0B" />);
-      } else if (i === fullStars + 1 && hasHalfStar) {
-        stars.push(<MaterialIcons key={i} name="star-half" size={11} color="#F59E0B" />);
-      } else {
-        stars.push(<MaterialIcons key={i} name="star-outline" size={11} color="#E5E7EB" />);
-      }
+      stars.push(
+        <Ionicons
+          key={i}
+          name={i <= fullStars ? "star" : "star-outline"}
+          size={11}
+          color="#F59E0B"
+        />
+      );
     }
     return stars;
   };
@@ -81,7 +80,7 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
       style={({ pressed }) => [
         styles.card,
         gridMode && styles.gridCard,
-        { opacity: pressed ? 0.7 : 1 },
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
       ]}
       onPress={() => router.push({ pathname: "/store/[id]", params: { id: product.id } })}
     >
@@ -92,47 +91,63 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
             <Text style={styles.badgeText}>{product.badge}</Text>
           </View>
         )}
+        
+        {/* Wishlist heart top-right of image */}
+        <Pressable
+          style={styles.imageHeartBtn}
+          onPress={handleToggleWishlist}
+        >
+          <Ionicons
+            name={isWishlisted ? "heart" : "heart-outline"}
+            size={16}
+            color={isWishlisted ? "#EF4444" : "#9CA3AF"}
+          />
+        </Pressable>
+
+        {/* Out of Stock overlay */}
+        {!product.inStock && (
+          <View style={styles.outOfStockOverlay}>
+            <View style={styles.outOfStockPill}>
+              <Text style={styles.outOfStockText}>Out of Stock</Text>
+            </View>
+          </View>
+        )}
       </View>
       <View style={styles.content}>
         <Text style={[styles.subcategory, { color: colors.mutedForeground }]}>{product.subcategory}</Text>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.foreground, flex: 1 }]} numberOfLines={2}>
-            {product.title}
-          </Text>
-          <FavoriteButton
-            isFavorite={isWishlisted}
-            onPress={handleToggleWishlist}
-            size={14}
-          />
-        </View>
+        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={2}>
+          {product.title}
+        </Text>
         <View style={styles.ratingRow}>
           <View style={styles.starsContainer}>
             {renderStars(product.rating || 0)}
           </View>
-          <Text style={[styles.rating, { color: colors.mutedForeground }]}>{product.rating > 0 ? product.rating : ""}</Text>
-          <Text style={[styles.reviews, { color: colors.mutedForeground }]}>{product.reviews > 0 ? `(${product.reviews})` : "No reviews"}</Text>
+          <Text style={[styles.reviews, { color: colors.mutedForeground }]}>
+            {product.reviews > 0 ? `(${product.reviews})` : "(0)"}
+          </Text>
         </View>
         <View style={styles.priceRow}>
           <View style={styles.priceGroup}>
-            <Text style={[styles.price, { color: colors.primary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            <Text style={[styles.price, { color: "#0B6FAD" }]} numberOfLines={1}>
               ₹{product.price}
             </Text>
-            <Text style={[styles.originalPrice, { color: colors.mutedForeground }]} numberOfLines={1}>
-              ₹{product.originalPrice}
-            </Text>
+            {discount > 0 && (
+              <Text style={[styles.originalPrice, { color: colors.mutedForeground }]} numberOfLines={1}>
+                ₹{product.originalPrice}
+              </Text>
+            )}
           </View>
+          
+          {/* Add to Cart Pill button */}
           <Pressable
-            style={[styles.addToCartBtn, { backgroundColor: colors.secondary }]}
+            style={[styles.addCartPillBtn, { opacity: product.inStock ? 1 : 0.5 }]}
             onPress={handleAddToCart}
+            disabled={!product.inStock}
           >
-            <Feather name="plus" size={13} color="#FFF" />
+            <Ionicons name="cart" size={12} color="#FFF" />
+            <Text style={styles.addCartPillText}>Add</Text>
           </Pressable>
         </View>
-        {discount > 0 && (
-          <View style={[styles.discountBadge, { backgroundColor: "#DCFCE7" }]}>
-            <Text style={[styles.discountText, { color: "#16A34A" }]}>{discount}% off</Text>
-          </View>
-        )}
       </View>
     </Pressable>
   );
@@ -142,6 +157,10 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     marginRight: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D6E9F2",
+    overflow: "hidden",
   },
   gridCard: {
     marginRight: 0,
@@ -149,12 +168,13 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     position: "relative",
-    borderRadius: 8,
+    height: 120,
+    width: "100%",
     overflow: "hidden",
   },
   thumbnail: {
     width: "100%",
-    height: 120,
+    height: "100%",
     resizeMode: "cover",
   },
   badge: {
@@ -167,30 +187,57 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
     color: "#FFFFFF",
+  },
+  imageHeartBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  outOfStockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outOfStockPill: {
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  outOfStockText: {
+    fontSize: 10,
+    fontFamily: "Fredoka_700Bold",
+    color: "#FFF",
   },
   content: {
     padding: 12,
     gap: 4,
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
   subcategory: {
     fontSize: 10,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    flexShrink: 1,
   },
   title: {
     fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19,
-    flexShrink: 1,
+    fontFamily: "Fredoka_600SemiBold",
+    lineHeight: 18,
+    height: 36,
   },
   ratingRow: {
     flexDirection: "row",
@@ -203,11 +250,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 1,
   },
-  rating: {
-    fontSize: 11,
-  },
   reviews: {
     fontSize: 11,
+    fontFamily: "Inter_400Regular",
   },
   priceRow: {
     flexDirection: "row",
@@ -225,33 +270,26 @@ const styles = StyleSheet.create({
   },
   price: {
     fontSize: 15,
-    fontWeight: "800",
-    flexShrink: 0,
-    maxWidth: 80,
+    fontFamily: "Fredoka_700Bold",
   },
   originalPrice: {
     fontSize: 11,
+    fontFamily: "Inter_400Regular",
     textDecorationLine: "line-through",
-    flexShrink: 1,
   },
-  discountBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  discountText: {
-    fontSize: 9,
-    fontWeight: "600",
-  },
-  addToCartBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  addCartPillBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
+    gap: 4,
+    backgroundColor: "#0B6FAD",
+    height: 28,
+    borderRadius: 14,
+    paddingHorizontal: 8,
+  },
+  addCartPillText: {
+    fontSize: 11,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#FFF",
   },
 });
-

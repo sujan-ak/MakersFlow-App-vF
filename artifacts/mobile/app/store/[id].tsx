@@ -1,4 +1,5 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useFavorites } from "@/context/FavoritesContext";
 import { router, useLocalSearchParams } from "expo-router";
@@ -80,11 +81,12 @@ export default function ProductDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { addToCart, items } = useCart();
+  const { addToCart, items, decrementQuantity } = useCart();
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
   const { requireAuth } = useRequireAuth();
 
   const isWishlisted = isProductInWishlist(String(id));
+  const [localQty, setLocalQty] = useState(1);
 
   const handleToggleWishlist = async () => {
     requireAuth(async () => {
@@ -100,8 +102,6 @@ export default function ProductDetailScreen() {
       const result = await Share.share({ message });
       if (result.action === Share.sharedAction) {
         console.log('[ProductShare] Shared successfully');
-      } else if (result.action === Share.dismissedAction) {
-        console.log('[ProductShare] Share dismissed');
       }
     } catch (error: any) {
       console.error("[ProductShare] Share failed error:", error);
@@ -160,7 +160,7 @@ export default function ProductDetailScreen() {
   if (!product) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.foreground, padding: 24 }}>Product not found.</Text>
+        <Text style={{ color: colors.foreground, padding: 24, fontFamily: "Inter_400Regular" }}>Product not found.</Text>
       </View>
     );
   }
@@ -173,7 +173,9 @@ export default function ProductDetailScreen() {
     if (!product) return;
     requireAuth(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      addToCart(product);
+      for (let i = 0; i < localQty; i++) {
+        addToCart(product);
+      }
       Alert.alert("Added to Cart", `${product.title} has been added to your cart.`, [
         { text: "Continue Shopping", style: "cancel" },
         { text: "Checkout", onPress: () => router.push("/store/checkout") },
@@ -190,7 +192,7 @@ export default function ProductDetailScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            colors={['#0B6FAD']}
           />
         }
       >
@@ -207,13 +209,13 @@ export default function ProductDetailScreen() {
               }
             }}
           >
-            <Feather name="arrow-left" size={20} color="#FFF" />
+            <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
           </Pressable>
           <Pressable
             style={[styles.shareCircle, { top: topPad + 8 }]}
             onPress={handleShare}
           >
-            <Feather name="share-2" size={20} color="#FFF" />
+            <Ionicons name="share-social" size={20} color="#0B6FAD" />
           </Pressable>
           <Pressable
             style={[styles.heartCircle, { top: topPad + 8 }]}
@@ -222,7 +224,7 @@ export default function ProductDetailScreen() {
             <Ionicons
               name={isWishlisted ? "heart" : "heart-outline"}
               size={20}
-              color={isWishlisted ? "#EF4444" : "#FFF"}
+              color={isWishlisted ? "#EF4444" : "#0B6FAD"}
             />
           </Pressable>
           {product.badge && (
@@ -237,20 +239,21 @@ export default function ProductDetailScreen() {
           <Text style={[styles.title, { color: colors.foreground }]}>{product.title}</Text>
 
           <View style={styles.priceRow}>
-            <Text style={[styles.price, { color: colors.primary }]}>₹{product.price}</Text>
+            <Text style={[styles.price, { color: "#0B6FAD" }]}>₹{product.price}</Text>
             <Text style={[styles.originalPrice, { color: colors.mutedForeground }]}>₹{product.originalPrice}</Text>
             <View style={[styles.discountBadge, { backgroundColor: "#DCFCE7" }]}>
               <Text style={[styles.discountText, { color: "#16A34A" }]}>{discount}% off</Text>
             </View>
           </View>
 
+          {/* Mapped stars loop to filled Ionicons */}
           <View style={styles.ratingRow}>
             {[1, 2, 3, 4, 5].map((i) => (
-              <Feather
+              <Ionicons
                 key={i}
-                name="star"
+                name={i <= Math.round(product.rating) ? "star" : "star-outline"}
                 size={16}
-                color={i <= Math.round(product.rating) ? "#F59E0B" : colors.border}
+                color={i <= Math.round(product.rating) ? "#F59E0B" : "#D6E9F2"}
               />
             ))}
             <Text style={[styles.ratingText, { color: colors.mutedForeground }]}>
@@ -258,17 +261,53 @@ export default function ProductDetailScreen() {
             </Text>
           </View>
 
-          {/* Stock status */}
-          <View style={styles.stockRow}>
-            <Feather
-              name={product.inStock ? "check-circle" : "x-circle"}
+          {/* Stock status badge */}
+          <View style={[styles.stockBadge, { backgroundColor: product.inStock ? "#DCF7F4" : "#FEE2E2" }]}>
+            <Ionicons
+              name={product.inStock ? "checkmark-circle" : "close-circle"}
               size={14}
-              color={product.inStock ? "#16A34A" : "#DC2626"}
+              color={product.inStock ? "#17E5D3" : "#EF4444"}
             />
-            <Text style={[styles.stockText, { color: product.inStock ? "#16A34A" : "#DC2626" }]}>
+            <Text style={[styles.stockBadgeText, { color: product.inStock ? "#0B6FAD" : "#EF4444" }]}>
               {product.inStock ? "In Stock" : "Out of Stock"}
             </Text>
           </View>
+
+          {/* Quantity stepper */}
+          {product.inStock && (
+            <View style={styles.quantityContainer}>
+              <Text style={[styles.quantityLabel, { color: colors.foreground }]}>Quantity</Text>
+              <View style={styles.stepperWrapper}>
+                <Pressable
+                  style={styles.stepperBtn}
+                  onPress={() => {
+                    if (isInCart) {
+                      decrementQuantity(product.id);
+                    } else {
+                      setLocalQty(prev => Math.max(1, prev - 1));
+                    }
+                  }}
+                >
+                  <Text style={styles.stepperText}>-</Text>
+                </Pressable>
+                <Text style={styles.quantityVal}>
+                  {isInCart ? (items.find((i) => i.product.id === product.id)?.quantity || 1) : localQty}
+                </Text>
+                <Pressable
+                  style={styles.stepperBtn}
+                  onPress={() => {
+                    if (isInCart) {
+                      addToCart(product);
+                    } else {
+                      setLocalQty(prev => prev + 1);
+                    }
+                  }}
+                >
+                  <Text style={styles.stepperText}>+</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
 
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About this product</Text>
           <Text style={[styles.description, { color: colors.mutedForeground }]}>{product.description}</Text>
@@ -276,14 +315,14 @@ export default function ProductDetailScreen() {
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>What's included</Text>
           {product.features.map((feat, idx) => (
             <View key={idx} style={styles.featureRow}>
-              <Feather name="check" size={14} color={colors.primary} />
+              <Ionicons name="checkmark-circle" size={16} color="#17E5D3" />
               <Text style={[styles.featureText, { color: colors.foreground }]}>{feat}</Text>
             </View>
           ))}
         </View>
       </ScrollView>
 
-      {/* CTA */}
+      {/* CTA Bottom Bar */}
       <View
         style={[
           styles.cta,
@@ -294,16 +333,41 @@ export default function ProductDetailScreen() {
           },
         ]}
       >
-        <Pressable
-          style={[styles.ctaBtn, { backgroundColor: isInCart ? colors.muted : colors.primary }]}
-          onPress={isInCart ? () => router.push("/store/checkout") : handleAddToCart}
-          disabled={!product.inStock}
-        >
-          <Feather name={isInCart ? "shopping-cart" : "shopping-bag"} size={18} color={isInCart ? colors.primary : "#FFF"} />
-          <Text style={[styles.ctaBtnText, { color: isInCart ? colors.primary : "#FFF" }]}>
-            {isInCart ? "Go to Checkout" : "Add to Cart"}
-          </Text>
-        </Pressable>
+        <View style={styles.ctaRow}>
+          <Pressable
+            style={[styles.ghostBtn, { borderColor: "#0B6FAD", opacity: product.inStock ? 1 : 0.5 }]}
+            onPress={handleAddToCart}
+            disabled={!product.inStock || isInCart}
+          >
+            <Ionicons name="cart" size={18} color="#0B6FAD" />
+            <Text style={[styles.ghostBtnText, { color: "#0B6FAD" }]}>
+              {isInCart ? "In Cart" : "Add to Cart"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={{ flex: 1.2, height: 48 }}
+            onPress={() => {
+              requireAuth(() => {
+                if (!isInCart) {
+                  addToCart(product);
+                }
+                router.push("/store/checkout");
+              });
+            }}
+            disabled={!product.inStock}
+          >
+            <LinearGradient
+              colors={["#0B6FAD", "#17E5D3"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buyNowBtn}
+            >
+              <Ionicons name="flash" size={18} color="#FFF" />
+              <Text style={styles.buyNowText}>Buy Now</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -320,56 +384,144 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   shareCircle: {
-    position: "absolute",
-    right: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heartCircle: {
     position: "absolute",
     right: 68,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  heartCircle: {
+    position: "absolute",
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  badge: { position: "absolute", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
+  badgeText: { fontSize: 12, fontFamily: "Fredoka_700Bold", color: "#FFF" },
+  content: { padding: 20, gap: 10 },
+  subcategory: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 1 },
+  title: { fontSize: 22, fontFamily: "Fredoka_700Bold", lineHeight: 28 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  price: { fontSize: 26, fontFamily: "Fredoka_700Bold" },
+  originalPrice: { fontSize: 16, fontFamily: "Inter_400Regular", textDecorationLine: "line-through" },
+  discountBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  discountText: { fontSize: 12, fontFamily: "Fredoka_700Bold" },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
+  ratingText: { fontSize: 13, fontFamily: "Inter_400Regular", marginLeft: 4 },
+  sectionTitle: { fontSize: 17, fontFamily: "Fredoka_700Bold", marginTop: 4 },
+  description: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  featureText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  cta: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, borderTopWidth: 1 },
+  stockBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  stockBadgeText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  stepperWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "#D6E9F2",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 12,
+  },
+  stepperBtn: {
+    width: 28,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
   },
-  badge: { position: "absolute", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
-  badgeText: { fontSize: 12, fontWeight: "700", color: "#FFF" },
-  content: { padding: 20, gap: 10 },
-  subcategory: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1 },
-  title: { fontSize: 22, fontWeight: "800", lineHeight: 28 },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  price: { fontSize: 26, fontWeight: "800" },
-  originalPrice: { fontSize: 16, textDecorationLine: "line-through" },
-  discountBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  discountText: { fontSize: 12, fontWeight: "700" },
-  ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  ratingText: { fontSize: 13, marginLeft: 4 },
-  stockRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  stockText: { fontSize: 13, fontWeight: "600" },
-  sectionTitle: { fontSize: 17, fontWeight: "700", marginTop: 4 },
-  description: { fontSize: 14, lineHeight: 22 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  featureText: { fontSize: 14 },
-  cta: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, borderTopWidth: 1 },
-  ctaBtn: {
+  stepperText: {
+    fontSize: 18,
+    fontFamily: "Fredoka_700Bold",
+    color: "#0B6FAD",
+  },
+  quantityVal: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#0F2A3D",
+  },
+  quantityContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginVertical: 8,
+  },
+  quantityLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  ctaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  ghostBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: 6,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
   },
-  ctaBtnText: { fontSize: 16, fontWeight: "700" },
+  ghostBtnText: {
+    fontSize: 14,
+    fontFamily: "Fredoka_600SemiBold",
+  },
+  buyNowBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 48,
+    borderRadius: 24,
+  },
+  buyNowText: {
+    fontSize: 14,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#FFF",
+  },
 });

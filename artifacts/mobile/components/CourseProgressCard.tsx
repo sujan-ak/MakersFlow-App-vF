@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React from "react";
@@ -37,35 +37,6 @@ export function CourseProgressCard({ course }: CourseProgressCardProps) {
     router.push(`/course/${course.courseId}`);
   };
 
-  const getStatusInfo = () => {
-    if (course.progress === 100) {
-      return {
-        label: "Completed ✓",
-        color: "#10B981",
-        bgColor: "#DCFCE7",
-        icon: "check-circle",
-        ctaLabel: "Review",
-      };
-    }
-    if (course.progress > 0) {
-      return {
-        label: "Continue",
-        color: "#3B82F6",
-        bgColor: "#DBEAFE",
-        icon: "play-circle",
-        ctaLabel: "Continue",
-      };
-    }
-    return {
-      label: "Start Now",
-      color: "#F59E0B",
-      bgColor: "#FEF3C7",
-      icon: "play",
-      ctaLabel: "Start Now",
-    };
-  };
-
-  const status = getStatusInfo();
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 100],
     outputRange: ["0%", "100%"],
@@ -75,19 +46,14 @@ export function CourseProgressCard({ course }: CourseProgressCardProps) {
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
       ]}
       onPress={handlePress}
-      accessible={true}
-      accessibilityRole="button"
-      accessibilityLabel={`${course.courseTitle} by ${course.instructor}. ${course.progress}% complete. ${course.completedModules} of ${course.totalModules} lessons completed. Status: ${status.label}`}
-      accessibilityHint="Double tap to open course details"
     >
       <View style={styles.header}>
         <Image
           source={course.thumbnail}
           style={styles.thumbnail}
-          accessible={false}
         />
         <View style={styles.headerInfo}>
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={2}>
@@ -100,77 +66,51 @@ export function CourseProgressCard({ course }: CourseProgressCardProps) {
       </View>
 
       {/* Progress Bar Section */}
-      {course.progress > 0 && (
-        <View style={styles.progressSection}>
-          <View style={styles.progressHeader}>
-            <Text style={[styles.progressText, { color: colors.primary }]}>
-              {course.progress}%
-            </Text>
-            <Text style={[styles.lessonsText, { color: colors.mutedForeground }]}>
-              {course.completedModules} of {course.totalModules} lessons
-            </Text>
-          </View>
-          <View style={[styles.progressBarBg, { backgroundColor: colors.muted }]}>
-            <Animated.View
-              style={[
-                styles.progressBarFill,
-                {
-                  width: progressWidth,
-                  backgroundColor: colors.primary,
-                  minWidth: 8,
-                },
-              ]}
-            />
-          </View>
+      <View style={styles.progressSection}>
+        <View style={styles.progressHeader}>
+          <Text style={[styles.progressText, { color: "#0B6FAD" }]}>
+            {course.progress}%
+          </Text>
+          <Text style={[styles.lessonsText, { color: colors.mutedForeground }]}>
+            {course.completedModules} of {course.totalModules} lessons
+          </Text>
         </View>
-      )}
+        <View style={[styles.progressBarBg, { backgroundColor: colors.muted }]}>
+          <Animated.View
+            style={[
+              styles.progressBarFill,
+              {
+                width: progressWidth,
+                backgroundColor: "#0B6FAD",
+                minWidth: 8,
+              },
+            ]}
+          />
+        </View>
+      </View>
 
-      {/* Footer with Status Badge and CTA */}
+      {/* Footer: "Continue Learning" Deep Sea pill button for progress courses, "Completed" badge for completed courses */}
       <View style={styles.footer}>
-        {course.progress === 0 ? (
+        {course.progress === 100 ? (
+          <View style={styles.footerLeft}>
+            <View style={[styles.statusBadge, { backgroundColor: "#DCFCE7" }]}>
+              <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+              <Text style={[styles.statusText, { color: "#10B981" }]}>Completed</Text>
+            </View>
+          </View>
+        ) : (
           <Pressable
-            style={[styles.startNowBtn, { backgroundColor: colors.secondary }]}
+            style={styles.continueBtn}
             onPress={handleContinue}
           >
-            <Feather name="play" size={16} color="#FFF" />
-            <Text style={styles.startNowText}>Start Now</Text>
+            <Ionicons name="play" size={14} color="#FFF" style={{ marginRight: 4 }} />
+            <Text style={styles.continueBtnText}>Continue Learning</Text>
+            <Ionicons name="chevron-forward" size={14} color="#FFF" style={{ marginLeft: "auto" }} />
           </Pressable>
-        ) : (
-          <View style={styles.footerLeft}>
-            <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
-              <Feather name={status.icon as any} size={12} color={status.color} />
-              <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-            </View>
-            {course.lastAccessedAt && (
-              <View style={styles.timeInfo}>
-                <Feather name="clock" size={12} color={colors.mutedForeground} />
-                <Text style={[styles.timeText, { color: colors.mutedForeground }]}>
-                  Last visited {formatLastAccessed(course.lastAccessedAt)}
-                </Text>
-              </View>
-            )}
-          </View>
         )}
       </View>
     </Pressable>
   );
-}
-
-function formatLastAccessed(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 5) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return date.toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
@@ -179,16 +119,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     marginBottom: 12,
-    minHeight: 48,
   },
   header: {
     flexDirection: "row",
-    marginBottom: 16,
+    marginBottom: 14,
     gap: 12,
   },
   thumbnail: {
-    width: 72,
-    height: 72,
+    width: 60,
+    height: 60,
     borderRadius: 12,
   },
   headerInfo: {
@@ -197,38 +136,39 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     lineHeight: 20,
     marginBottom: 4,
   },
   instructor: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
   progressSection: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   progressHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   progressText: {
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 14,
+    fontFamily: "Fredoka_700Bold",
   },
   lessonsText: {
-    fontSize: 13,
-    fontWeight: "500",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
   },
   progressBarBg: {
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: 3,
   },
   footer: {
     flexDirection: "row",
@@ -238,59 +178,32 @@ const styles = StyleSheet.create({
   },
   footerLeft: {
     flex: 1,
-    gap: 8,
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
     alignSelf: "flex-start",
-    minHeight: 32,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: "Inter_600SemiBold",
   },
-  timeInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  timeText: {
-    fontSize: 12,
-  },
-  ctaButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    minHeight: 48,
-    minWidth: 110,
-    justifyContent: "center",
-  },
-  ctaText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#FFF",
-  },
-  startNowBtn: {
+  continueBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    minHeight: 48,
+    backgroundColor: "#0B6FAD",
+    height: 40,
+    borderRadius: 20,
+    paddingHorizontal: 16,
   },
-  startNowText: {
-    fontSize: 15,
-    fontWeight: "700",
+  continueBtnText: {
+    fontSize: 13,
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
   },
 });

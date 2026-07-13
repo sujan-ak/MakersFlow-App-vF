@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
@@ -16,7 +16,7 @@ export default function SecurityScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Security</Text>
         <View style={{ width: 22 }} />
@@ -26,10 +26,10 @@ export default function SecurityScreen() {
         contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
           <View style={styles.row}>
-            <View style={[styles.iconBox, { backgroundColor: colors.accent }]}>
-              <Feather name="smartphone" size={18} color={colors.primary} />
+            <View style={[styles.iconBox, { backgroundColor: "#DCF7F4" }]}>
+              <Ionicons name="phone-portrait" size={18} color="#0B6FAD" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { color: colors.foreground }]}>Biometric Login</Text>
@@ -38,14 +38,14 @@ export default function SecurityScreen() {
             <Switch
               value={biometric}
               onValueChange={setBiometric}
-              trackColor={{ true: colors.primary }}
+              trackColor={{ true: "#0B6FAD", false: "#D6E9F2" }}
               thumbColor="#FFF"
             />
           </View>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <View style={[styles.divider, { backgroundColor: "#D6E9F2" }]} />
           <View style={styles.row}>
-            <View style={[styles.iconBox, { backgroundColor: colors.accent }]}>
-              <Feather name="shield" size={18} color={colors.primary} />
+            <View style={[styles.iconBox, { backgroundColor: "#DCF7F4" }]}>
+              <Ionicons name="shield" size={18} color="#0B6FAD" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { color: colors.foreground }]}>Two-Factor Auth</Text>
@@ -54,18 +54,18 @@ export default function SecurityScreen() {
             <Switch
               value={twoFactor}
               onValueChange={setTwoFactor}
-              trackColor={{ true: colors.primary }}
+              trackColor={{ true: "#0B6FAD", false: "#D6E9F2" }}
               thumbColor="#FFF"
             />
           </View>
         </View>
 
         <Pressable
-          style={[styles.changePasswordBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.changePasswordBtn, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
         >
-          <Feather name="lock" size={18} color={colors.primary} />
+          <Ionicons name="lock-closed" size={18} color="#0B6FAD" />
           <Text style={[styles.changePasswordText, { color: colors.foreground }]}>Change Password</Text>
-          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          <Ionicons name="chevron-forward" size={18} color="#0B6FAD" />
         </Pressable>
       </ScrollView>
     </View>
@@ -82,12 +82,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  card: { borderRadius: 16, borderWidth: 1.5, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  rowLabel: { fontSize: 15, fontWeight: "600" },
-  rowSub: { fontSize: 12, marginTop: 1 },
+  iconBox: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  rowLabel: { fontSize: 15, fontFamily: "Fredoka_600SemiBold" },
+  rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   divider: { height: 1, marginLeft: 70 },
   changePasswordBtn: {
     flexDirection: "row",
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 16,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
-  changePasswordText: { flex: 1, fontSize: 15, fontWeight: "600" },
+  changePasswordText: { flex: 1, fontSize: 15, fontFamily: "Fredoka_600SemiBold" },
 });

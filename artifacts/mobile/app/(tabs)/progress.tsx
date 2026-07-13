@@ -1,4 +1,4 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
@@ -9,8 +9,6 @@ import {
   Text,
   View,
   Image,
-  Modal,
-  ActivityIndicator,
   RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,18 +27,24 @@ import { HomeSkeleton } from "@/components/SkeletonLoader";
 
 function formatTotalTime(totalSeconds: number): string {
   const minutes = Math.round(totalSeconds / 60);
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
+  if (minutes < 60) return `${minutes} min`;
   const hours = totalSeconds / 3600;
   return `${hours.toFixed(1)} hrs`;
 }
+
+const MOCK_LEADERBOARD = [
+  { rank: 1, name: "Aarav Sharma", points: 2840, isSelf: false },
+  { rank: 2, name: "Ishaan Patel", points: 2610, isSelf: false },
+  { rank: 3, name: "Sneha Reddy", points: 2450, isSelf: false },
+  { rank: 12, name: "You (Student)", points: 1280, isSelf: true },
+];
 
 export default function ProgressScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { courseProgress, watchlist } = useProgress();
   const { user } = useAuth();
+  const [currentTab, setCurrentTab] = useState<"courses" | "stats" | "leaderboard">("stats");
   const [selectedDay, setSelectedDay] = useState<{
     day: string;
     minutes: number;
@@ -90,13 +94,10 @@ export default function ProgressScreen() {
       }));
       setCourses(mapped);
 
-      // Fetch enrollments
       const enrollments = await fetchEnrolledCourses(user.id);
-
       const totalCoursesEnrolled = enrollments.length;
       setEnrolledCount(totalCoursesEnrolled);
 
-      // Fetch lesson progress
       const { data: progressData, error: progressError } = await supabase
         .from('lesson_progress')
         .select('course_id, lesson_id, time_spent_secs, is_completed, last_watched_at')
@@ -105,7 +106,6 @@ export default function ProgressScreen() {
       if (progressError) throw progressError;
       const progressList = progressData ?? [];
 
-      // Calculate completed courses count
       let completedCoursesCount = 0;
       let notStartedCoursesCount = 0;
 
@@ -151,7 +151,6 @@ export default function ProgressScreen() {
       const coursesInProgress = Math.max(0, totalCoursesEnrolled - completedCoursesCount - notStartedCoursesCount);
       const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
 
-      // Calculate average progress
       let progressSum = 0;
       for (const enr of enrollments) {
         const courseId = String(enr.course_id);
@@ -164,14 +163,9 @@ export default function ProgressScreen() {
         }
       }
       const averageProgress = totalCoursesEnrolled > 0 ? Math.round(progressSum / totalCoursesEnrolled) : 0;
-
-      // Calculate total time spent
       const totalTimeSpent = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
-
-      // Calculate learning streak
       const learningStreak = ProgressCalculator.calculateStreak(progressList);
 
-      // Generate weekly activity (7 days ending with today)
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const weeklyActivity = [];
       const now = new Date();
@@ -197,7 +191,6 @@ export default function ProgressScreen() {
         });
       }
 
-      // Calculate recently completed lessons (last 10)
       const recentlyCompleted: any[] = [];
       for (const p of progressList) {
         if (p.is_completed && p.last_watched_at) {
@@ -253,10 +246,18 @@ export default function ProgressScreen() {
     setRefreshing(false);
   };
 
-  const coursesWithProgress = useMemo(
-    () => ProgressAnalytics.getCoursesWithProgress(courseProgress, courses),
-    [courseProgress, courses]
-  );
+  const coursesWithProgress = useMemo(() => {
+    const enrollMap = new Map(watchlist.map(w => [w.courseId, w]));
+    return courses.filter(c => enrollMap.has(c.id)).map(c => {
+      const w = enrollMap.get(c.id);
+      return {
+        courseId: c.id,
+        courseTitle: c.title,
+        thumbnail: c.thumbnail,
+        progress: w ? Math.round(w.courseProgress || 0) : 0,
+      };
+    });
+  }, [watchlist, courses]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -264,7 +265,6 @@ export default function ProgressScreen() {
     return <HomeSkeleton />;
   }
 
-  // Get max minutes for weekly activity chart scaling
   const maxMinutes = Math.max(...stats.weeklyActivity.map((d: any) => d.minutes), 1);
 
   return (
@@ -276,30 +276,55 @@ export default function ProgressScreen() {
       }}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0B6FAD']} />
       }
     >
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Your Progress</Text>
+          <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>Your Progress</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Track your learning journey
           </Text>
         </View>
         <Pressable
-          style={[styles.cartBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={styles.cartBtn}
           onPress={() => router.push("/(tabs)/store")}
         >
-          <Ionicons name="cart-outline" size={20} color={colors.foreground} />
+          <Ionicons name="cart" size={20} color="#0B6FAD" />
         </Pressable>
       </View>
 
-      {/* Empty State */}
+      {/* Segmented Tab Switcher */}
+      <View style={styles.segmentedContainer}>
+        {[
+          { id: "courses", label: "Courses", icon: "book" },
+          { id: "stats", label: "Progress", icon: "stats-chart" },
+          { id: "leaderboard", label: "Leaderboard", icon: "trophy" }
+        ].map((tab) => {
+          const isActive = currentTab === tab.id;
+          return (
+            <Pressable
+              key={tab.id}
+              style={[
+                styles.segmentBtn,
+                isActive && { backgroundColor: "#0B6FAD" }
+              ]}
+              onPress={() => setCurrentTab(tab.id as any)}
+            >
+              <Ionicons name={tab.icon as any} size={14} color={isActive ? "#FFF" : "#5A7A8C"} />
+              <Text style={[styles.segmentLabel, { color: isActive ? "#FFF" : "#5A7A8C", fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {stats.totalCoursesEnrolled === 0 ? (
         <View style={styles.emptyState}>
-          <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-            <Feather name="trending-up" size={48} color={colors.mutedForeground} />
+          <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+            <Ionicons name="stats-chart" size={48} color="#17E5D3" />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
             Your Learning Journey Starts Here!
@@ -308,349 +333,218 @@ export default function ProgressScreen() {
             Enroll in courses to track your progress and achieve your learning goals
           </Text>
           <Pressable
-            style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
+            style={[styles.emptyBtn, { backgroundColor: "#0B6FAD" }]}
             onPress={() => router.push("/(tabs)/courses")}
           >
             <Text style={styles.emptyBtnText}>Browse Courses</Text>
-            <Feather name="arrow-right" size={18} color="#FFF" />
+            <Ionicons name="chevron-forward" size={18} color="#FFF" />
           </Pressable>
         </View>
       ) : (
         <>
-          {/* Progress Statistics */}
-          <View style={styles.section}>
-            <ProgressStats
-              totalCoursesEnrolled={stats.totalCoursesEnrolled}
-              coursesCompleted={stats.coursesCompleted}
-              coursesInProgress={stats.coursesInProgress}
-              totalLessonsCompleted={stats.totalLessonsCompleted}
-              averageProgress={stats.averageProgress}
-              learningStreak={stats.learningStreak}
-            />
-          </View>
-
-          {/* Learning Streak & Time Spent Row */}
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.statIconWrapper, { backgroundColor: colors.accent }]}>
-                <Feather name="clock" size={20} color={colors.primary} />
-              </View>
-              <Text style={[styles.statCardValue, { color: colors.foreground }]}>
-                {formatTotalTime(stats.totalTimeSpent)}
-              </Text>
-              <Text style={[styles.statCardLabel, { color: colors.mutedForeground }]}>Total Time Spent</Text>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.statIconWrapper, { backgroundColor: "#FEF3C7" }]}>
-                <Feather name="zap" size={20} color="#F59E0B" />
-              </View>
-              <Text style={[styles.statCardValue, { color: colors.foreground }]}>
-                {stats.learningStreak} Days
-              </Text>
-              <Text style={[styles.statCardLabel, { color: colors.mutedForeground }]}>Learning Streak</Text>
-            </View>
-          </View>
-
-          {/* Weekly Activity */}
-          <View style={styles.section}>
-            <View style={styles.activityHeader}>
-              <View>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 4 }]}>
-                  Weekly Activity
-                </Text>
-                <Text style={[styles.activitySubtitle, { color: colors.mutedForeground }]}>
-                  Tap on a day to see details
-                </Text>
-              </View>
-              <View style={[styles.activityBadge, { backgroundColor: colors.accent }]}>
-                <Feather name="trending-up" size={14} color={colors.primary} />
-                <Text style={[styles.activityBadgeText, { color: colors.primary }]}>
-                  {stats.weeklyActivity.reduce((sum: number, d: any) => sum + d.minutes, 0)} min
-                </Text>
-              </View>
-            </View>
-            {stats.totalLessonsCompleted === 0 ? (
-              <View
-                style={[
-                  styles.emptyActivityCard,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-              >
-                <View style={[styles.emptyActivityIcon, { backgroundColor: colors.muted }]}>
-                  <Feather name="bar-chart-2" size={32} color={colors.mutedForeground} />
-                </View>
-                <Text style={[styles.emptyActivityTitle, { color: colors.foreground }]}>
-                  Complete a lesson to begin tracking
-                </Text>
-                <Text style={[styles.emptyActivityText, { color: colors.mutedForeground }]}>
-                  Start your first lesson to see your learning statistics here
-                </Text>
-                <Pressable
-                  style={[styles.emptyActivityBtn, { backgroundColor: colors.primary }]}
-                  onPress={() => {
-                    const firstCourse = coursesWithProgress[0];
-                    if (firstCourse) {
-                      router.push(`/course/${firstCourse.courseId}`);
-                    } else {
-                      router.push("/(tabs)/courses");
-                    }
-                  }}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel="Start Learning"
-                  accessibilityHint="Double tap to start learning"
-                >
-                  <Text style={styles.emptyActivityBtnText}>Start Learning</Text>
-                  <Feather name="arrow-right" size={16} color="#FFF" />
-                </Pressable>
-              </View>
-            ) : (
-              <View
-                style={[
-                  styles.activityCard,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-              >
-                <View style={styles.activityChart}>
-                  {stats.weeklyActivity.map((day: any, index: number) => {
-                    const height = maxMinutes > 0 ? (day.minutes / maxMinutes) * 100 : 0;
-                    const hasActivity = day.minutes > 0;
-                    const isSelected = selectedDay?.index === index;
-
-                    return (
-                      <Pressable
-                        key={`week-${index}-${day.day}`}
-                        style={styles.activityBarContainer}
-                        onPress={() => {
-                          if (hasActivity) {
-                            setSelectedDay({ ...day, index });
-                          }
-                        }}
-                        accessible={hasActivity}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${day.day}: ${day.minutes} minutes, ${day.lessonsCompleted} lessons completed`}
-                      >
-                        <View style={styles.activityBarWrapper}>
-                          <View
-                            style={[
-                              styles.activityBar,
-                              {
-                                height: `${Math.max(height, 5)}%`,
-                                backgroundColor: hasActivity 
-                                  ? isSelected 
-                                    ? colors.primary 
-                                    : `${colors.primary}CC`
-                                  : colors.muted,
-                                transform: [{ scale: isSelected ? 1.1 : 1 }],
-                                shadowColor: isSelected ? colors.primary : "transparent",
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.3,
-                                shadowRadius: 4,
-                                elevation: isSelected ? 4 : 0,
-                              },
-                            ]}
-                          />
+          {currentTab === "courses" && (
+            <View style={{ gap: 12 }}>
+              {coursesWithProgress.length === 0 ? (
+                <Text style={styles.emptyActivityText}>No courses with progress in this tab.</Text>
+              ) : (
+                coursesWithProgress.map((c) => (
+                  <View key={c.courseId} style={styles.courseProgressRowCard}>
+                    <Image source={c.thumbnail} style={styles.courseProgressThumbnail} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.courseProgressTitle}>{c.courseTitle}</Text>
+                      <View style={styles.courseProgressRow}>
+                        <View style={styles.courseProgressTrack}>
+                          <View style={[styles.courseProgressFill, { width: `${c.progress}%` }]} />
                         </View>
-                        <Text
-                          style={[
-                            styles.activityDay,
-                            {
-                              color: isSelected ? colors.primary : colors.mutedForeground,
-                              fontWeight: isSelected ? "700" : "600",
-                            },
-                          ]}
-                        >
-                          {day.day}
-                        </Text>
-                        {hasActivity && (
-                          <View style={[styles.activityDot, { backgroundColor: colors.primary }]} />
-                        )}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* Tooltip Display */}
-                {selectedDay && (
-                  <View style={[styles.tooltipCard, { backgroundColor: colors.accent }]}>
-                    <View style={styles.tooltipHeader}>
-                      <Feather name="calendar" size={16} color={colors.primary} />
-                      <Text style={[styles.tooltipDay, { color: colors.foreground }]}>
-                        {selectedDay.day}
-                      </Text>
-                    </View>
-                    <View style={styles.tooltipStats}>
-                      <View style={styles.tooltipStat}>
-                        <Feather name="clock" size={14} color={colors.mutedForeground} />
-                        <Text style={[styles.tooltipStatText, { color: colors.foreground }]}>
-                          {selectedDay.minutes} minutes
-                        </Text>
-                      </View>
-                      <View style={styles.tooltipStat}>
-                        <Feather name="check-circle" size={14} color={colors.mutedForeground} />
-                        <Text style={[styles.tooltipStatText, { color: colors.foreground }]}>
-                          {selectedDay.lessonsCompleted} lesson{selectedDay.lessonsCompleted !== 1 ? "s" : ""}
-                        </Text>
+                        <Text style={styles.courseProgressPct}>{c.progress}%</Text>
                       </View>
                     </View>
                   </View>
-                )}
-
-                <View style={[styles.activityDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.activitySummary}>
-                  <View style={styles.activityStat}>
-                    <View style={[styles.activityStatIcon, { backgroundColor: `${colors.primary}14` }]}>
-                      <Feather name="clock" size={14} color={colors.primary} />
-                    </View>
-                    <View>
-                      <Text style={[styles.activityStatLabel, { color: colors.mutedForeground }]}>
-                        Total Time
-                      </Text>
-                      <Text style={[styles.activityStatValue, { color: colors.foreground }]}>
-                        {stats.weeklyActivity.reduce((sum: number, d: any) => sum + d.minutes, 0)} min
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[styles.activityStatDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.activityStat}>
-                    <View style={[styles.activityStatIcon, { backgroundColor: `${colors.primary}14` }]}>
-                      <Feather name="check-circle" size={14} color={colors.primary} />
-                    </View>
-                    <View>
-                      <Text style={[styles.activityStatLabel, { color: colors.mutedForeground }]}>
-                        Lessons Done
-                      </Text>
-                      <Text style={[styles.activityStatValue, { color: colors.foreground }]}>
-                        {stats.weeklyActivity.reduce((sum: number, d: any) => sum + d.lessonsCompleted, 0)}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[styles.activityStatDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.activityStat}>
-                    <View style={[styles.activityStatIcon, { backgroundColor: `${colors.primary}14` }]}>
-                      <Feather name="zap" size={14} color={colors.primary} />
-                    </View>
-                    <View>
-                      <Text style={[styles.activityStatLabel, { color: colors.mutedForeground }]}>
-                        Active Days
-                      </Text>
-                      <Text style={[styles.activityStatValue, { color: colors.foreground }]}>
-                        {stats.weeklyActivity.filter((d: any) => d.minutes > 0).length}/7
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* View My Courses Shortcut */}
-          <View style={styles.section}>
-            <Pressable
-              style={[
-                styles.coursesShortcut,
-                {
-                  backgroundColor: `${colors.primary}14`,
-                  borderColor: `${colors.primary}4D`,
-                },
-              ]}
-              onPress={() => router.push("/(tabs)/courses")}
-            >
-              <Feather name="book-open" size={20} color={colors.primary} />
-              <View style={styles.coursesShortcutText}>
-                <Text style={[styles.coursesShortcutTitle, { color: colors.primary }]}>
-                  My Enrolled Courses
-                </Text>
-                <Text style={[styles.coursesShortcutSubtitle, { color: colors.mutedForeground }]}>
-                  {stats.totalCoursesEnrolled} course{stats.totalCoursesEnrolled !== 1 ? "s" : ""} enrolled
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={colors.primary} />
-            </Pressable>
-          </View>
-
-          {/* Continue Learning */}
-          {watchlist.length > 0 && (
-            <View style={styles.section}>
-              <SectionHeader
-                title="Continue Learning"
-                subtitle={`${watchlist.length} lesson${watchlist.length > 1 ? "s" : ""} in progress`}
-              />
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.carouselContent}
-              >
-                {watchlist.map((item) => (
-                  <WatchlistCard key={`${item.courseId}-${item.moduleId}`} item={item} />
-                ))}
-              </ScrollView>
+                ))
+              )}
             </View>
           )}
 
-          {/* Recently Completed Lessons */}
-          {stats.recentlyCompleted.length > 0 && (
-            <View style={styles.section}>
-              <SectionHeader
-                title="Recently Completed"
-                subtitle={`${stats.recentlyCompleted.length} lesson${
-                  stats.recentlyCompleted.length > 1 ? "s" : ""
-                }`}
-              />
-              <View style={styles.completedList}>
-                {stats.recentlyCompleted.slice(0, 5).map((lesson: any, index: number) => (
-                  <Pressable
-                    key={`${lesson.courseId}-${lesson.moduleId}-${index}`}
-                    style={[
-                      styles.completedItem,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                    onPress={() => router.push(`/course/${lesson.courseId}`)}
-                  >
-                    <Image source={lesson.courseThumbnail} style={styles.completedThumbnail} />
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[styles.completedModuleTitle, { color: colors.foreground }]}
-                        numberOfLines={1}
-                      >
-                        {lesson.moduleTitle}
-                      </Text>
-                      <Text
-                        style={[styles.completedCourseTitle, { color: colors.mutedForeground }]}
-                        numberOfLines={1}
-                      >
-                        {lesson.courseTitle}
-                      </Text>
-                      <Text style={[styles.completedDate, { color: colors.mutedForeground }]}>
-                        {formatCompletedDate(lesson.completedAt)}
-                      </Text>
-                    </View>
-                    <View style={styles.completedCheck}>
-                      <Feather name="check-circle" size={20} color="#10B981" />
-                    </View>
-                  </Pressable>
-                ))}
+          {currentTab === "stats" && (
+            <>
+              {/* Progress Statistics Grid */}
+              <View style={styles.section}>
+                <ProgressStats
+                  totalCoursesEnrolled={stats.totalCoursesEnrolled}
+                  coursesCompleted={stats.coursesCompleted}
+                  coursesInProgress={stats.coursesInProgress}
+                  totalLessonsCompleted={stats.totalLessonsCompleted}
+                  averageProgress={stats.averageProgress}
+                  learningStreak={stats.learningStreak}
+                />
               </View>
+
+              {/* Time Spent & Learning Streak Cards */}
+              <View style={styles.statsRow}>
+                <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={[styles.statIconWrapper, { backgroundColor: "#DCF7F4" }]}>
+                    <Ionicons name="time" size={20} color="#0B6FAD" />
+                  </View>
+                  <Text style={[styles.statCardValue, { color: colors.foreground }]}>
+                    {formatTotalTime(stats.totalTimeSpent)}
+                  </Text>
+                  <Text style={[styles.statCardLabel, { color: colors.mutedForeground }]}>Total Time Spent</Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={[styles.statIconWrapper, { backgroundColor: "#DCF7F4" }]}>
+                    <Ionicons name="flash" size={20} color="#0B6FAD" />
+                  </View>
+                  <Text style={[styles.statCardValue, { color: colors.foreground }]}>
+                    {stats.learningStreak} Days
+                  </Text>
+                  <Text style={[styles.statCardLabel, { color: colors.mutedForeground }]}>Learning Streak</Text>
+                </View>
+              </View>
+
+              {/* Weekly Activity Chart */}
+              <View style={styles.section}>
+                <View style={styles.activityHeader}>
+                  <View>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 4, paddingHorizontal: 0 }]}>
+                      Weekly Activity
+                    </Text>
+                    <Text style={[styles.activitySubtitle, { color: colors.mutedForeground }]}>
+                      Tap on a day to see details
+                    </Text>
+                  </View>
+                  <View style={[styles.activityBadge, { backgroundColor: "#DCF7F4" }]}>
+                    <Ionicons name="trending-up" size={14} color="#0B6FAD" />
+                    <Text style={[styles.activityBadgeText, { color: "#0B6FAD" }]}>
+                      {stats.weeklyActivity.reduce((sum: number, d: any) => sum + d.minutes, 0)} min
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.activityChart}>
+                    {stats.weeklyActivity.map((day: any, index: number) => {
+                      const height = maxMinutes > 0 ? (day.minutes / maxMinutes) * 100 : 0;
+                      const hasActivity = day.minutes > 0;
+                      const isSelected = selectedDay?.index === index;
+
+                      return (
+                        <Pressable
+                          key={`week-${index}-${day.day}`}
+                          style={styles.activityBarContainer}
+                          onPress={() => {
+                            if (hasActivity) {
+                              setSelectedDay({ ...day, index });
+                            }
+                          }}
+                        >
+                          <View style={styles.activityBarWrapper}>
+                            <View
+                              style={[
+                                styles.activityBar,
+                                {
+                                  height: `${Math.max(height, 5)}%`,
+                                  backgroundColor: hasActivity 
+                                    ? isSelected 
+                                      ? "#0B6FAD" 
+                                      : "#17E5D3"
+                                    : colors.muted,
+                                  transform: [{ scale: isSelected ? 1.1 : 1 }],
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text
+                            style={[
+                              styles.activityDay,
+                              {
+                                color: isSelected ? "#0B6FAD" : colors.mutedForeground,
+                                fontWeight: isSelected ? "700" : "600",
+                              },
+                            ]}
+                          >
+                            {day.day}
+                          </Text>
+                          {hasActivity && (
+                            <View style={[styles.activityDot, { backgroundColor: "#0B6FAD" }]} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {selectedDay && (
+                    <View style={[styles.tooltipCard, { backgroundColor: "#DCF7F4" }]}>
+                      <View style={styles.tooltipHeader}>
+                        <Ionicons name="calendar" size={16} color="#0B6FAD" />
+                        <Text style={[styles.tooltipDay, { color: colors.foreground }]}>
+                          {selectedDay.day}
+                        </Text>
+                      </View>
+                      <View style={styles.tooltipStats}>
+                        <View style={styles.tooltipStat}>
+                          <Ionicons name="time" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.tooltipStatText, { color: colors.foreground }]}>
+                            {selectedDay.minutes} minutes
+                          </Text>
+                        </View>
+                        <View style={styles.tooltipStat}>
+                          <Ionicons name="checkmark-circle" size={14} color={colors.mutedForeground} />
+                          <Text style={[styles.tooltipStatText, { color: colors.foreground }]}>
+                            {selectedDay.lessonsCompleted} lesson{selectedDay.lessonsCompleted !== 1 ? "s" : ""}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* shortcut */}
+              <View style={styles.section}>
+                <Pressable
+                  style={[styles.coursesShortcut, { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" }]}
+                  onPress={() => router.push("/(tabs)/courses")}
+                >
+                  <Ionicons name="book" size={20} color="#0B6FAD" />
+                  <View style={styles.coursesShortcutText}>
+                    <Text style={[styles.coursesShortcutTitle, { color: "#0B6FAD" }]}>
+                      My Enrolled Courses
+                    </Text>
+                    <Text style={[styles.coursesShortcutSubtitle, { color: colors.mutedForeground }]}>
+                      {stats.totalCoursesEnrolled} course{stats.totalCoursesEnrolled !== 1 ? "s" : ""} enrolled
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#0B6FAD" />
+                </Pressable>
+              </View>
+            </>
+          )}
+
+          {currentTab === "leaderboard" && (
+            <View style={styles.leaderboardSection}>
+              <View style={styles.leaderboardHeader}>
+                <Ionicons name="trophy" size={32} color="#F59E0B" />
+                <Text style={styles.leaderboardTitle}>Weekly Leaderboard</Text>
+              </View>
+              {MOCK_LEADERBOARD.map((item) => (
+                <View
+                  key={item.rank}
+                  style={[
+                    styles.leaderboardRow,
+                    item.isSelf && { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" },
+                  ]}
+                >
+                  <Text style={styles.leaderboardRank}>#{item.rank}</Text>
+                  <Text style={[styles.leaderboardName, item.isSelf && { color: "#0B6FAD" }]}>{item.name}</Text>
+                  <Text style={styles.leaderboardPoints}>{item.points} pts</Text>
+                </View>
+              ))}
             </View>
           )}
         </>
       )}
     </ScrollView>
   );
-}
-
-function formatCompletedDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffHours < 1) return "Just now";
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
@@ -665,65 +559,72 @@ const styles = StyleSheet.create({
   cartBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
+    borderColor: "#D6E9F2",
   },
-  pageTitle: { fontSize: 28, fontWeight: "800", marginBottom: 4 },
-  subtitle: { fontSize: 14 },
+  pageTitle: { fontSize: 26, fontFamily: "Fredoka_700Bold", marginBottom: 4 },
+  subtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
   section: { marginBottom: 32 },
-  sectionTitle: { fontSize: 20, fontWeight: "800", marginBottom: 12, paddingHorizontal: 20 },
+  sectionTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold", marginBottom: 12, paddingHorizontal: 20 },
   carouselContent: { paddingLeft: 20, paddingRight: 4 },
 
-  // Empty State
   emptyState: {
     alignItems: "center",
     paddingHorizontal: 40,
     paddingTop: 80,
   },
   emptyIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 22,
-    fontWeight: "800",
+    fontSize: 20,
+    fontFamily: "Fredoka_700Bold",
     marginBottom: 8,
     textAlign: "center",
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 32,
+    lineHeight: 20,
+    marginBottom: 24,
   },
   emptyBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 24, // pill
     minHeight: 48,
   },
   emptyBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 15,
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
   },
 
-  // Streak Card
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginHorizontal: 20,
     marginTop: 8,
     gap: 12,
+    marginBottom: 24,
   },
   statCard: {
     flex: 1,
@@ -744,57 +645,13 @@ const styles = StyleSheet.create({
   },
   statCardValue: {
     fontSize: 20,
-    fontWeight: "800",
+    fontFamily: "Fredoka_700Bold",
   },
   statCardLabel: {
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
   },
 
-  // Weekly Activity Empty State
-  emptyActivityCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 32,
-    alignItems: "center",
-    marginHorizontal: 20,
-  },
-  emptyActivityIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  emptyActivityTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptyActivityText: {
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  emptyActivityBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-    minHeight: 48,
-  },
-  emptyActivityBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFF",
-  },
-
-  // Weekly Activity Header
   activityHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -804,6 +661,7 @@ const styles = StyleSheet.create({
   },
   activitySubtitle: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
     marginTop: 2,
   },
   activityBadge: {
@@ -816,10 +674,9 @@ const styles = StyleSheet.create({
   },
   activityBadgeText: {
     fontSize: 13,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
 
-  // Weekly Activity
   activityCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -856,7 +713,7 @@ const styles = StyleSheet.create({
   },
   activityDay: {
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
   },
   activityDot: {
     width: 4,
@@ -865,44 +722,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: -2,
   },
-  activityDivider: {
-    height: 1,
-    marginHorizontal: 20,
-    marginVertical: 16,
-  },
-  activitySummary: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 12,
-  },
-  activityStat: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  activityStatIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activityStatLabel: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  activityStatValue: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  activityStatDivider: {
-    width: 1,
-    height: "100%",
-  },
 
-  // Tooltip
   tooltipCard: {
     marginHorizontal: 20,
     marginBottom: 16,
@@ -917,7 +737,7 @@ const styles = StyleSheet.create({
   },
   tooltipDay: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
   tooltipStats: {
     flexDirection: "row",
@@ -930,49 +750,9 @@ const styles = StyleSheet.create({
   },
   tooltipStatText: {
     fontSize: 13,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
   },
 
-  // Recently Completed
-  completedList: {
-    gap: 10,
-    paddingHorizontal: 20,
-  },
-  completedItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 12,
-  },
-  completedThumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-  },
-  completedModuleTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  completedCourseTitle: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  completedDate: {
-    fontSize: 11,
-  },
-  completedCheck: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // Courses Shortcut
   coursesShortcut: {
     flexDirection: "row",
     alignItems: "center",
@@ -987,10 +767,135 @@ const styles = StyleSheet.create({
   },
   coursesShortcutTitle: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     marginBottom: 2,
   },
   coursesShortcutSubtitle: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+
+  // Segmented control selector styling
+  segmentedContainer: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "#D6E9F2",
+    marginHorizontal: 20,
+    padding: 3,
+    marginBottom: 20,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 38,
+    borderRadius: 20,
+  },
+  segmentLabel: {
+    fontSize: 13,
+  },
+
+  // Per-course progress rows: white cards
+  courseProgressRowCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D6E9F2",
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    gap: 12,
+  },
+  courseProgressThumbnail: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+  },
+  courseProgressTitle: {
+    fontSize: 14,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#0F2A3D",
+    marginBottom: 8,
+  },
+  courseProgressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  courseProgressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E8F4F9",
+    position: "relative",
+    overflow: "hidden",
+  },
+  courseProgressFill: {
+    height: "100%",
+    backgroundColor: "#0B6FAD",
+    borderRadius: 3,
+  },
+  courseProgressPct: {
+    fontSize: 12,
+    fontFamily: "Fredoka_700Bold",
+    color: "#0B6FAD",
+  },
+
+  // Leaderboard Section styling
+  leaderboardSection: {
+    marginHorizontal: 20,
+    gap: 12,
+  },
+  leaderboardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  leaderboardTitle: {
+    fontSize: 18,
+    fontFamily: "Fredoka_700Bold",
+    color: "#0F2A3D",
+  },
+  leaderboardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D6E9F2",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  leaderboardRank: {
+    fontSize: 14,
+    fontFamily: "Fredoka_700Bold",
+    color: "#0B6FAD",
+    width: 36,
+  },
+  leaderboardName: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#0F2A3D",
+    flex: 1,
+  },
+  leaderboardPoints: {
+    fontSize: 13,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#5A7A8C",
+  },
+  emptyActivityText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    color: "#5A7A8C",
+    marginTop: 20,
   },
 });

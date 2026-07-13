@@ -1,51 +1,19 @@
-// Typography Scale - Use these 4 text styles consistently across all screens
 export const TYPOGRAPHY = {
-  // H1 - Page titles, main headings
-  h1: {
-    fontSize: 20,
-    fontWeight: '600' as const,
-    lineHeight: 24,
-  },
-  
-  // H2 - Section titles, card titles  
-  h2: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    lineHeight: 20,
-  },
-  
-  // Body - Main content, descriptions
-  body: {
-    fontSize: 14,
-    fontWeight: '400' as const,
-    lineHeight: 20,
-  },
-  
-  // Caption - Meta text, labels, small text
-  caption: {
-    fontSize: 12,
-    fontWeight: '400' as const,
-    lineHeight: 16,
-  },
+  h1: { fontSize: 20, fontFamily: "Fredoka_700Bold", lineHeight: 26 },
+  h2: { fontSize: 16, fontFamily: "Fredoka_600SemiBold", lineHeight: 22 },
+  body: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  caption: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
 } as const;
 
-// Semantic text styles for specific use cases
 export const TEXT_STYLES = {
-  // Headers
-  pageTitle: { ...TYPOGRAPHY.h1, fontSize: 24, fontWeight: '700' as const },
-  sectionTitle: { ...TYPOGRAPHY.h2, fontSize: 18, fontWeight: '700' as const },
-  cardTitle: { ...TYPOGRAPHY.h2, fontSize: 14, fontWeight: '700' as const },
-  
-  // Content
-  description: TYPOGRAPHY.body,
-  instructor: { ...TYPOGRAPHY.body, fontSize: 13 },
-  
-  // Meta
-  label: { ...TYPOGRAPHY.caption, fontWeight: '600' as const },
-  meta: TYPOGRAPHY.caption,
-  time: { ...TYPOGRAPHY.caption, fontSize: 11, fontWeight: '600' as const },
-  
-  // Interactive
-  button: { ...TYPOGRAPHY.h2, fontWeight: '700' as const },
-  link: { ...TYPOGRAPHY.body, fontWeight: '600' as const },
+  pageTitle:    { fontSize: 24, fontFamily: "Fredoka_700Bold", lineHeight: 30 },
+  sectionTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold", lineHeight: 24 },
+  cardTitle:    { fontSize: 14, fontFamily: "Fredoka_600SemiBold", lineHeight: 20 },
+  description:  { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  instructor:   { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  label:        { fontSize: 12, fontFamily: "Inter_600SemiBold", lineHeight: 16 },
+  meta:         { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  time:         { fontSize: 11, fontFamily: "Inter_600SemiBold", lineHeight: 14 },
+  button:       { fontSize: 16, fontFamily: "Fredoka_600SemiBold", lineHeight: 20 },
+  link:         { fontSize: 14, fontFamily: "Inter_600SemiBold", lineHeight: 20 },
 } as const;

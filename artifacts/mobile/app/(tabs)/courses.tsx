@@ -1,26 +1,14 @@
-// ═══════════════════════════════════════════════════════════
-// MOVED TO: app/(tabs)/search.tsx
-// ═══════════════════════════════════════════════════════════
-// The following features were moved to the Search tab:
-// - SearchBar component for course discovery
-// - Category filter chips (Robotics, AI, Electronics, etc.)
-// - Full course catalog browsing
-// - Search functionality across all courses
-// // TODO: Extract reviews aggregation to a shared lib/reviewsService.ts to avoid duplication across screens
-// ═══════════════════════════════════════════════════════════
-
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { ScrollView, View, Text, Pressable, StyleSheet, Platform, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import { fetchEnrolledCourses } from "@/services/enrollmentService";
 import { fetchCourseProgress } from "@/lib/progressStorage";
-import { TEXT_STYLES } from "@/constants/typography";
 import { CourseProgressCard } from "@/components/CourseProgressCard";
-import { CourseCardSkeleton, ListSkeleton } from "@/components/SkeletonLoader";
+import { CourseCardSkeleton } from "@/components/SkeletonLoader";
 import { CourseCard } from "@/components/CourseCard";
 import { fetchAllCourses } from "@/services/courseDataProvider";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +25,7 @@ export default function CoursesScreen() {
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
   const [browseMoreCourses, setBrowseMoreCourses] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("All");
 
   const loadData = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing) {
@@ -45,7 +34,6 @@ export default function CoursesScreen() {
     try {
       let enrolledMapped: any[] = [];
       
-      // 1. Fetch enrolled courses if logged in
       if (user?.id) {
         const enrollments = await fetchEnrolledCourses(user.id);
         enrolledMapped = await Promise.all(
@@ -70,10 +58,8 @@ export default function CoursesScreen() {
         setEnrolledCourses([]);
       }
 
-      // 2. Fetch all published courses
       const allPub = await fetchAllCourses();
       
-      // TODO: Extract reviews aggregation to a shared lib/reviewsService.ts to avoid duplication across screens
       let reviewStats: Record<string, { ratingSum: number; count: number }> = {};
       try {
         const { data: reviewsData } = await supabase
@@ -151,6 +137,11 @@ export default function CoursesScreen() {
     return enrolledCourses.filter((c) => c.progress === 100);
   }, [enrolledCourses]);
 
+  const filteredBrowseCourses = useMemo(() => {
+    if (selectedCategory === "All") return browseMoreCourses;
+    return browseMoreCourses.filter(c => c.category.toLowerCase() === selectedCategory.toLowerCase());
+  }, [browseMoreCourses, selectedCategory]);
+
   const totalEnrolled = enrolledCourses.length;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -159,7 +150,7 @@ export default function CoursesScreen() {
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <View>
-            <Text style={[styles.pageTitle, { color: colors.foreground }]}>
+            <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>
               {user ? "My Courses" : "Explore Courses"}
             </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
@@ -167,12 +158,53 @@ export default function CoursesScreen() {
             </Text>
           </View>
           <Pressable
-            style={[styles.cartBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={styles.cartBtn}
             onPress={() => router.push("/(tabs)/store")}
           >
-            <Ionicons name="cart-outline" size={20} color={colors.foreground} />
+            <Ionicons name="cart" size={20} color="#0B6FAD" />
           </Pressable>
         </View>
+      </View>
+
+      {/* Category filter chips row */}
+      <View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipsScroll}
+        >
+          {["All", "Robotics", "IoT", "Coding", "Embedded Systems"].map((cat) => {
+            const isActive = selectedCategory === cat;
+            return (
+              <Pressable
+                key={cat}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isActive ? "#0B6FAD" : "#FFFFFF",
+                    borderColor: isActive ? "transparent" : "#D6E9F2",
+                  }
+                ]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                {isActive && (
+                  <Ionicons name="checkmark" size={14} color="#FFF" style={{ marginRight: 4 }} />
+                )}
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color: isActive ? "#FFF" : "#5A7A8C",
+                      fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
+                    }
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -182,7 +214,7 @@ export default function CoursesScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4F46E5']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0B6FAD']} />
         }
       >
         {isLoading ? (
@@ -190,21 +222,20 @@ export default function CoursesScreen() {
             <CourseCardSkeleton />
             <CourseCardSkeleton />
             <CourseCardSkeleton />
-            <CourseCardSkeleton />
           </View>
         ) : (
           <>
             {!user ? (
-              <View style={[styles.guestBanner, { backgroundColor: colors.accent, borderColor: colors.border }]}>
+              <View style={[styles.guestBanner, { backgroundColor: "#DCF7F4", borderColor: "#D6E9F2" }]}>
                 <View style={styles.guestBannerHeader}>
-                  <Feather name="info" size={18} color={colors.primary} />
-                  <Text style={[styles.guestBannerTitle, { color: colors.foreground }]}>Sign in to track progress</Text>
+                  <Ionicons name="information-circle" size={18} color="#0B6FAD" />
+                  <Text style={[styles.guestBannerTitle, { color: "#0F2A3D" }]}>Sign in to track progress</Text>
                 </View>
                 <Text style={[styles.guestBannerText, { color: colors.mutedForeground }]}>
                   Log in to see your enrolled courses, certificates, and continue learning where you left off.
                 </Text>
                 <Pressable
-                  style={[styles.guestBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.guestBtn, { backgroundColor: "#0B6FAD" }]}
                   onPress={() => router.push("/(auth)/login")}
                 >
                   <Text style={styles.guestBtnText}>Sign In</Text>
@@ -212,9 +243,9 @@ export default function CoursesScreen() {
               </View>
             ) : totalEnrolled === 0 ? (
               <View style={[styles.emptyEnrolledCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Feather name="book-open" size={32} color={colors.mutedForeground} style={{ opacity: 0.5, marginBottom: 8 }} />
+                <Ionicons name="book" size={32} color={colors.mutedForeground} style={{ opacity: 0.5, marginBottom: 8 }} />
                 <Text style={[styles.emptyEnrolledText, { color: colors.mutedForeground }]}>
-                  No enrolled courses yet. Choose a course from "Browse More" below to start learning!
+                  No enrolled courses yet. Choose a course from "Explore Courses" below to start learning!
                 </Text>
               </View>
             ) : (
@@ -226,16 +257,16 @@ export default function CoursesScreen() {
                     onPress={() => setIsInProgressOpen(!isInProgressOpen)}
                   >
                     <View style={styles.sectionLeft}>
-                      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                      <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>
                         In Progress
                       </Text>
-                      <View style={[styles.countBadge, { backgroundColor: "#FF6B3526" }]}>
-                        <Text style={[styles.countText, { color: "#FF6B35" }]}>
+                      <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
+                        <Text style={[styles.countText, { color: "#0B6FAD" }]}>
                           {inProgressCourses.length}
                         </Text>
                       </View>
                     </View>
-                    <Feather
+                    <Ionicons
                       name={isInProgressOpen ? "chevron-up" : "chevron-down"}
                       size={20}
                       color={colors.mutedForeground}
@@ -264,16 +295,16 @@ export default function CoursesScreen() {
                       onPress={() => setIsNotStartedOpen(!isNotStartedOpen)}
                     >
                       <View style={styles.sectionLeft}>
-                        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                        <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>
                           Not Started
                         </Text>
-                        <View style={[styles.countBadge, { backgroundColor: "#4F46E526" }]}>
-                          <Text style={[styles.countText, { color: "#4F46E5" }]}>
+                        <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
+                          <Text style={[styles.countText, { color: "#0B6FAD" }]}>
                             {notStartedCourses.length}
                           </Text>
                         </View>
                       </View>
-                      <Feather
+                      <Ionicons
                         name={isNotStartedOpen ? "chevron-up" : "chevron-down"}
                         size={20}
                         color={colors.mutedForeground}
@@ -296,16 +327,16 @@ export default function CoursesScreen() {
                     onPress={() => setIsCompletedOpen(!isCompletedOpen)}
                   >
                     <View style={styles.sectionLeft}>
-                      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                      <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>
                         Completed
                       </Text>
-                      <View style={[styles.countBadge, { backgroundColor: "#10B98126" }]}>
-                        <Text style={[styles.countText, { color: "#10B981" }]}>
+                      <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
+                        <Text style={[styles.countText, { color: "#0B6FAD" }]}>
                           {completedCourses.length}
                         </Text>
                       </View>
                     </View>
-                    <Feather
+                    <Ionicons
                       name={isCompletedOpen ? "chevron-up" : "chevron-down"}
                       size={20}
                       color={colors.mutedForeground}
@@ -329,13 +360,13 @@ export default function CoursesScreen() {
             )}
 
             {/* BROWSE MORE SUBSECTION */}
-            {browseMoreCourses.length > 0 && (
+            {filteredBrowseCourses.length > 0 && (
               <View style={[styles.browseSection, { marginTop: 24 }]}>
-                <Text style={[styles.browseTitle, { color: colors.foreground }]}>
-                  {user ? "Browse More Courses" : "Explore Courses"}
+                <Text style={[styles.browseTitle, { color: "#0F2A3D" }]}>
+                  {user ? "Explore More Courses" : "Explore Courses"}
                 </Text>
                 <View style={styles.gridContainer}>
-                  {browseMoreCourses.map((course) => (
+                  {filteredBrowseCourses.map((course) => (
                     <CourseCard key={course.id} course={course} />
                   ))}
                 </View>
@@ -361,55 +392,30 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 26,
-    fontWeight: "800",
+    fontFamily: "Fredoka_700Bold",
   },
   subtitle: {
     fontSize: 14,
+    fontFamily: "Inter_400Regular",
     marginTop: 2,
   },
   cartBtn: {
     width: 44,
     height: 44,
-    borderRadius: 14,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
+    borderColor: "#D6E9F2",
   },
   scroll: {
     paddingTop: 16,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingTop: 80,
-    paddingHorizontal: 40,
-    gap: 16,
-  },
-  emptyIcon: {
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    textAlign: "center",
-  },
-  browseBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  browseBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#FFF",
   },
   section: {
     marginBottom: 2,
@@ -429,7 +435,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
   countBadge: {
     borderRadius: 12,
@@ -438,7 +444,7 @@ const styles = StyleSheet.create({
   },
   countText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
   sectionContent: {
     gap: 12,
@@ -448,6 +454,7 @@ const styles = StyleSheet.create({
   },
   emptySection: {
     fontSize: 14,
+    fontFamily: "Inter_400Regular",
     paddingLeft: 16,
     paddingVertical: 12,
   },
@@ -468,6 +475,7 @@ const styles = StyleSheet.create({
   },
   emptyEnrolledText: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 18,
   },
@@ -476,7 +484,7 @@ const styles = StyleSheet.create({
   },
   browseTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
     marginLeft: 20,
     marginBottom: 16,
   },
@@ -502,22 +510,41 @@ const styles = StyleSheet.create({
   },
   guestBannerTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
   guestBannerText: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
     lineHeight: 18,
   },
   guestBtn: {
     alignSelf: "flex-start",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 20,
     marginTop: 4,
   },
   guestBtnText: {
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
+  },
+  
+  // Custom filter chips styling
+  filterChipsScroll: {
+    paddingHorizontal: 20,
+    gap: 10,
+    paddingBottom: 8,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 13,
   },
 });

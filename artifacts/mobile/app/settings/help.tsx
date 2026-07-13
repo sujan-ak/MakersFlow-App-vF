@@ -1,4 +1,4 @@
-﻿import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -23,7 +23,7 @@ export default function HelpScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Help & Support</Text>
         <View style={{ width: 22 }} />
@@ -34,9 +34,9 @@ export default function HelpScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Contact options */}
-        <View style={[styles.contactCard, { backgroundColor: colors.primary }]}>
+        <View style={[styles.contactCard, { backgroundColor: "#0B6FAD" }]}>
           <View style={styles.contactRow}>
-            <Feather name="mail" size={20} color="#FFF" />
+            <Ionicons name="mail" size={20} color="#FFF" />
             <View>
               <Text style={styles.contactLabel}>Email Support</Text>
               <Text style={styles.contactValue}>support@makersflow.com</Text>
@@ -44,7 +44,7 @@ export default function HelpScreen() {
           </View>
           <View style={[styles.contactDivider, { backgroundColor: "rgba(255,255,255,0.2)" }]} />
           <View style={styles.contactRow}>
-            <Feather name="phone" size={20} color="#FFF" />
+            <Ionicons name="call" size={20} color="#FFF" />
             <View>
               <Text style={styles.contactLabel}>Phone Support</Text>
               <Text style={styles.contactValue}>+91 98765 43210</Text>
@@ -57,15 +57,15 @@ export default function HelpScreen() {
         {FAQS.map((faq, idx) => (
           <Pressable
             key={idx}
-            style={[styles.faqItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[styles.faqItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
             onPress={() => setExpanded(expanded === idx ? null : idx)}
           >
             <View style={styles.faqHeader}>
               <Text style={[styles.faqQ, { color: colors.foreground, flex: 1 }]}>{faq.q}</Text>
-              <Feather
+              <Ionicons
                 name={expanded === idx ? "chevron-up" : "chevron-down"}
                 size={18}
-                color={colors.mutedForeground}
+                color="#0B6FAD"
               />
             </View>
             {expanded === idx && (
@@ -88,15 +88,15 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
   contactCard: { borderRadius: 16, padding: 20, gap: 12 },
   contactRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  contactLabel: { fontSize: 12, color: "rgba(255,255,255,0.75)" },
-  contactValue: { fontSize: 15, fontWeight: "700", color: "#FFF" },
+  contactLabel: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular" },
+  contactValue: { fontSize: 15, fontFamily: "Fredoka_700Bold", color: "#FFF" },
   contactDivider: { height: 1 },
-  faqTitle: { fontSize: 18, fontWeight: "700" },
-  faqItem: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 8 },
+  faqTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  faqItem: { borderRadius: 14, borderWidth: 1.5, padding: 16, gap: 8 },
   faqHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  faqQ: { fontSize: 14, fontWeight: "600", lineHeight: 20 },
-  faqA: { fontSize: 14, lineHeight: 20 },
+  faqQ: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", lineHeight: 20 },
+  faqA: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
 });

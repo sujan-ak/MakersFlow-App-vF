@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -9,9 +9,11 @@ import {
   SafeAreaView,
   Platform,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { markOnboardingSeen } from "@/lib/onboardingStorage";
+import { LinearGradient } from "expo-linear-gradient";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -20,30 +22,32 @@ const SLIDES = [
     id: "1",
     title: "Learn STEM Skills",
     subtitle: "From Robotics to AI and everything in between",
-    icon: "cpu" as const,
-    glowColor: "rgba(79, 70, 229, 0.15)",
-    iconColor: "#4F46E5",
+    icon: "hardware-chip" as const,
+    glowColor: "rgba(11, 111, 173, 0.15)",
+    iconColor: "#0B6FAD",
   },
   {
     id: "2",
     title: "Take Video Courses",
     subtitle: "Expert-led lessons on Arduino, IoT, Drones and more",
-    icon: "tv" as const,
-    glowColor: "rgba(249, 115, 22, 0.15)",
-    iconColor: "#F97316",
+    icon: "play-circle" as const,
+    glowColor: "rgba(23, 229, 211, 0.15)",
+    iconColor: "#17E5D3",
   },
   {
     id: "3",
     title: "Earn Certificates",
     subtitle: "Complete courses and showcase your skills",
-    icon: "award" as const,
+    icon: "ribbon" as const,
     glowColor: "rgba(16, 185, 129, 0.15)",
     iconColor: "#10B981",
   },
 ];
 
 export default function OnboardingScreen() {
+  const insets = useSafeAreaInsets();
   const [activeIndex, setActiveIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
 
   const handleBrowse = async () => {
     await markOnboardingSeen();
@@ -63,11 +67,17 @@ export default function OnboardingScreen() {
     }
   };
 
-  const browseLabel = activeIndex === SLIDES.length - 1 ? "Get Started" : "Browse";
-
   return (
     <SafeAreaView style={styles.container}>
+      {/* Skip button top-right */}
+      <View style={[styles.topHeader, { top: insets.top + 16 }]}>
+        <Pressable onPress={handleBrowse}>
+          <Text style={styles.skipLinkText}>Skip</Text>
+        </Pressable>
+      </View>
+
       <FlatList
+        ref={flatListRef}
         data={SLIDES}
         horizontal
         pagingEnabled
@@ -77,7 +87,7 @@ export default function OnboardingScreen() {
         renderItem={({ item }) => (
           <View style={styles.slide}>
             <View style={[styles.illustrationContainer, { backgroundColor: item.glowColor }]}>
-              <Feather name={item.icon} size={80} color={item.iconColor} />
+              <Ionicons name={item.icon} size={80} color={item.iconColor} />
             </View>
             <View style={styles.textContainer}>
               <Text style={styles.title}>{item.title}</Text>
@@ -95,8 +105,10 @@ export default function OnboardingScreen() {
               style={[
                 styles.dot,
                 {
-                  backgroundColor: idx === activeIndex ? "#4F46E5" : "#444",
-                  width: idx === activeIndex ? 16 : 8,
+                  backgroundColor: idx === activeIndex ? "#0B6FAD" : "#444",
+                  width: idx === activeIndex ? 18 : 6,
+                  height: idx === activeIndex ? 6 : 6,
+                  borderRadius: 3,
                 },
               ]}
             />
@@ -105,12 +117,35 @@ export default function OnboardingScreen() {
       </View>
 
       <View style={styles.bottomBar}>
-        <Pressable style={styles.browseBtn} onPress={handleBrowse}>
-          <Text style={styles.browseBtnText}>{browseLabel}</Text>
+        <Pressable onPress={handleSignIn} style={styles.signInLinkBtn}>
+          <Text style={styles.signInLinkText}>Sign In</Text>
         </Pressable>
-        <Pressable style={styles.signInBtn} onPress={handleSignIn}>
-          <Text style={styles.signInBtnText}>Sign In</Text>
-        </Pressable>
+
+        {activeIndex === SLIDES.length - 1 ? (
+          <Pressable onPress={handleBrowse}>
+            <LinearGradient
+              colors={["#0B6FAD", "#17E5D3"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.gradientBtn}
+            >
+              <Text style={styles.gradientBtnText}>Get Started</Text>
+              <Ionicons name="rocket" size={16} color="#FFF" />
+            </LinearGradient>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={styles.nextPillBtn}
+            onPress={() => {
+              const nextIndex = activeIndex + 1;
+              flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+              setActiveIndex(nextIndex);
+            }}
+          >
+            <Text style={styles.nextPillText}>Next</Text>
+            <Ionicons name="chevron-forward" size={16} color="#FFF" />
+          </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -118,6 +153,16 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0A0A0A" },
+  topHeader: {
+    position: "absolute",
+    right: 20,
+    zIndex: 10,
+  },
+  skipLinkText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#888",
+  },
   slide: {
     width: SCREEN_WIDTH,
     flex: 1,
@@ -143,11 +188,11 @@ const styles = StyleSheet.create({
     }),
   },
   textContainer: { alignItems: "center", gap: 12 },
-  title: { fontSize: 24, fontWeight: "800", color: "#FFFFFF", textAlign: "center" },
-  subtitle: { fontSize: 15, color: "#A3A3A3", textAlign: "center", lineHeight: 22, paddingHorizontal: 20 },
-  footerContainer: { height: 64, alignItems: "center", justifyContent: "center", marginBottom: 20 },
+  title: { fontSize: 24, fontFamily: "Fredoka_700Bold", color: "#FFFFFF", textAlign: "center" },
+  subtitle: { fontSize: 15, fontFamily: "Inter_400Regular", color: "#A3A3A3", textAlign: "center", lineHeight: 22, paddingHorizontal: 20 },
+  footerContainer: { height: 48, alignItems: "center", justifyContent: "center", marginBottom: 20 },
   dotsContainer: { flexDirection: "row", gap: 8, alignItems: "center" },
-  dot: { height: 8, borderRadius: 4 },
+  dot: {},
   bottomBar: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -158,8 +203,42 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#171717",
   },
-  browseBtn: { paddingVertical: 12, paddingHorizontal: 20 },
-  browseBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
-  signInBtn: { backgroundColor: "#4F46E5", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 },
-  signInBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  signInLinkBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  signInLinkText: {
+    color: "#0B6FAD",
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  nextPillBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#0B6FAD",
+    height: 48,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+  },
+  nextPillText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontFamily: "Fredoka_600SemiBold",
+  },
+  gradientBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 48,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+  },
+  gradientBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontFamily: "Fredoka_600SemiBold",
+  },
 });

@@ -1,16 +1,12 @@
-import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 
 function TabLayout() {
   const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
 
   return (
@@ -21,28 +17,23 @@ function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.background,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          elevation: 0,
-          height: isWeb ? 84 : undefined,
+          backgroundColor: colors.card,
+          borderTopWidth: 0,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          overflow: "hidden",
+          height: isWeb ? 84 : 72,
+          paddingBottom: Platform.OS === "ios" ? 20 : 12,
+          paddingTop: 10,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          elevation: 8,
           zIndex: 999,
         },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
-            />
-          ) : null,
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "600" as const,
           fontFamily: "Inter_600SemiBold",
         },
       }}
@@ -51,7 +42,7 @@ function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={22} color={color} />,
           tabBarAccessibilityLabel: "Home tab",
         }}
       />
@@ -59,7 +50,7 @@ function TabLayout() {
         name="store"
         options={{
           title: "Store",
-          tabBarIcon: ({ color }) => <Feather name="shopping-bag" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="storefront" size={22} color={color} />,
           tabBarAccessibilityLabel: "Store tab",
         }}
       />
@@ -67,7 +58,7 @@ function TabLayout() {
         name="courses"
         options={{
           title: "Courses",
-          tabBarIcon: ({ color }) => <Feather name="book-open" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="book" size={22} color={color} />,
           tabBarAccessibilityLabel: "Courses tab",
         }}
       />
@@ -75,7 +66,7 @@ function TabLayout() {
         name="search"
         options={{
           title: "Search",
-          tabBarIcon: ({ color }) => <Feather name="search" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="search" size={22} color={color} />,
           tabBarAccessibilityLabel: "Search tab",
         }}
       />
@@ -97,7 +88,7 @@ function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={22} color={color} />,
           tabBarAccessibilityLabel: "Profile tab",
         }}
       />

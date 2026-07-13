@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -15,7 +15,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Alert } from "react-native";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 
@@ -55,6 +54,10 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [otpProvider, setOtpProvider] = useState<'sms' | 'whatsapp'>('sms');
+
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
   async function handleGoogleLogin() {
     if (googleLoading) return;
@@ -125,7 +128,6 @@ export default function LoginScreen() {
     setPhoneError("");
     setError("");
 
-    // Remove all non-digit characters for validation
     const digitsOnly = phone.replace(/\D/g, "");
 
     if (!phone) {
@@ -138,7 +140,6 @@ export default function LoginScreen() {
       return;
     }
 
-    // Format to E.164 (add +91 if not present)
     let formattedPhone = phone.trim();
     if (!formattedPhone.startsWith("+")) {
       formattedPhone = "+91" + digitsOnly;
@@ -169,6 +170,7 @@ export default function LoginScreen() {
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={[styles.content, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
           <Image
@@ -176,25 +178,31 @@ export default function LoginScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={[styles.appName, { color: colors.foreground }]}>MAKERSFLOW</Text>
+          <Text style={[styles.appName, { color: "#0F2A3D" }]}>MAKERSFLOW</Text>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>Learn · Explore · Excel</Text>
         </View>
 
         <View style={styles.form}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Welcome back</Text>
+          <Text style={[styles.title, { color: "#0F2A3D" }]}>Welcome back!</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Sign in to continue your learning journey</Text>
 
           {error ? (
-            <View style={[styles.errorBox, { backgroundColor: "#FEE2E2" }]}>
-              <Feather name="alert-circle" size={14} color="#DC2626" />
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color="#DC2626" />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
+          {/* Email input */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: emailError ? "#DC2626" : colors.border }]}>
-              <Feather name="mail" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Email</Text>
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: emailError ? "#DC2626" : (emailFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="mail" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={email}
@@ -202,6 +210,8 @@ export default function LoginScreen() {
                   setEmail(text);
                   setEmailError("");
                 }}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
                 placeholder="Enter your email"
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="email-address"
@@ -212,10 +222,16 @@ export default function LoginScreen() {
             {emailError ? <Text style={styles.fieldError}>{emailError}</Text> : null}
           </View>
 
+          {/* Password input */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: passwordError ? "#DC2626" : colors.border }]}>
-              <Feather name="lock" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.label, { color: "#0F2A3D" }]}>Password</Text>
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={password}
@@ -223,30 +239,37 @@ export default function LoginScreen() {
                   setPassword(text);
                   setPasswordError("");
                 }}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
                 placeholder="Enter your password"
                 placeholderTextColor={colors.mutedForeground}
                 secureTextEntry={!showPassword}
               />
               <Pressable onPress={() => setShowPassword(!showPassword)}>
-                <Feather name={showPassword ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
+                <Ionicons name={showPassword ? "eye-off" : "eye"} size={16} color={colors.mutedForeground} />
               </Pressable>
             </View>
             {passwordError ? <Text style={styles.fieldError}>{passwordError}</Text> : null}
           </View>
 
           <Pressable onPress={() => router.push("/(auth)/forgot-password")} style={styles.forgotRow}>
-            <Text style={[styles.forgotText, { color: colors.primary }]}>Forgot password?</Text>
+            <Text style={[styles.forgotText, { color: "#0B6FAD" }]}>Forgot password?</Text>
           </Pressable>
 
+          {/* Login Button */}
           <Pressable
-            style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+            style={({ pressed }) => [styles.loginBtn, { backgroundColor: "#0B6FAD", opacity: pressed ? 0.85 : 1 }]}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginBtnText}>Sign In</Text>
+              <View style={styles.primaryButtonContent}>
+                <Ionicons name="log-in" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.loginBtnText}>Sign In</Text>
+                <Ionicons name="chevron-forward" size={18} color="#fff" style={{ marginLeft: "auto" }} />
+              </View>
             )}
           </Pressable>
 
@@ -256,10 +279,11 @@ export default function LoginScreen() {
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
           </View>
 
+          {/* Google Login button */}
           <Pressable
             style={({ pressed }) => [
               styles.googleBtn,
-              { backgroundColor: "#FFFFFF", borderColor: "#E5E7EB", opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2", opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={handleGoogleLogin}
             disabled={googleLoading}
@@ -268,7 +292,7 @@ export default function LoginScreen() {
               <ActivityIndicator size="small" color="#1F2937" />
             ) : (
               <>
-                <Feather name="chrome" size={18} color="#1F2937" />
+                <Ionicons name="logo-google" size={18} color="#1F2937" style={{ marginRight: 8 }} />
                 <Text style={[styles.googleBtnText, { color: "#1F2937" }]}>Continue with Google</Text>
               </>
             )}
@@ -280,28 +304,44 @@ export default function LoginScreen() {
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
           </View>
 
+          {/* Phone Provider Toggle */}
           <View style={styles.providerToggle}>
-            {(['sms', 'whatsapp'] as const).map((p) => (
-              <Pressable
-                key={p}
-                style={[styles.providerBtn, otpProvider === p && { backgroundColor: colors.primary }]}
-                onPress={() => setOtpProvider(p)}
-              >
-                <Feather
-                  name={p === 'sms' ? 'message-square' : 'message-circle'}
-                  size={14}
-                  color={otpProvider === p ? '#fff' : colors.mutedForeground}
-                />
-                <Text style={[styles.providerBtnText, { color: otpProvider === p ? '#fff' : colors.mutedForeground }]}>
-                  {p === 'sms' ? 'SMS' : 'WhatsApp'}
-                </Text>
-              </Pressable>
-            ))}
+            {(['sms', 'whatsapp'] as const).map((p) => {
+              const isActive = otpProvider === p;
+              return (
+                <Pressable
+                  key={p}
+                  style={[
+                    styles.providerBtn,
+                    {
+                      backgroundColor: isActive ? "#0B6FAD" : "#FFFFFF",
+                      borderColor: isActive ? "transparent" : "#D6E9F2",
+                    }
+                  ]}
+                  onPress={() => setOtpProvider(p)}
+                >
+                  <Ionicons
+                    name={p === 'sms' ? 'chatbubble-ellipses' : 'chatbubbles'}
+                    size={14}
+                    color={isActive ? '#fff' : '#5A7A8C'}
+                  />
+                  <Text style={[styles.providerBtnText, { color: isActive ? '#fff' : '#5A7A8C' }]}>
+                    {p === 'sms' ? 'SMS' : 'WhatsApp'}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
+          {/* Phone number field */}
           <View style={styles.fieldGroup}>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: phoneError ? "#DC2626" : colors.border }]}>
-              <Feather name="smartphone" size={16} color={colors.mutedForeground} />
+            <View style={[
+              styles.inputWrapper, 
+              { 
+                borderColor: phoneError ? "#DC2626" : (phoneFocused ? "#0B6FAD" : "#D6E9F2"),
+              }
+            ]}>
+              <Ionicons name="call" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={phone}
@@ -309,6 +349,8 @@ export default function LoginScreen() {
                   setPhone(text);
                   setPhoneError("");
                 }}
+                onFocus={() => setPhoneFocused(true)}
+                onBlur={() => setPhoneFocused(false)}
                 placeholder="+91 98765 43210"
                 placeholderTextColor={colors.mutedForeground}
                 keyboardType="phone-pad"
@@ -319,14 +361,18 @@ export default function LoginScreen() {
           </View>
 
           <Pressable
-            style={({ pressed }) => [styles.phoneBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+            style={({ pressed }) => [styles.phoneBtn, { backgroundColor: "#0B6FAD", opacity: pressed ? 0.85 : 1 }]}
             onPress={handlePhoneLogin}
             disabled={phoneLoading}
           >
             {phoneLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginBtnText}>Send OTP</Text>
+              <View style={styles.primaryButtonContent}>
+                <Ionicons name="mail" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.loginBtnText}>Send OTP</Text>
+                <Ionicons name="chevron-forward" size={18} color="#fff" style={{ marginLeft: "auto" }} />
+              </View>
             )}
           </Pressable>
         </View>
@@ -334,7 +380,7 @@ export default function LoginScreen() {
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Don't have an account? </Text>
           <Pressable onPress={() => router.push("/(auth)/register")}>
-            <Text style={[styles.registerLink, { color: colors.primary }]}>Sign Up</Text>
+            <Text style={[styles.registerLink, { color: "#0B6FAD" }]}>Sign Up</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -351,56 +397,76 @@ const styles = StyleSheet.create({
     height: 80,
     marginBottom: 12,
   },
-  appName: { fontSize: 24, fontWeight: "800", letterSpacing: 2 },
-  tagline: { fontSize: 13, marginTop: 4 },
+  appName: { fontSize: 24, fontFamily: "Fredoka_700Bold", letterSpacing: 2 },
+  tagline: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 4 },
   form: { gap: 16 },
-  title: { fontSize: 26, fontWeight: "800" },
-  subtitle: { fontSize: 14, marginTop: -8 },
-  errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10 },
-  errorText: { fontSize: 13, color: "#DC2626", flex: 1 },
+  title: { fontSize: 26, fontFamily: "Fredoka_700Bold" },
+  subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", marginTop: -8 },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FEE2E2",
+  },
+  errorText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#DC2626", flex: 1 },
   fieldGroup: { gap: 6 },
-  label: { fontSize: 14, fontWeight: "600" },
+  label: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
+    minHeight: 48,
   },
-  input: { flex: 1, fontSize: 15 },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   forgotRow: { alignSelf: "flex-end", marginTop: -8 },
-  forgotText: { fontSize: 13, fontWeight: "600" },
+  forgotText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   loginBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 4,
+    paddingHorizontal: 20,
   },
-  loginBtnText: { fontSize: 16, fontWeight: "700", color: "#FFF" },
+  loginBtnText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   divider: { flex: 1, height: 1 },
-  dividerText: { fontSize: 13 },
+  dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   googleBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
+    paddingVertical: 12,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
   },
-  googleBtnText: { fontSize: 15, fontWeight: "600" },
+  googleBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   phoneBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
-  footer: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
-  footerText: { fontSize: 14 },
-  registerLink: { fontSize: 14, fontWeight: "700" },
-  fieldError: { fontSize: 12, color: "#DC2626", marginTop: 4 },
+  primaryButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    gap: 8,
+  },
+  footer: { flexDirection: "row", justifyContent: "center", marginTop: 24, paddingBottom: 24 },
+  footerText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  registerLink: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  fieldError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#DC2626", marginTop: 4 },
   providerToggle: {
     flexDirection: 'row',
     gap: 8,
@@ -412,10 +478,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
-  providerBtnText: { fontSize: 13, fontWeight: '600' },
+  providerBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

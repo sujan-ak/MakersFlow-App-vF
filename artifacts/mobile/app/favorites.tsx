@@ -1,8 +1,10 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -14,11 +16,20 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFavorites } from "@/context/FavoritesContext";
 import { useColors } from "@/hooks/useColors";
+import { useCart } from "@/context/CartContext";
 
 export default function FavoritesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { favoriteCourses, watchLaterLessons, downloadedLessons, removeFromWatchLater, removeFavoriteCourse, removeDownloadedLesson } = useFavorites();
+  const { addToCart, items: cartItems } = useCart();
+  const {
+    favoriteCourses,
+    watchLaterLessons,
+    downloadedLessons,
+    removeFromWatchLater,
+    removeFavoriteCourse,
+    removeDownloadedLesson,
+  } = useFavorites();
   const [activeTab, setActiveTab] = useState<"favorites" | "watchLater" | "downloads">("favorites");
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -26,9 +37,9 @@ export default function FavoritesScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Favorites, Watch Later & Downloads</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Favorites & Downloads</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -37,7 +48,7 @@ export default function FavoritesScreen() {
         <Pressable
           style={[
             styles.tabButton,
-            activeTab === "favorites" && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
+            activeTab === "favorites" && { borderBottomColor: "#0B6FAD", borderBottomWidth: 2 },
           ]}
           onPress={() => {
             Haptics.selectionAsync();
@@ -47,8 +58,7 @@ export default function FavoritesScreen() {
           <Text
             style={[
               styles.tabButtonText,
-              { color: activeTab === "favorites" ? colors.primary : colors.mutedForeground },
-              activeTab === "favorites" && { fontWeight: "700" },
+              { color: activeTab === "favorites" ? "#0B6FAD" : "#5A7A8C" },
             ]}
           >
             Favorites {favoriteCourses.length > 0 ? `(${favoriteCourses.length})` : ""}
@@ -57,7 +67,7 @@ export default function FavoritesScreen() {
         <Pressable
           style={[
             styles.tabButton,
-            activeTab === "watchLater" && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
+            activeTab === "watchLater" && { borderBottomColor: "#0B6FAD", borderBottomWidth: 2 },
           ]}
           onPress={() => {
             Haptics.selectionAsync();
@@ -67,8 +77,7 @@ export default function FavoritesScreen() {
           <Text
             style={[
               styles.tabButtonText,
-              { color: activeTab === "watchLater" ? colors.primary : colors.mutedForeground },
-              activeTab === "watchLater" && { fontWeight: "700" },
+              { color: activeTab === "watchLater" ? "#0B6FAD" : "#5A7A8C" },
             ]}
           >
             Watch Later {watchLaterLessons.length > 0 ? `(${watchLaterLessons.length})` : ""}
@@ -77,7 +86,7 @@ export default function FavoritesScreen() {
         <Pressable
           style={[
             styles.tabButton,
-            activeTab === "downloads" && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
+            activeTab === "downloads" && { borderBottomColor: "#0B6FAD", borderBottomWidth: 2 },
           ]}
           onPress={() => {
             Haptics.selectionAsync();
@@ -87,8 +96,7 @@ export default function FavoritesScreen() {
           <Text
             style={[
               styles.tabButtonText,
-              { color: activeTab === "downloads" ? colors.primary : colors.mutedForeground },
-              activeTab === "downloads" && { fontWeight: "700" },
+              { color: activeTab === "downloads" ? "#0B6FAD" : "#5A7A8C" },
             ]}
           >
             Downloads {downloadedLessons.length > 0 ? `(${downloadedLessons.length})` : ""}
@@ -106,8 +114,8 @@ export default function FavoritesScreen() {
         {activeTab === "favorites" ? (
           favoriteCourses.length === 0 ? (
             <View style={styles.emptyState}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-                <Feather name="heart" size={48} color={colors.mutedForeground} />
+              <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+                <Ionicons name="heart" size={48} color="#0B6FAD" />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
                 No favorites yet
@@ -116,11 +124,18 @@ export default function FavoritesScreen() {
                 Tap the heart icon on any course to save it here
               </Text>
               <Pressable
-                style={[styles.emptyButton, { backgroundColor: colors.primary }]}
-                onPress={() => router.push("/(tabs)/search")}
+                style={{ height: 48, marginTop: 8 }}
+                onPress={() => router.push("/(tabs)/courses")}
               >
-                <Text style={styles.emptyButtonText}>Browse Courses</Text>
-                <Feather name="arrow-right" size={16} color="#FFF" />
+                <LinearGradient
+                  colors={["#0B6FAD", "#17E5D3"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.emptyButtonGradient}
+                >
+                  <Text style={styles.emptyButtonText}>Browse Courses</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#FFF" />
+                </LinearGradient>
               </Pressable>
             </View>
           ) : (
@@ -128,7 +143,7 @@ export default function FavoritesScreen() {
               {favoriteCourses.map((fav) => (
                 <Pressable
                   key={fav.courseId}
-                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
                   onPress={() =>
                     router.push({
                       pathname: "/course/[id]",
@@ -147,7 +162,7 @@ export default function FavoritesScreen() {
                     />
                   ) : (
                     <View style={[styles.lessonThumbnail, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
-                      <Feather name="book" size={24} color={colors.mutedForeground} />
+                      <Ionicons name="book" size={24} color={colors.mutedForeground} />
                     </View>
                   )}
                   <View style={styles.lessonInfo}>
@@ -157,9 +172,44 @@ export default function FavoritesScreen() {
                     <Text style={[styles.lessonTitle, { color: colors.foreground }]} numberOfLines={2}>
                       {fav.courseTitle}
                     </Text>
-                    <Text style={[styles.lessonCourse, { color: colors.primary, marginTop: 2 }]}>
+                    <Text style={[styles.lessonCourse, { color: "#0B6FAD", marginTop: 2 }]}>
                       {fav.isFree ? "Free" : `₹${fav.price}`}
                     </Text>
+
+                    {/* Move to Cart Deep Sea Pill */}
+                    {!fav.isFree && (
+                      <Pressable
+                        style={styles.moveToCartBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          const productForCart: any = {
+                            id: String(fav.courseId),
+                            title: fav.courseTitle,
+                            category: "digital",
+                            subcategory: fav.category || "Courses",
+                            price: Number(fav.price) || 0,
+                            originalPrice: Number(fav.price) || 0,
+                            thumbnail: fav.courseThumbnail,
+                            description: "",
+                            rating: 4.8,
+                            reviews: 0,
+                            inStock: true,
+                            features: [],
+                            is_course: true,
+                            course_id: String(fav.courseId),
+                          };
+                          if (!cartItems.some((i) => i.product.id === productForCart.id)) {
+                            addToCart(productForCart);
+                          }
+                          removeFavoriteCourse(fav.courseId);
+                          Alert.alert("Moved to Cart", `${fav.courseTitle} has been moved to your cart.`);
+                        }}
+                      >
+                        <Ionicons name="cart" size={14} color="#FFF" />
+                        <Text style={styles.moveToCartText}>Move to Cart</Text>
+                      </Pressable>
+                    )}
                   </View>
                   <Pressable
                     style={styles.removeButton}
@@ -169,7 +219,7 @@ export default function FavoritesScreen() {
                       removeFavoriteCourse(fav.courseId);
                     }}
                   >
-                    <Feather name="heart" size={18} color="#EF4444" />
+                    <Ionicons name="heart" size={18} color="#EF4444" />
                   </Pressable>
                 </Pressable>
               ))}
@@ -177,70 +227,70 @@ export default function FavoritesScreen() {
           )
         ) : activeTab === "watchLater" ? (
           watchLaterLessons.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-              <Feather name="bookmark" size={48} color={colors.mutedForeground} />
+            <View style={styles.emptyState}>
+              <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+                <Ionicons name="bookmark" size={48} color="#0B6FAD" />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                No saved lessons
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                Save lessons while watching to find them here later
+              </Text>
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              No saved lessons
-            </Text>
-            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-              Save lessons while watching to find them here later
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.lessonsList}>
-            {watchLaterLessons.map((lesson) => (
-              <Pressable
-                key={lesson.lessonId}
-                style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() =>
-                  router.push({
-                    pathname: "/course/learn",
-                    params: { courseId: lesson.courseId, lessonId: lesson.lessonId },
-                  })
-                }
-              >
-                {lesson.courseThumbnail ? (
-                  <Image
-                    source={
-                      typeof lesson.courseThumbnail === "string"
-                        ? { uri: lesson.courseThumbnail }
-                        : lesson.courseThumbnail
-                    }
-                    style={styles.lessonThumbnail}
-                  />
-                ) : (
-                  <View style={[styles.lessonThumbnail, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
-                    <Feather name="play" size={24} color={colors.mutedForeground} />
-                  </View>
-                )}
-                <View style={styles.lessonInfo}>
-                  <Text style={[styles.lessonCourse, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {lesson.courseTitle}
-                  </Text>
-                  <Text style={[styles.lessonTitle, { color: colors.foreground }]} numberOfLines={2}>
-                    {lesson.lessonTitle}
-                  </Text>
-                </View>
+          ) : (
+            <View style={styles.lessonsList}>
+              {watchLaterLessons.map((lesson) => (
                 <Pressable
-                  style={styles.removeButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    removeFromWatchLater(lesson.lessonId);
-                  }}
+                  key={lesson.lessonId}
+                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/course/learn",
+                      params: { courseId: lesson.courseId, lessonId: lesson.lessonId },
+                    })
+                  }
                 >
-                  <Feather name="x" size={18} color={colors.mutedForeground} />
+                  {lesson.courseThumbnail ? (
+                    <Image
+                      source={
+                        typeof lesson.courseThumbnail === "string"
+                          ? { uri: lesson.courseThumbnail }
+                          : lesson.courseThumbnail
+                      }
+                      style={styles.lessonThumbnail}
+                    />
+                  ) : (
+                    <View style={[styles.lessonThumbnail, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
+                      <Ionicons name="play" size={24} color={colors.mutedForeground} />
+                    </View>
+                  )}
+                  <View style={styles.lessonInfo}>
+                    <Text style={[styles.lessonCourse, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {lesson.courseTitle}
+                    </Text>
+                    <Text style={[styles.lessonTitle, { color: colors.foreground }]} numberOfLines={2}>
+                      {lesson.lessonTitle}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.removeButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      removeFromWatchLater(lesson.lessonId);
+                    }}
+                  >
+                    <Ionicons name="bookmark" size={18} color="#0B6FAD" />
+                  </Pressable>
                 </Pressable>
-              </Pressable>
-            ))}
-          </View>
+              ))}
+            </View>
           )
         ) : downloadedLessons.length === 0 ? (
           <View style={styles.emptyState}>
-            <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
-              <Feather name="download-cloud" size={48} color={colors.mutedForeground} />
+            <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
+              <Ionicons name="download" size={48} color="#0B6FAD" />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
               No downloads
@@ -254,7 +304,7 @@ export default function FavoritesScreen() {
             {downloadedLessons.map((lesson) => (
               <Pressable
                 key={lesson.lessonId}
-                style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
                 onPress={() =>
                   router.push({
                     pathname: "/course/learn",
@@ -273,7 +323,7 @@ export default function FavoritesScreen() {
                   />
                 ) : (
                   <View style={[styles.lessonThumbnail, { backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" }]}>
-                    <Feather name="download" size={24} color={colors.mutedForeground} />
+                    <Ionicons name="download" size={24} color={colors.mutedForeground} />
                   </View>
                 )}
                 <View style={styles.lessonInfo}>
@@ -292,7 +342,7 @@ export default function FavoritesScreen() {
                     removeDownloadedLesson(lesson.lessonId);
                   }}
                 >
-                  <Feather name="trash-2" size={18} color={colors.mutedForeground} />
+                  <Ionicons name="trash" size={18} color="#EF4444" />
                 </Pressable>
               </Pressable>
             ))}
@@ -313,7 +363,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
   tabSelector: {
     flexDirection: "row",
     borderBottomWidth: 1,
@@ -326,8 +376,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 14,
+    fontFamily: "Fredoka_600SemiBold",
   },
   emptyState: {
     alignItems: "center",
@@ -344,33 +394,30 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
     marginBottom: 8,
     textAlign: "center",
   },
   emptyText: {
     fontSize: 14,
+    fontFamily: "Inter_400Regular",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 24,
   },
-  emptyButton: {
+  emptyButtonGradient: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 24,
   },
   emptyButtonText: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
-  },
-  coursesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 16,
   },
   lessonsList: {
     gap: 12,
@@ -379,14 +426,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
     gap: 12,
   },
   lessonThumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 70,
+    height: 70,
+    borderRadius: 12,
   },
   lessonInfo: {
     flex: 1,
@@ -394,11 +441,11 @@ const styles = StyleSheet.create({
   },
   lessonCourse: {
     fontSize: 12,
-    fontWeight: "500",
+    fontFamily: "Inter_600SemiBold",
   },
   lessonTitle: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: "Fredoka_600SemiBold",
     lineHeight: 18,
   },
   removeButton: {
@@ -407,5 +454,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  moveToCartBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#0B6FAD",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  moveToCartText: {
+    fontSize: 12,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#FFF",
   },
 });

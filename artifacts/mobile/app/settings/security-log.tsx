@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+import { Ionicons } from "@expo/vector-icons";
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -35,7 +35,7 @@ export default function SecurityLogScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Login Activity</Text>
         <View style={{ width: 40 }} />
@@ -43,16 +43,18 @@ export default function SecurityLogScreen() {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
+          <ActivityIndicator size="large" color="#0B6FAD" />
+          <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Loading...</Text>
         </View>
       ) : events.length === 0 ? (
         <View style={styles.center}>
-          <Feather name="shield" size={40} color={colors.mutedForeground} />
+          <View style={styles.emptyIconCircle}>
+            <Ionicons name="shield" size={40} color="#0B6FAD" />
+          </View>
           <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No login events yet</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
           {events.map((e) => {
             const date = new Date(e.created_at).toLocaleString('en-IN', {
               day: 'numeric', month: 'short', year: 'numeric',
@@ -65,13 +67,13 @@ export default function SecurityLogScreen() {
                   styles.card,
                   {
                     backgroundColor: e.is_flagged ? '#FEF2F2' : colors.card,
-                    borderColor: e.is_flagged ? '#FCA5A5' : colors.border,
+                    borderColor: e.is_flagged ? '#FCA5A5' : '#D6E9F2',
                   },
                 ]}
               >
                 <View style={styles.cardRow}>
-                  <Feather
-                    name={e.is_flagged ? 'alert-triangle' : 'check-circle'}
+                  <Ionicons
+                    name={e.is_flagged ? 'alert-circle' : 'checkmark-circle'}
                     size={18}
                     color={e.is_flagged ? '#DC2626' : '#10B981'}
                   />
@@ -100,13 +102,22 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, gap: 8 },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', textAlign: 'center' },
+  headerTitle: { flex: 1, fontSize: 17, fontFamily: 'Fredoka_700Bold', textAlign: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyText: { fontSize: 15 },
-  card: { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 10 },
+  emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#DCF7F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  card: { borderRadius: 16, borderWidth: 1.5, padding: 14, marginBottom: 10 },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  deviceText: { fontSize: 14, fontWeight: '600' },
-  dateText: { fontSize: 12, marginTop: 2 },
+  deviceText: { fontSize: 14, fontFamily: 'Fredoka_600SemiBold' },
+  dateText: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
   flagBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  flagText: { fontSize: 11, fontWeight: '700', color: '#DC2626' },
+  flagText: { fontSize: 11, fontFamily: 'Fredoka_700Bold', color: '#DC2626' },
 });

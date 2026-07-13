@@ -1,4 +1,4 @@
-import { Feather, MaterialIcons } from "@expo/vector-icons";
+import { Feather, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState, useEffect } from "react";
@@ -31,7 +31,6 @@ import { markLessonComplete, upsertLessonProgress, fetchCourseLessonsProgress } 
 import { supabase } from "@/lib/supabase";
 import { getEnrollment, isExpired, completeCourse } from "@/services/enrollmentService";
 import { onSessionExpired } from "@/lib/sessionEvents";
-import * as WebBrowser from "expo-web-browser";
 import { ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -65,7 +64,6 @@ export default function LearnScreen() {
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [resumeFromTime, setResumeFromTime] = useState(0);
-  // TODO: DRM/piracy protection required before production
   const [downloadedPath, setDownloadedPathState] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
@@ -76,12 +74,11 @@ export default function LearnScreen() {
     getDownloadedPath(activeModuleId).then(setDownloadedPathState);
   }, [activeModuleId]);
 
-  // Admin-managed lesson resources (PDFs / links / files)
   const [lessonResources, setLessonResources] = useState<
     { id: string; title: string; url: string; type: string | null }[]
   >([]);
-  // Admin-authored key learning points (Notes tab)
   const [lessonNotes, setLessonNotes] = useState<string[]>([]);
+  
   useEffect(() => {
     if (!activeModuleId) { setLessonResources([]); return; }
     (async () => {
@@ -93,7 +90,6 @@ export default function LearnScreen() {
           .order("created_at", { ascending: true });
         setLessonResources((data as any[]) ?? []);
       } catch {
-        // Table may not exist yet — the tab simply shows "No resources yet"
         setLessonResources([]);
       }
       try {
@@ -109,8 +105,6 @@ export default function LearnScreen() {
     })();
   }, [activeModuleId]);
 
-  // If the auth token can't refresh while a video is playing, progress saves
-  // start failing silently. Surface a re-login prompt instead (PDF §1).
   useEffect(() => {
     const unsubscribe = onSessionExpired(() => {
       Alert.alert(
@@ -161,7 +155,7 @@ export default function LearnScreen() {
             }))
           );
           setLessons(flatLessons);
-          setTotalLessons(flatLessons.length); // store authoritative total
+          setTotalLessons(flatLessons.length);
 
           if (!activeModuleId && flatLessons.length > 0) {
             setActiveModuleId(lessonId || moduleId || flatLessons[0].id);
@@ -200,8 +194,8 @@ export default function LearnScreen() {
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
+        <ActivityIndicator size="large" color="#0B6FAD" />
+        <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Loading...</Text>
       </View>
     );
   }
@@ -209,12 +203,11 @@ export default function LearnScreen() {
   if (!course) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.foreground, padding: 24 }}>Course not found.</Text>
+        <Text style={{ color: colors.foreground, padding: 24, fontFamily: "Inter_400Regular" }}>Course not found.</Text>
       </View>
     );
   }
 
-  // Use totalLessons (authoritative DB count) for progress calculation
   const isCourseCompleted = !!enrollment?.completed_at;
   const completedModules = lessonsProgress.filter((p) => p.is_completed).length;
   const effectiveTotalLessons = totalLessons || lessons.length;
@@ -320,7 +313,6 @@ export default function LearnScreen() {
   const handleVideoComplete = async () => {
     if (!user?.id || !courseId || !activeModule?.id) return;
     await markLessonComplete(user.id, courseId, activeModule.id);
-    // Sync ProgressContext so progress bars elsewhere update
     await completeModule(courseId, activeModule.id);
     let updatedProgress: any[] = [];
     try {
@@ -331,7 +323,6 @@ export default function LearnScreen() {
     }
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Navigate to certificate only on FIRST completion
     const completedCount = updatedProgress.filter((p) => p.is_completed).length;
     if (totalLessons > 0 && completedCount >= totalLessons) {
       if (!enrollment?.completed_at) {
@@ -409,7 +400,6 @@ export default function LearnScreen() {
     setIsMarkingComplete(true);
     try {
       await markLessonComplete(user.id, courseId, activeModule.id);
-      // Sync ProgressContext so progress bars elsewhere update
       await completeModule(courseId, activeModule.id);
       let updatedProgress: any[] = [];
       try {
@@ -420,7 +410,6 @@ export default function LearnScreen() {
       }
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Navigate to certificate only on FIRST completion
       const completedCount = updatedProgress.filter((p) => p.is_completed).length;
       if (totalLessons > 0 && completedCount >= totalLessons) {
         if (!enrollment?.completed_at) {
@@ -448,7 +437,6 @@ export default function LearnScreen() {
         }
       }
 
-      // Show completion modal
       setShowCompleteModal(true);
     } catch (e) {
       console.error('[markComplete] error:', e);
@@ -489,7 +477,6 @@ export default function LearnScreen() {
     const isCompleted = modProgress?.is_completed || false;
     const isCurrent = activeModuleId === module.id;
     
-    // Sequential unlocking: can access if previous is completed or is first
     const previousModule = lessons[index - 1];
     const prevProgress = previousModule ? lessonsProgress.find((p) => String(p.lesson_id) === previousModule.id) : null;
     const canAccess = index === 0 || !previousModule || prevProgress?.is_completed;
@@ -511,34 +498,34 @@ export default function LearnScreen() {
             router.replace("/(tabs)/courses");
           }
         }} style={styles.backBtn}>
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
           Learning
         </Text>
         <Pressable onPress={handleWatchLaterToggle} style={styles.watchLaterBtn}>
-          <MaterialIcons
-            name={isSaved ? "bookmark" : "bookmark-border"}
-            size={22}
-            color={isSaved ? colors.primary : colors.mutedForeground}
+          <Ionicons
+            name={isSaved ? "bookmark" : "bookmark-outline"}
+            size={20}
+            color={isSaved ? "#0B6FAD" : colors.mutedForeground}
           />
         </Pressable>
         <Pressable onPress={handleDownload} style={styles.downloadBtn} disabled={isDownloading}>
           {isDownloading ? (
             <View style={{ alignItems: 'center' }}>
-              <RNActivityIndicator size="small" color={colors.primary} />
+              <RNActivityIndicator size="small" color="#0B6FAD" />
               {downloadProgress !== null && (
-                <Text style={{ fontSize: 9, color: colors.primary }}>
+                <Text style={{ fontSize: 9, color: "#0B6FAD", fontFamily: "Inter_400Regular" }}>
                   {Math.round(downloadProgress * 100)}%
                 </Text>
               )}
             </View>
           ) : (
-            <Feather name="download" size={20} color={downloadedPath ? '#10B981' : colors.mutedForeground} />
+            <Ionicons name="download" size={20} color={downloadedPath ? '#17E5D3' : colors.mutedForeground} />
           )}
         </Pressable>
         <Pressable onPress={handleShare} style={styles.shareBtn}>
-          <Feather name="share-2" size={20} color={colors.mutedForeground} />
+          <Ionicons name="share-social" size={20} color={colors.mutedForeground} />
         </Pressable>
       </View>
 
@@ -549,8 +536,8 @@ export default function LearnScreen() {
         </Text>
         <View style={styles.statsRow}>
           <View style={styles.statItemInline}>
-            <Feather name="check-circle" size={13} color="#10B981" />
-            <Text style={[styles.statTextInline, { color: colors.foreground, fontWeight: "600" }]}>
+            <Ionicons name="checkmark-circle" size={13} color="#17E5D3" />
+            <Text style={[styles.statTextInline, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
               {completedModules} Completed
             </Text>
           </View>
@@ -558,8 +545,8 @@ export default function LearnScreen() {
             <>
               <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItemInline}>
-                <Feather name="circle" size={13} color={colors.mutedForeground} />
-                <Text style={[styles.statTextInline, { color: colors.mutedForeground }]}>
+                <Ionicons name="ellipse-outline" size={13} color={colors.mutedForeground} />
+                <Text style={[styles.statTextInline, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                   {remainingModules} Remaining
                 </Text>
               </View>
@@ -571,7 +558,7 @@ export default function LearnScreen() {
             <View
               style={[
                 styles.progressBarFill,
-                { width: `${progressPercentage}%` as any, backgroundColor: colors.primary },
+                { width: `${progressPercentage}%` as any, backgroundColor: "#0B6FAD" },
               ]}
             />
           </View>
@@ -581,7 +568,7 @@ export default function LearnScreen() {
         </View>
       </View>
 
-      {/* Video Player - Compact 25% screen */}
+      {/* Video Player */}
       <View style={styles.videoWrapper}>
         {isEnrollmentExpired ? (
           <View style={[styles.expiryBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -590,7 +577,7 @@ export default function LearnScreen() {
               Your access expired on {enrollment?.expires_at ? new Date(enrollment.expires_at).toLocaleDateString() : ""}
             </Text>
             <Pressable
-              style={[styles.supportBtn, { backgroundColor: colors.primary }]}
+              style={[styles.supportBtn, { backgroundColor: "#0B6FAD" }]}
               onPress={() => {
                 Linking.openURL('mailto:support@edodwaja.com?subject=Course Access Renewal');
               }}
@@ -608,31 +595,31 @@ export default function LearnScreen() {
         )}
       </View>
 
-      {/* Mark Complete Button */}
+      {/* Mark Complete Button - Secondary Aqua / Pill h48 */}
       {(() => {
         const isAlreadyComplete = !!(lessonsProgress.find(
           (p) => String(p.lesson_id) === String(activeModule?.id)
         )?.is_completed);
         return isAlreadyComplete ? (
           <View style={[styles.actionButtonContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-            <View style={[styles.markCompleteBtn, { backgroundColor: '#10B981' }]}>
-              <Feather name="check-circle" size={16} color="#FFF" />
-              <Text style={styles.markCompleteBtnText}>Lesson Completed</Text>
+            <View style={[styles.markCompleteBtn, { backgroundColor: '#DCF7F4' }]}>
+              <Ionicons name="checkmark-circle" size={16} color="#0B6FAD" />
+              <Text style={[styles.markCompleteBtnText, { color: '#0B6FAD' }]}>Lesson Completed</Text>
             </View>
           </View>
         ) : (
           <View style={[styles.actionButtonContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
             <Pressable
-              style={[styles.markCompleteBtn, { backgroundColor: isMarkingComplete ? colors.muted : colors.primary }]}
+              style={[styles.markCompleteBtn, { backgroundColor: '#17E5D3' }]}
               onPress={handleMarkComplete}
               disabled={isMarkingComplete}
             >
               {isMarkingComplete ? (
-                <RNActivityIndicator size="small" color="#FFF" />
+                <RNActivityIndicator size="small" color="#063B4F" />
               ) : (
-                <Feather name="check" size={16} color="#FFF" />
+                <Ionicons name="checkmark" size={16} color="#063B4F" />
               )}
-              <Text style={styles.markCompleteBtnText}>
+              <Text style={[styles.markCompleteBtnText, { color: '#063B4F' }]}>
                 {isMarkingComplete ? 'Saving...' : 'Mark Lesson Complete'}
               </Text>
             </Pressable>
@@ -648,7 +635,7 @@ export default function LearnScreen() {
         ].map(([key, label]) => (
           <Pressable
             key={key}
-            style={[styles.tab, activeTab === key && { borderBottomColor: colors.primary }]}
+            style={[styles.tab, activeTab === key && { borderBottomColor: "#0B6FAD" }]}
             onPress={() => {
               Haptics.selectionAsync();
               setActiveTab(key as any);
@@ -658,8 +645,8 @@ export default function LearnScreen() {
               style={[
                 styles.tabText,
                 {
-                  color: activeTab === key ? colors.primary : colors.mutedForeground,
-                  fontWeight: activeTab === key ? "700" : "600",
+                  color: activeTab === key ? "#0B6FAD" : colors.mutedForeground,
+                  fontFamily: activeTab === key ? "Fredoka_700Bold" : "Fredoka_600SemiBold",
                 },
               ]}
             >
@@ -700,9 +687,11 @@ export default function LearnScreen() {
                   style={[
                     styles.modItem,
                     {
-                      backgroundColor: isCurrent ? colors.accent : colors.card,
-                      borderColor: isCompleted ? "#10B981" : isCurrent ? colors.primary : colors.border,
-                      borderWidth: isCompleted || isCurrent ? 2 : 1,
+                      backgroundColor: isCurrent ? "#DCF7F4" : colors.card,
+                      borderColor: isCompleted ? "#17E5D3" : "#D6E9F2",
+                      borderWidth: isCompleted ? 1.5 : 1,
+                      borderLeftWidth: isCurrent ? 5 : isCompleted ? 1.5 : 1,
+                      borderLeftColor: isCurrent ? "#0B6FAD" : isCompleted ? "#17E5D3" : "#D6E9F2",
                       opacity: isLocked ? 0.5 : 1,
                     },
                   ]}
@@ -713,16 +702,16 @@ export default function LearnScreen() {
                     style={[
                       styles.modNum,
                       {
-                        backgroundColor: isCompleted ? "#DCFCE7" : isCurrent ? colors.accent : colors.muted,
+                        backgroundColor: isCompleted ? "#DCF7F4" : isCurrent ? "#DCF7F4" : colors.muted,
                       },
                     ]}
                   >
                     {isCompleted ? (
-                      <Feather name="check" size={14} color="#10B981" />
+                      <Ionicons name="checkmark" size={14} color="#17E5D3" />
                     ) : isLocked ? (
-                      <Feather name="lock" size={14} color={colors.mutedForeground} />
+                      <Ionicons name="lock-closed" size={14} color="#9CA3AF" />
                     ) : isCurrent ? (
-                      <View style={[styles.currentDot, { backgroundColor: colors.primary }]} />
+                      <View style={[styles.currentDot, { backgroundColor: "#0B6FAD" }]} />
                     ) : (
                       <Text style={[styles.modNumText, { color: colors.mutedForeground }]}>{idx + 1}</Text>
                     )}
@@ -733,8 +722,8 @@ export default function LearnScreen() {
                       style={[
                         styles.modTitle,
                         {
-                          color: isCurrent ? colors.primary : isCompleted ? "#10B981" : colors.foreground,
-                          fontWeight: isCurrent || isCompleted ? "700" : "600",
+                          color: isCurrent ? "#0B6FAD" : isCompleted ? "#17E5D3" : colors.foreground,
+                          fontFamily: isCurrent || isCompleted ? "Fredoka_700Bold" : "Fredoka_600SemiBold",
                         },
                       ]}
                     >
@@ -743,23 +732,23 @@ export default function LearnScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", marginTop: 3 }}>
                       <Text style={[styles.modDuration, { color: colors.mutedForeground }]}>{mod.duration}</Text>
                       {watchedPercentage > 0 && watchedPercentage < 100 && (
-                        <Text style={{ fontSize: 12, color: colors.primary, marginLeft: 6 }}>
+                        <Text style={{ fontSize: 12, color: "#0B6FAD", fontFamily: "Inter_600SemiBold", marginLeft: 6 }}>
                           · {Math.round(watchedPercentage)}% watched
                         </Text>
                       )}
                     </View>
                     {watchedPercentage > 0 && watchedPercentage < 100 && (
                       <View style={{ height: 3, borderRadius: 1.5, width: "80%", backgroundColor: colors.border, marginTop: 6 }}>
-                        <View style={{ height: 3, borderRadius: 1.5, width: `${watchedPercentage}%` as any, backgroundColor: colors.primary }} />
+                        <View style={{ height: 3, borderRadius: 1.5, width: `${watchedPercentage}%` as any, backgroundColor: "#0B6FAD" }} />
                       </View>
                     )}
                   </View>
 
-                  <Feather
-                    name={isCompleted ? "check-circle" : isCurrent ? "play-circle" : isLocked ? "lock" : "circle"}
-                    size={18}
+                  <Ionicons
+                    name={isCompleted ? "checkmark-circle" : isCurrent ? "play-circle" : isLocked ? "lock-closed" : "ellipse-outline"}
+                    size={20}
                     color={
-                      isCompleted ? "#10B981" : isCurrent ? colors.primary : isLocked ? colors.mutedForeground : colors.border
+                      isCompleted ? "#17E5D3" : isCurrent ? "#0B6FAD" : isLocked ? "#9CA3AF" : "#D6E9F2"
                     }
                   />
                 </Pressable>
@@ -768,37 +757,35 @@ export default function LearnScreen() {
           </View>
         )}
 
-        {/* Navigation Buttons */}
+        {/* Navigation Buttons - Pill shapes */}
         <View style={[styles.navButtons, { borderTopColor: colors.border }]}>
           <Pressable
             style={[
               styles.navBtn,
-              styles.navBtnPrev,
-              { backgroundColor: colors.muted, opacity: getPreviousModule() ? 1 : 0.5 },
+              { backgroundColor: "#E8F4F9", borderRadius: 20, height: 40, opacity: getPreviousModule() ? 1 : 0.5 },
             ]}
             onPress={handlePreviousLesson}
             disabled={!getPreviousModule()}
           >
-            <Feather name="chevron-left" size={18} color={colors.foreground} />
-            <Text style={[styles.navBtnText, { color: colors.foreground }]}>Previous</Text>
+            <Ionicons name="chevron-back" size={18} color="#0F2A3D" />
+            <Text style={[styles.navBtnText, { color: "#0F2A3D" }]}>Previous</Text>
           </Pressable>
 
           <Pressable
             style={[
               styles.navBtn,
-              styles.navBtnNext,
-              { backgroundColor: colors.primary, opacity: getNextModule() ? 1 : 0.5 },
+              { backgroundColor: "#0B6FAD", borderRadius: 20, height: 40, opacity: getNextModule() ? 1 : 0.5 },
             ]}
             onPress={handleNextLessonNav}
             disabled={!getNextModule()}
           >
             <Text style={[styles.navBtnText, { color: "#FFF" }]}>Next Lesson</Text>
-            <Feather name="chevron-right" size={18} color="#FFF" />
+            <Ionicons name="chevron-forward" size={18} color="#FFF" />
           </Pressable>
         </View>
       </ScrollView>
 
-      {/* Resume Modal - PHASE 3 */}
+      {/* Resume Modal */}
       <ResumeModal
         visible={showResumeModal}
         resumeTime={resumeFromTime}
@@ -807,7 +794,7 @@ export default function LearnScreen() {
         onClose={() => setShowResumeModal(false)}
       />
 
-      {/* Lesson Complete Modal - PHASE 4 */}
+      {/* Lesson Complete Modal */}
       <LessonCompleteModal
         visible={showCompleteModal}
         lessonTitle={activeModule.title}
@@ -834,9 +821,8 @@ const styles = StyleSheet.create({
   watchLaterBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   downloadBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   shareBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: "700", textAlign: "center" },
+  headerTitle: { flex: 1, fontSize: 17, fontFamily: "Fredoka_700Bold", textAlign: "center" },
   
-  // Compact Course Header
   courseHeader: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -845,7 +831,7 @@ const styles = StyleSheet.create({
   },
   courseTitle: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: "Fredoka_600SemiBold",
     lineHeight: 18,
   },
   statsRow: {
@@ -881,7 +867,7 @@ const styles = StyleSheet.create({
   },
   progressBarText: {
     fontSize: 11,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
     minWidth: 32,
   },
   expiryBanner: {
@@ -896,7 +882,7 @@ const styles = StyleSheet.create({
   },
   expiryText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
     textAlign: "center",
   },
   supportBtn: {
@@ -906,17 +892,13 @@ const styles = StyleSheet.create({
   },
   supportBtnText: {
     color: "#FFF",
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
     fontSize: 14,
   },
-
-  // Video wrapper - 25% screen height
   videoWrapper: {
     width: "100%",
     maxHeight: 220,
   },
-
-  // Mark Complete Button
   actionButtonContainer: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -926,21 +908,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 8,
+    height: 48,
+    borderRadius: 24,
     gap: 8,
   },
   markCompleteBtnText: {
-    color: "#FFF",
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
-
   tabs: { flexDirection: "row", borderBottomWidth: 1 },
   tab: { flex: 1, paddingVertical: 14, alignItems: "center", borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabText: { fontSize: 14 },
   
-  // Professional Lesson List
   moduleList: { padding: 16, gap: 10 },
   modItem: {
     flexDirection: "row",
@@ -951,12 +930,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   modNum: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  modNumText: { fontSize: 13, fontWeight: "700" },
+  modNumText: { fontSize: 13, fontFamily: "Fredoka_700Bold" },
   currentDot: { width: 8, height: 8, borderRadius: 4 },
-  modTitle: { fontSize: 14, fontWeight: "600", lineHeight: 18 },
-  modDuration: { fontSize: 12, marginTop: 3 },
-
-  // Navigation Buttons
+  modTitle: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", lineHeight: 18 },
+  modDuration: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 3 },
   navButtons: {
     flexDirection: "row",
     padding: 16,
@@ -968,14 +945,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 8,
+    height: 40,
+    borderRadius: 20,
     gap: 6,
   },
-  navBtnPrev: {},
-  navBtnNext: {},
   navBtnText: {
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: "Fredoka_700Bold",
   },
 });

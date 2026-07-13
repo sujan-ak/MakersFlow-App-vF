@@ -1,40 +1,62 @@
 const colors = {
   light: {
-    text: "#1A1A2E",
-    tint: "#4F46E5",
-
-    background: "#F8F9FF",
-    foreground: "#1A1A2E",
-
+    text: "#0F2A3D",
+    tint: "#0B6FAD",
+    background: "#F4FAFD",
+    foreground: "#0F2A3D",
     card: "#FFFFFF",
-    cardForeground: "#1A1A2E",
-
-    primary: "#4F46E5",
+    cardForeground: "#0F2A3D",
+    primary: "#0B6FAD",
     primaryForeground: "#FFFFFF",
-
-    secondary: "#F97316",
-    secondaryForeground: "#FFFFFF",
-
-    muted: "#F3F4F6",
-    mutedForeground: "#6B7280",
-
-    accent: "#EEF2FF",
-    accentForeground: "#4F46E5",
-
+    primaryPressed: "#085380",
+    secondary: "#17E5D3",
+    secondaryForeground: "#063B4F",
+    muted: "#E8F4F9",
+    mutedForeground: "#5A7A8C",
+    accent: "#DCF7F4",
+    accentForeground: "#0B6FAD",
     destructive: "#EF4444",
     destructiveForeground: "#FFFFFF",
-
-    border: "#E5E7EB",
-    input: "#E5E7EB",
-
+    border: "#D6E9F2",
+    input: "#D6E9F2",
     success: "#10B981",
     successForeground: "#FFFFFF",
-
     warning: "#F59E0B",
     warningForeground: "#FFFFFF",
+    deepSeaDark: "#085380",
+    aquaLight: "#7FF0E5",
+    gradientStart: "#0B6FAD",
+    gradientEnd: "#17E5D3",
   },
-
+  dark: {
+    text: "#E8F4FD",
+    tint: "#17E5D3",
+    background: "#061824",
+    foreground: "#E8F4FD",
+    card: "#0D2638",
+    cardForeground: "#E8F4FD",
+    primary: "#17E5D3",
+    primaryForeground: "#061824",
+    primaryPressed: "#0BB8A8",
+    secondary: "#0B6FAD",
+    secondaryForeground: "#FFFFFF",
+    muted: "#0D2638",
+    mutedForeground: "#7AADCC",
+    accent: "#0A3352",
+    accentForeground: "#17E5D3",
+    destructive: "#EF4444",
+    destructiveForeground: "#FFFFFF",
+    border: "#0D3550",
+    input: "#0D3550",
+    success: "#10B981",
+    successForeground: "#FFFFFF",
+    warning: "#F59E0B",
+    warningForeground: "#FFFFFF",
+    deepSeaDark: "#085380",
+    aquaLight: "#7FF0E5",
+    gradientStart: "#0B6FAD",
+    gradientEnd: "#17E5D3",
+  },
   radius: 12,
 };
-
 export default colors;

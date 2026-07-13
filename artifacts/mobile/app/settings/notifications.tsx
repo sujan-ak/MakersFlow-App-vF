@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View, Alert } from "react-native";
@@ -95,7 +95,6 @@ export default function NotificationsScreen() {
 
         if (finalStatus === "granted") {
           setPushEnabled(true);
-          // Register this device's Expo push token so the backend can send pushes
           if (user?.id) {
             await registerForPushNotifications(user.id);
           }
@@ -156,7 +155,7 @@ export default function NotificationsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Notifications</Text>
         <View style={{ width: 22 }} />
@@ -166,7 +165,7 @@ export default function NotificationsScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 16 }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2", marginBottom: 16 }]}>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.rowLabel, { color: colors.foreground }]}>Push Notifications</Text>
@@ -175,14 +174,14 @@ export default function NotificationsScreen() {
             <Switch
               value={pushEnabled}
               onValueChange={togglePushNotifications}
-              trackColor={{ true: colors.primary }}
+              trackColor={{ true: "#0B6FAD", false: "#D6E9F2" }}
               thumbColor="#FFF"
               disabled={loading}
             />
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
           {NOTIF_SETTINGS.map((item, idx) => (
             <React.Fragment key={item.key}>
               <View style={styles.row}>
@@ -193,13 +192,13 @@ export default function NotificationsScreen() {
                 <Switch
                   value={prefs[item.key]}
                   onValueChange={() => toggle(item.key)}
-                  trackColor={{ true: colors.primary }}
+                  trackColor={{ true: "#0B6FAD", false: "#D6E9F2" }}
                   thumbColor="#FFF"
                   disabled={loading}
                 />
               </View>
               {idx < NOTIF_SETTINGS.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View style={[styles.divider, { backgroundColor: "#D6E9F2" }]} />
               )}
             </React.Fragment>
           ))}
@@ -219,23 +218,10 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  infoBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  card: { borderRadius: 16, borderWidth: 1.5, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
-  rowLabel: { fontSize: 15, fontWeight: "600" },
-  rowSub: { fontSize: 12, marginTop: 1 },
+  rowLabel: { fontSize: 15, fontFamily: "Fredoka_600SemiBold" },
+  rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   divider: { height: 1, marginLeft: 16 },
 });

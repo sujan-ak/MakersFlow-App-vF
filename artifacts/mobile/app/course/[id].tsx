@@ -1,4 +1,5 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "expo-router";
@@ -21,7 +22,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge } from "@/components/Badge";
-import { FavoriteButton } from "@/components/FavoriteButton";
 import { StarRating } from "@/components/StarRating";
 import { DetailSkeleton } from "@/components/SkeletonLoader";
 import { QUIZZES } from "@/data/mockData";
@@ -46,7 +46,7 @@ export default function CourseDetailScreen() {
   const { requireAuth } = useRequireAuth();
 
   const [course, setCourse] = useState<any>(null);
-  const [modules, setModules] = useState<any[]>([]); // flat lessons
+  const [modules, setModules] = useState<any[]>([]);
   const [lessonsProgress, setLessonsProgress] = useState<any[]>([]);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrollment, setEnrollment] = useState<any>(null);
@@ -55,7 +55,8 @@ export default function CourseDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const isFavorite = course ? isFavoriteCourse(course.id) : false;
 
-  // Review state
+  const [activeTab, setActiveTab] = useState<"overview" | "lessons" | "reviews">("overview");
+
   const [myReview, setMyReview] = useState<{ rating: number; comment: string } | null>(null);
   const [draftRating, setDraftRating] = useState(0);
   const [draftComment, setDraftComment] = useState("");
@@ -132,7 +133,6 @@ export default function CourseDetailScreen() {
         }
       }
 
-      // Load reviews
       let reviews: any[] = [];
       try {
         reviews = await fetchCourseReviews(id);
@@ -147,7 +147,6 @@ export default function CourseDetailScreen() {
         setAvgRating(null);
       }
 
-      // Load user's review
       if (user?.id) {
         const mine = await fetchMyReview(user.id, id);
         if (mine) {
@@ -187,13 +186,10 @@ export default function CourseDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Pressable onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace("/(tabs)/courses");
-          }
-        }} style={styles.backBtn}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          if (router.canGoBack()) router.back();
+          else router.replace("/(tabs)/courses");
+        }} style={styles.backCircleWeb}>
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.errorText, { color: colors.foreground }]}>Course not found.</Text>
       </View>
@@ -215,7 +211,6 @@ export default function CourseDetailScreen() {
 
   const totalDurationMin = modules.reduce((sum, m) => sum + (m.duration_minutes || 0), 0);
   const displayDuration = totalDurationMin > 0 ? `${totalDurationMin} mins` : "Self-paced";
-  const hasStarted = progress > 0;
 
   const handleFavoriteToggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -241,93 +236,84 @@ export default function CourseDetailScreen() {
       setIsEnrolling(true);
 
       try {
-      // ── BUG FIX (paid enrollment never visible) ────────────────────────────
-      // Previously paid courses were "enrolled" instantly with
-      // payment_status: 'pending' and the UI flipped to enrolled with a
-      // success alert — no payment ever happened, the enrollment stayed
-      // 'pending' forever, and (correctly) never unlocked / never showed as a
-      // real enrollment. Paid courses must go through checkout: find the
-      // linked store product and send the user to payment. Fulfilment then
-      // creates the real enrollment (complete_paid_order RPC / webhook).
-      if (!course.isFree) {
-        const { data: linkedProduct } = await supabase
-          .from("products")
-          .select("id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock")
-          .eq("course_id", Number(course.id))
-          .maybeSingle();
+        if (!course.isFree) {
+          const { data: linkedProduct } = await supabase
+            .from("products")
+            .select("id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock")
+            .eq("course_id", Number(course.id))
+            .maybeSingle();
 
-        if (!linkedProduct) {
-          Alert.alert(
-            "Purchase unavailable",
-            "This course can't be purchased right now. Please try again later or contact support.",
-          );
+          if (!linkedProduct) {
+            Alert.alert(
+              "Purchase unavailable",
+              "This course can't be purchased right now. Please try again later or contact support.",
+            );
+            return;
+          }
+
+          const productForCart: any = {
+            id: String(linkedProduct.id),
+            title: linkedProduct.title || course.title,
+            category: "digital",
+            subcategory: linkedProduct.subcategory || "Courses",
+            price: Number(linkedProduct.price) || course.price,
+            originalPrice: Number(linkedProduct.original_price) || Number(linkedProduct.price) || course.price,
+            thumbnail: linkedProduct.thumbnail_url ? { uri: linkedProduct.thumbnail_url } : course.thumbnail,
+            description: linkedProduct.description || course.description,
+            rating: 4.8,
+            reviews: 0,
+            inStock: true,
+            features: [],
+            is_course: true,
+            course_id: String(course.id),
+          };
+
+          if (!cartItems.some((i) => i.product.id === productForCart.id)) {
+            addToCart(productForCart);
+          }
+          router.push("/store/checkout");
           return;
         }
 
-        const productForCart: any = {
-          id: String(linkedProduct.id),
-          title: linkedProduct.title || course.title,
-          category: "digital",
-          subcategory: linkedProduct.subcategory || "Courses",
-          price: Number(linkedProduct.price) || course.price,
-          originalPrice: Number(linkedProduct.original_price) || Number(linkedProduct.price) || course.price,
-          thumbnail: linkedProduct.thumbnail_url ? { uri: linkedProduct.thumbnail_url } : course.thumbnail,
-          description: linkedProduct.description || course.description,
-          rating: 4.8,
-          reviews: 0,
-          inStock: true,
-          features: [],
-          is_course: true,
-          course_id: String(course.id),
-        };
+        await enrollInCourse(user.id, course.id, course.isFree);
+        setIsEnrolled(true);
 
-        if (!cartItems.some((i) => i.product.id === productForCart.id)) {
-          addToCart(productForCart);
-        }
-        router.push("/store/checkout");
-        return;
+        const progressData = await fetchCourseLessonsProgress(user.id, course.id);
+        setLessonsProgress(progressData);
+        
+        Alert.alert(
+          "Enrollment Successful!",
+          `You've successfully enrolled in "${course.title}". Ready to start learning?`,
+          [
+            {
+              text: "View Course",
+              style: "cancel",
+              onPress: () => {
+                setIsEnrolling(false);
+              },
+            },
+            {
+              text: "Start Learning",
+              onPress: () => {
+                setIsEnrolling(false);
+                router.push({ 
+                  pathname: "/course/learn", 
+                  params: { courseId: course.id, moduleId: modules[0]?.id || "" } 
+                });
+              },
+            },
+          ]
+        );
+      } catch (error) {
+        console.error('[CourseDetail] Enrollment error:', error);
+        Alert.alert(
+          "Enrollment Failed",
+          "Something went wrong. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsEnrolling(false);
       }
-
-      // Free course — enroll directly, exactly as before.
-      await enrollInCourse(user.id, course.id, course.isFree);
-      setIsEnrolled(true);
-
-      const progressData = await fetchCourseLessonsProgress(user.id, course.id);
-      setLessonsProgress(progressData);
-      
-      Alert.alert(
-        "Enrollment Successful!",
-        `You've successfully enrolled in "${course.title}". Ready to start learning?`,
-        [
-          {
-            text: "View Course",
-            style: "cancel",
-            onPress: () => {
-              setIsEnrolling(false);
-            },
-          },
-          {
-            text: "Start Learning",
-            onPress: () => {
-              setIsEnrolling(false);
-              router.push({ 
-                pathname: "/course/learn", 
-                params: { courseId: course.id, moduleId: modules[0]?.id || "" } 
-              });
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('[CourseDetail] Enrollment error:', error);
-      Alert.alert(
-        "Enrollment Failed",
-        "Something went wrong. Please try again.",
-        [{ text: "OK" }]
-      );
-    } finally {
-      setIsEnrolling(false);
-    }
     });
   };
 
@@ -338,20 +324,16 @@ export default function CourseDetailScreen() {
       await upsertReview(user.id, course.id, draftRating, draftComment);
       setMyReview({ rating: draftRating, comment: draftComment });
       setReviewSubmitted(true);
-      // Reviews are moderated: it stays visible only to this user until an
-      // admin approves it (RLS returns approved reviews + the user's own).
       Alert.alert(
         "Review submitted",
         "Thanks! Your review is pending approval and will be visible to everyone once approved.",
       );
-      // Refresh reviews list & avg in real-time
       const reviews = await fetchCourseReviews(course.id);
       setAllReviews(reviews);
       if (reviews.length > 0) {
         const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
         setAvgRating(Math.round(avg * 10) / 10);
       }
-      // Auto-hide thanks message after 3s
       setTimeout(() => setReviewSubmitted(false), 3000);
     } catch (err) {
       console.error("[CourseDetail] review submit error:", err);
@@ -360,6 +342,8 @@ export default function CourseDetailScreen() {
       setReviewSubmitting(false);
     }
   };
+
+  const topOffset = Platform.OS === "web" ? 67 : insets.top;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -370,31 +354,42 @@ export default function CourseDetailScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            colors={['#0B6FAD']}
           />
         }
       >
-        {/* Thumbnail */}
+        {/* Thumbnail Hero Area with overlaid actions */}
         <View style={styles.thumbnailContainer}>
           <Image source={course.thumbnail} style={styles.thumbnail} />
           <View style={styles.overlay} />
           <Pressable
-            style={[styles.backCircle, { top: (Platform.OS === "web" ? 67 : insets.top) + 8 }]}
+            style={[styles.backCircle, { top: topOffset + 8 }]}
             onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace("/(tabs)/courses");
-              }
+              if (router.canGoBack()) router.back();
+              else router.replace("/(tabs)/courses");
             }}
           >
-            <Feather name="arrow-left" size={20} color="#FFF" />
+            <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
           </Pressable>
+          
+          {/* Overlaid Wishlist button */}
           <Pressable
-            style={[styles.shareCircle, { top: (Platform.OS === "web" ? 67 : insets.top) + 8 }]}
+            style={[styles.favoriteCircle, { top: topOffset + 8 }]}
+            onPress={handleFavoriteToggle}
+          >
+            <Ionicons
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={20}
+              color={isFavorite ? "#EF4444" : "#0B6FAD"}
+            />
+          </Pressable>
+
+          {/* Overlaid Share button */}
+          <Pressable
+            style={[styles.shareCircle, { top: topOffset + 8 }]}
             onPress={handleShare}
           >
-            <Feather name="share-2" size={20} color="#FFF" />
+            <Ionicons name="share-social" size={20} color="#0B6FAD" />
           </Pressable>
           <View style={[styles.thumbnailBadge, { bottom: 16, left: 16 }]}>
             <Badge label={course.level} variant="primary" />
@@ -403,310 +398,338 @@ export default function CourseDetailScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          <View style={[styles.categoryBadge, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.categoryText, { color: colors.primary }]}>{course.category}</Text>
+          <View style={[styles.categoryBadge, { backgroundColor: "#DCF7F4" }]}>
+            <Text style={[styles.categoryText, { color: "#0B6FAD" }]}>{course.category}</Text>
           </View>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { color: colors.foreground, flex: 1 }]}>{course.title}</Text>
-            <FavoriteButton
-              isFavorite={isFavorite}
-              onPress={handleFavoriteToggle}
-              size={20}
-            />
           </View>
           <Text style={[styles.instructor, { color: colors.mutedForeground }]}>By {course.instructor}</Text>
 
-          {/* Stats row — live data */}
-          <View style={[styles.statsRow, { backgroundColor: colors.muted, borderRadius: 14 }]}>
+          {/* Stats strip */}
+          <View style={styles.statsStrip}>
             {[
               { icon: "star", value: avgRating != null ? avgRating.toFixed(1) : "—", label: "Rating" },
               { icon: "book", value: modules.length > 0 ? `${modules.length}` : "—", label: "Lessons" },
-              { icon: "clock", value: displayDuration, label: "Duration" },
-              { icon: "message-circle", value: `${allReviews.length}`, label: "Reviews" },
+              { icon: "time", value: displayDuration, label: "Duration" },
             ].map((s) => (
-              <View key={s.label} style={styles.statItem}>
-                <Feather name={s.icon as any} size={16} color={colors.primary} />
-                <Text style={[styles.statValue, { color: colors.foreground }]}>{s.value}</Text>
-                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
+              <View key={s.label} style={[styles.statChip, { backgroundColor: "#DCF7F4" }]}>
+                <Ionicons name={s.icon as any} size={18} color="#0B6FAD" />
+                <Text style={[styles.statValue, { color: "#0B6FAD" }]}>{s.value}</Text>
+                <Text style={[styles.statLabel, { color: "#5A7A8C" }]}>{s.label}</Text>
               </View>
             ))}
           </View>
 
-          {/* Description */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About this course</Text>
-          <Text style={[styles.description, { color: colors.mutedForeground }]}>{course.description}</Text>
-
-          {/* Tags */}
-          <View style={styles.tags}>
-            {course.tags.map((tag: any) => (
-              <View key={tag} style={[styles.tag, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Progress (if enrolled) */}
-          {isEnrolled && (
-            <View style={[styles.progressCard, { backgroundColor: colors.accent, borderColor: colors.primary }]}>
-              <View style={styles.progressHeader}>
-                <View>
-                  <Text style={[styles.progressLabel, { color: colors.primary }]}>Your Progress</Text>
-                  <Text style={[styles.progressPct, { color: colors.primary }]}>{progress}%</Text>
-                </View>
-                {isCourseCompleted && (
-                  <View style={[styles.completeBadge, { backgroundColor: "#10B981" }]}>
-                    <Feather name="award" size={16} color="#FFF" />
-                    <Text style={styles.completeBadgeText}>Completed</Text>
-                  </View>
-                )}
-              </View>
-              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[styles.progressFill, { width: `${progress}%` as any, backgroundColor: colors.primary }]}
-                />
-              </View>
-              <View style={styles.progressStats}>
-                <Text style={[styles.progressSub, { color: colors.foreground }]}>
-                  {completedModules} of {modules.length} lessons completed
+          {/* Tab bar */}
+          <View style={styles.tabBar}>
+            {(["overview", "lessons", "reviews"] as const).map((tab) => (
+              <Pressable
+                key={tab}
+                style={[
+                  styles.tabItem,
+                  activeTab === tab && { borderBottomColor: "#0B6FAD", borderBottomWidth: 2 }
+                ]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    { color: activeTab === tab ? "#0B6FAD" : "#5A7A8C" },
+                    activeTab === tab && { fontFamily: "Inter_600SemiBold" }
+                  ]}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </Text>
-                {remainingModules > 0 && (
-                  <Text style={[styles.progressRemaining, { color: colors.mutedForeground }]}>
-                    {remainingModules} remaining
-                  </Text>
-                )}
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Tab contents */}
+          {activeTab === "overview" && (
+            <View style={{ gap: 12 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About this course</Text>
+              <Text style={[styles.description, { color: colors.mutedForeground }]}>{course.description}</Text>
+
+              {/* Tags */}
+              <View style={styles.tags}>
+                {course.tags.map((tag: any) => (
+                  <View key={tag} style={[styles.tag, { backgroundColor: colors.muted }]}>
+                    <Text style={[styles.tagText, { color: colors.mutedForeground }]}>{tag}</Text>
+                  </View>
+                ))}
               </View>
             </View>
           )}
 
-          {/* Curriculum */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Curriculum</Text>
-          <Text style={[styles.curriculumSubtitle, { color: colors.mutedForeground }]}>
-            {modules.length} lessons · {displayDuration}
-          </Text>
-          {modules.map((mod, idx) => {
-            const modProgress = lessonsProgress.find((p) => String(p.lesson_id) === String(mod.id));
-            const isCompleted = modProgress?.is_completed === true;
-            const watchedPercentage = modProgress?.watch_percentage || 0;
-
-            return (
-              <Pressable
-                key={mod.id}
-                style={[
-                  styles.moduleItem,
-                  { 
-                    backgroundColor: colors.card, 
-                    borderColor: isCompleted ? "#10B981" : colors.border,
-                    borderWidth: isCompleted ? 2 : 1
-                  },
-                ]}
-                onPress={() => {
-                  if (isEnrolled) {
-                    router.push({ pathname: "/course/learn", params: { courseId: course.id, moduleId: mod.id } });
-                  }
-                }}
-              >
-                <View
-                  style={[
-                    styles.moduleNum,
-                    { backgroundColor: isCompleted ? "#DCFCE7" : colors.muted },
-                  ]}
-                >
-                  {isCompleted ? (
-                    <Feather name="check" size={14} color="#10B981" />
-                  ) : (
-                    <Text style={[styles.moduleNumText, { color: colors.mutedForeground }]}>{idx + 1}</Text>
-                  )}
-                </View>
-                <View style={styles.moduleInfo}>
-                  <Text style={[styles.moduleTitle, { color: isCompleted ? "#10B981" : colors.foreground }]}>
-                    {mod.title}
-                  </Text>
-                  <View style={styles.moduleMetaRow}>
-                    <Feather name="clock" size={11} color={colors.mutedForeground} />
-                    <Text style={[styles.moduleDuration, { color: colors.mutedForeground }]}>{mod.duration}</Text>
-                    {watchedPercentage > 0 && watchedPercentage < 100 && (
-                      <Text style={[styles.watchedPercentage, { color: colors.primary }]}>
-                        · {Math.round(watchedPercentage)}% watched
+          {activeTab === "lessons" && (
+            <View style={{ gap: 12 }}>
+              {/* Progress */}
+              {isEnrolled && (
+                <View style={[styles.progressCard, { backgroundColor: "#DCF7F4", borderColor: "#0B6FAD" }]}>
+                  <View style={styles.progressHeader}>
+                    <View>
+                      <Text style={[styles.progressLabel, { color: "#0B6FAD" }]}>Your Progress</Text>
+                      <Text style={[styles.progressPct, { color: "#0B6FAD" }]}>{progress}%</Text>
+                    </View>
+                    {isCourseCompleted && (
+                      <View style={[styles.completeBadge, { backgroundColor: "#10B981" }]}>
+                        <Ionicons name="ribbon" size={16} color="#FFF" />
+                        <Text style={styles.completeBadgeText}>Completed</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                    <View
+                      style={[styles.progressFill, { width: `${progress}%` as any, backgroundColor: "#0B6FAD" }]}
+                    />
+                  </View>
+                  <View style={styles.progressStats}>
+                    <Text style={[styles.progressSub, { color: colors.foreground }]}>
+                      {completedModules} of {modules.length} lessons completed
+                    </Text>
+                    {remainingModules > 0 && (
+                      <Text style={[styles.progressRemaining, { color: colors.mutedForeground }]}>
+                        {remainingModules} remaining
                       </Text>
                     )}
                   </View>
-                  {watchedPercentage > 0 && watchedPercentage < 100 && (
-                    <View style={[styles.lessonProgressTrack, { backgroundColor: colors.muted, marginTop: 6 }]}>
-                      <View style={[styles.lessonProgressFill, { width: `${watchedPercentage}%` as any, backgroundColor: colors.primary }]} />
-                    </View>
-                  )}
                 </View>
-                {isEnrolled ? (
-                  <Feather 
-                    name={isCompleted ? "check-circle" : "play-circle"} 
-                    size={20} 
-                    color={isCompleted ? "#10B981" : colors.primary} 
-                  />
-                ) : (
-                  <Feather name="lock" size={16} color={colors.mutedForeground} />
-                )}
-              </Pressable>
-            );
-          })}
+              )}
 
-          {/* View Certificate when completed */}
-          {isEnrolled && isCourseCompleted && (
-            <Pressable
-              style={[styles.certBtn, { backgroundColor: '#10B981' }]}
-              onPress={() => router.push({
-                pathname: '/certificate',
-                params: {
-                  courseName: course.title,
-                  studentName: user?.name ?? '',
-                  completionDate: new Date().toISOString(),
-                },
-              })}
-            >
-              <Feather name="award" size={18} color="#fff" />
-              <Text style={styles.certBtnText}>View Certificate</Text>
-            </Pressable>
-          )}
-
-          {/* Quiz */}
-          {quiz && isEnrolled && (
-            <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Quiz</Text>
-              <Pressable
-                style={[styles.quizCard, { backgroundColor: colors.primary }]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push({ pathname: "/quiz/[id]", params: { id: quiz.id } });
-                }}
-              >
-                <View>
-                  <Text style={styles.quizTitle}>{quiz.title}</Text>
-                  <Text style={styles.quizSub}>{quiz.questions.length} questions · {quiz.timeLimit / 60} min</Text>
-                </View>
-                <Feather name="chevron-right" size={20} color="#FFF" />
-              </Pressable>
-            </>
-          )}
-
-          {/* ── Average Rating Bar ───────────────── */}
-          {allReviews.length > 0 && (
-            <View style={[styles.avgRatingRow, { backgroundColor: colors.muted, borderRadius: 14 }]}>
-              <StarRating rating={Math.round(avgRating ?? 0)} size={20} readonly />
-              <Text style={[styles.avgRatingText, { color: colors.foreground }]}>
-                {avgRating?.toFixed(1)}{" "}
-                <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>
-                  ({allReviews.length} rating{allReviews.length !== 1 ? "s" : ""})
-                </Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Curriculum</Text>
+              <Text style={[styles.curriculumSubtitle, { color: colors.mutedForeground }]}>
+                {modules.length} lessons · {displayDuration}
               </Text>
+              {modules.map((mod, idx) => {
+                const modProgress = lessonsProgress.find((p) => String(p.lesson_id) === String(mod.id));
+                const isCompleted = modProgress?.is_completed === true;
+                const watchedPercentage = modProgress?.watch_percentage || 0;
+
+                return (
+                  <Pressable
+                    key={mod.id}
+                    style={[
+                      styles.moduleItem,
+                      { 
+                        backgroundColor: colors.card, 
+                        borderColor: isCompleted ? "#17E5D3" : "#D6E9F2",
+                        borderWidth: isCompleted ? 1.5 : 1
+                      },
+                    ]}
+                    onPress={() => {
+                      if (isEnrolled) {
+                        router.push({ pathname: "/course/learn", params: { courseId: course.id, moduleId: mod.id } });
+                      }
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.moduleNum,
+                        { backgroundColor: isCompleted ? "#DCF7F4" : "#E8F4F9" },
+                      ]}
+                    >
+                      {isCompleted ? (
+                        <Ionicons name="checkmark" size={14} color="#17E5D3" />
+                      ) : (
+                        <Text style={[styles.moduleNumText, { color: "#5A7A8C" }]}>{idx + 1}</Text>
+                      )}
+                    </View>
+                    <View style={styles.moduleInfo}>
+                      <Text style={[styles.moduleTitle, { color: isCompleted ? "#0B6FAD" : colors.foreground }]}>
+                        {mod.title}
+                      </Text>
+                      <View style={styles.moduleMetaRow}>
+                        <Ionicons name="time" size={11} color={colors.mutedForeground} />
+                        <Text style={[styles.moduleDuration, { color: colors.mutedForeground }]}>{mod.duration}</Text>
+                        {watchedPercentage > 0 && watchedPercentage < 100 && (
+                          <Text style={[styles.watchedPercentage, { color: "#0B6FAD" }]}>
+                            · {Math.round(watchedPercentage)}% watched
+                          </Text>
+                        )}
+                      </View>
+                      {watchedPercentage > 0 && watchedPercentage < 100 && (
+                        <View style={[styles.lessonProgressTrack, { backgroundColor: colors.muted, marginTop: 6 }]}>
+                          <View style={[styles.lessonProgressFill, { width: `${watchedPercentage}%` as any, backgroundColor: "#0B6FAD" }]} />
+                        </View>
+                      )}
+                    </View>
+                    {isEnrolled ? (
+                      isCompleted ? (
+                        <Ionicons name="checkmark-circle" size={22} color="#17E5D3" />
+                      ) : (
+                        <Ionicons name="play-circle" size={22} color="#0B6FAD" />
+                      )
+                    ) : (
+                      <Ionicons name="lock-closed" size={20} color="#9CA3AF" />
+                    )}
+                  </Pressable>
+                );
+              })}
+
+              {/* View Certificate */}
+              {isEnrolled && isCourseCompleted && (
+                <Pressable
+                  style={[styles.certBtn, { backgroundColor: '#0B6FAD' }]}
+                  onPress={() => router.push({
+                    pathname: '/certificate',
+                    params: {
+                      courseName: course.title,
+                      studentName: user?.name ?? '',
+                      completionDate: new Date().toISOString(),
+                    },
+                  })}
+                >
+                  <Ionicons name="ribbon" size={18} color="#fff" />
+                  <Text style={styles.certBtnText}>View Certificate</Text>
+                </Pressable>
+              )}
+
+              {/* Quiz */}
+              {quiz && isEnrolled && (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Quiz</Text>
+                  <Pressable
+                    style={[styles.quizCard, { backgroundColor: "#0B6FAD" }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push({ pathname: "/quiz/[id]", params: { id: quiz.id } });
+                    }}
+                  >
+                    <View>
+                      <Text style={styles.quizTitle}>{quiz.title}</Text>
+                      <Text style={styles.quizSub}>{quiz.questions.length} questions · {quiz.timeLimit / 60} min</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#FFF" />
+                  </Pressable>
+                </>
+              )}
             </View>
           )}
 
-          {/* ── Rate This Course ─────────────────── */}
-          {isEnrolled && completedModules > 0 && (
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-              <View style={[styles.rateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                {reviewSubmitted ? (
-                  <View style={styles.thankYouRow}>
-                    <Feather name="check-circle" size={20} color="#10B981" />
-                    <Text style={[styles.thankYouText, { color: "#10B981" }]}>
-                      Thanks for your review!
+          {activeTab === "reviews" && (
+            <View style={{ gap: 12 }}>
+              {allReviews.length > 0 && (
+                <View style={[styles.avgRatingRow, { backgroundColor: colors.muted, borderRadius: 14 }]}>
+                  <StarRating rating={Math.round(avgRating ?? 0)} size={20} readonly />
+                  <Text style={[styles.avgRatingText, { color: colors.foreground }]}>
+                    {avgRating?.toFixed(1)}{" "}
+                    <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>
+                      ({allReviews.length} rating{allReviews.length !== 1 ? "s" : ""})
                     </Text>
-                  </View>
-                ) : (
-                  <>
-                    <Text style={[styles.rateTitle, { color: colors.foreground }]}>
-                      {myReview ? "Update your rating" : "Rate this course"}
-                    </Text>
-                    <StarRating
-                      rating={draftRating}
-                      onRatingChange={setDraftRating}
-                      size={32}
-                    />
-                    {draftRating > 0 && (
+                  </Text>
+                </View>
+              )}
+
+              {/* Rate Course */}
+              {isEnrolled && completedModules > 0 && (
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                  <View style={[styles.rateCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    {reviewSubmitted ? (
+                      <View style={styles.thankYouRow}>
+                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                        <Text style={[styles.thankYouText, { color: "#10B981" }]}>
+                          Thanks for your review!
+                        </Text>
+                      </View>
+                    ) : (
                       <>
-                        <TextInput
-                          style={[
-                            styles.commentInput,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                              color: colors.foreground,
-                            },
-                          ]}
-                          placeholder="Share your thoughts (optional)..."
-                          placeholderTextColor={colors.mutedForeground}
-                          value={draftComment}
-                          onChangeText={setDraftComment}
-                          multiline
-                          numberOfLines={3}
-                          maxLength={500}
+                        <Text style={[styles.rateTitle, { color: colors.foreground }]}>
+                          {myReview ? "Update your rating" : "Rate this course"}
+                        </Text>
+                        <StarRating
+                          rating={draftRating}
+                          onRatingChange={setDraftRating}
+                          size={32}
                         />
-                        <Pressable
-                          style={[
-                            styles.submitBtn,
-                            { backgroundColor: colors.primary, opacity: reviewSubmitting ? 0.6 : 1 },
-                          ]}
-                          onPress={handleSubmitReview}
-                          disabled={reviewSubmitting}
-                        >
-                          {reviewSubmitting ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                          ) : (
-                            <Text style={styles.submitBtnText}>
-                              {myReview ? "Update Review" : "Submit Review"}
-                            </Text>
-                          )}
-                        </Pressable>
+                        {draftRating > 0 && (
+                          <>
+                            <TextInput
+                              style={[
+                                styles.commentInput,
+                                {
+                                  backgroundColor: colors.background,
+                                  borderColor: colors.border,
+                                  color: colors.foreground,
+                                },
+                              ]}
+                              placeholder="Share your thoughts (optional)..."
+                              placeholderTextColor={colors.mutedForeground}
+                              value={draftComment}
+                              onChangeText={setDraftComment}
+                              multiline
+                              numberOfLines={3}
+                              maxLength={500}
+                            />
+                            <Pressable
+                              style={[
+                                styles.submitBtn,
+                                { backgroundColor: "#0B6FAD", opacity: reviewSubmitting ? 0.6 : 1 },
+                              ]}
+                              onPress={handleSubmitReview}
+                              disabled={reviewSubmitting}
+                            >
+                              {reviewSubmitting ? (
+                                <ActivityIndicator size="small" color="#FFF" />
+                              ) : (
+                                <Text style={styles.submitBtnText}>
+                                  {myReview ? "Update Review" : "Submit Review"}
+                                </Text>
+                              )}
+                            </Pressable>
+                          </>
+                        )}
                       </>
                     )}
-                  </>
-                )}
-              </View>
-            </KeyboardAvoidingView>
-          )}
-
-          {/* ── Reviews List ─────────────────────── */}
-          {allReviews.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Reviews</Text>
-              {(showAllReviews ? allReviews : allReviews.slice(0, 3)).map((review: any) => (
-                <View
-                  key={review.id}
-                  style={[styles.reviewItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-                >
-                  <View style={styles.reviewHeader}>
-                    <StarRating rating={review.rating} size={14} readonly />
-                    <Text style={[styles.reviewMeta, { color: colors.mutedForeground }]}>
-                      Student ·{" "}
-                      {new Date(review.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </Text>
                   </View>
-                  {!!review.comment && (
-                    <Text style={[styles.reviewComment, { color: colors.foreground }]}>
-                      "{review.comment}"
-                    </Text>
-                  )}
-                </View>
-              ))}
-              {allReviews.length > 3 && (
-                <Pressable
-                  onPress={() => setShowAllReviews((prev) => !prev)}
-                  style={styles.showAllBtn}
-                >
-                  <Text style={[styles.showAllText, { color: colors.primary }]}>
-                    {showAllReviews ? "Show less" : `Show all ${allReviews.length} reviews →`}
-                  </Text>
-                </Pressable>
+                </KeyboardAvoidingView>
               )}
-            </>
+
+              {/* Review Item lists */}
+              {allReviews.length > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Reviews</Text>
+                  {(showAllReviews ? allReviews : allReviews.slice(0, 3)).map((review: any) => (
+                    <View
+                      key={review.id}
+                      style={[styles.reviewItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    >
+                      <View style={styles.reviewHeader}>
+                        <StarRating rating={review.rating} size={14} readonly />
+                        <Text style={[styles.reviewMeta, { color: colors.mutedForeground }]}>
+                          Student ·{" "}
+                          {new Date(review.created_at).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </Text>
+                      </View>
+                      {!!review.comment && (
+                        <Text style={[styles.reviewComment, { color: colors.foreground }]}>
+                          "{review.comment}"
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                  {allReviews.length > 3 && (
+                    <Pressable
+                      onPress={() => setShowAllReviews((prev) => !prev)}
+                      style={styles.showAllBtn}
+                    >
+                      <Text style={[styles.showAllText, { color: "#0B6FAD" }]}>
+                        {showAllReviews ? "Show less" : `Show all ${allReviews.length} reviews →`}
+                      </Text>
+                    </Pressable>
+                  )}
+                </>
+              )}
+            </View>
           )}
         </View>
       </ScrollView>
 
-      {/* CTA */}
+      {/* CTA Sticky Bottom */}
       <View
         style={[
           styles.cta,
@@ -719,12 +742,12 @@ export default function CourseDetailScreen() {
       >
         {isEnrolled && accessExpired ? (
           <View style={{ gap: 8 }}>
-            <Text style={{ color: colors.mutedForeground, fontSize: 12, textAlign: "center" }}>
+            <Text style={{ color: colors.mutedForeground, fontSize: 12, textAlign: "center", fontFamily: "Inter_400Regular" }}>
               Your 1-year access expired on{" "}
               {enrollment?.expires_at ? new Date(enrollment.expires_at).toLocaleDateString() : ""}
             </Text>
             <Pressable
-              style={[styles.ctaBtn, { backgroundColor: colors.primary }]}
+              style={[styles.ctaBtn, { backgroundColor: "#0B6FAD" }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 Alert.alert(
@@ -737,55 +760,52 @@ export default function CourseDetailScreen() {
                 );
               }}
             >
-              <Feather name="refresh-cw" size={18} color="#FFF" />
+              <Ionicons name="refresh-circle" size={18} color="#FFF" />
               <Text style={styles.ctaBtnText}>Renew Access · ₹{course.price}</Text>
             </Pressable>
           </View>
         ) : isEnrolled ? (
           <Pressable
-            style={[styles.ctaBtn, { backgroundColor: progress === 100 ? "#10B981" : colors.primary }]}
+            style={[styles.ctaBtn, { backgroundColor: "#0B6FAD" }]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               const targetModuleId = lastModuleId ? String(lastModuleId) : (modules[0]?.id || "");
               router.push({ pathname: "/course/learn", params: { courseId: course.id, moduleId: targetModuleId } });
             }}
           >
-            {progress === 100 ? (
-              <>
-                <Feather name="award" size={18} color="#FFF" />
-                <Text style={styles.ctaBtnText}>Review Course</Text>
-              </>
-            ) : progress > 0 ? (
-              <>
-                <Feather name="play" size={18} color="#FFF" />
-                <Text style={styles.ctaBtnText}>Continue Learning · {progress}%</Text>
-              </>
-            ) : (
-              <>
-                <Feather name="play" size={18} color="#FFF" />
-                <Text style={styles.ctaBtnText}>Start Learning</Text>
-              </>
-            )}
+            <View style={styles.primaryButtonContent}>
+              <Ionicons name="play" size={18} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={styles.ctaBtnText}>
+                {progress === 100 ? "Review Course" : progress > 0 ? `Continue Learning · ${progress}%` : "Start Learning"}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#FFF" style={{ marginLeft: "auto" }} />
+            </View>
           </Pressable>
         ) : (
           <View style={styles.ctaRow}>
-            <View>
+            <View style={{ justifyContent: "center" }}>
               {course.isFree ? (
                 <Text style={[styles.ctaPrice, { color: colors.success }]}>Free</Text>
               ) : (
-                <Text style={[styles.ctaPrice, { color: colors.primary }]}>₹{course.price}</Text>
+                <Text style={[styles.ctaPrice, { color: "#0B6FAD" }]}>₹{course.price}</Text>
               )}
             </View>
             <Pressable
-              style={[styles.ctaBtn, { backgroundColor: colors.secondary, flex: 1, opacity: isEnrolling ? 0.6 : 1 }]}
+              style={{ flex: 1, height: 56 }}
               onPress={handleEnrollNow}
               disabled={isEnrolling}
             >
-              {isEnrolling ? (
-                <Text style={styles.ctaBtnText}>Enrolling...</Text>
-              ) : (
-                <Text style={styles.ctaBtnText}>{course.isFree ? "Enroll for Free" : "Buy Now"}</Text>
-              )}
+              <LinearGradient
+                colors={["#0B6FAD", "#17E5D3"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.enrollGradientBtn}
+              >
+                <Ionicons name="rocket" size={20} color="#FFF" style={{ marginRight: 4 }} />
+                <Text style={styles.enrollBtnText}>
+                  {isEnrolling ? "Enrolling..." : (course.isFree ? "Enroll for Free" : "Buy Now")}
+                </Text>
+              </LinearGradient>
             </Pressable>
           </View>
         )}
@@ -796,7 +816,6 @@ export default function CourseDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  backBtn: { padding: 16 },
   errorText: { fontSize: 16, textAlign: "center", marginTop: 40 },
   thumbnailContainer: { position: "relative", height: 240 },
   thumbnail: { width: "100%", height: "100%", resizeMode: "cover" },
@@ -807,9 +826,29 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  backCircleWeb: {
+    marginLeft: 16,
+    marginTop: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   shareCircle: {
     position: "absolute",
@@ -817,9 +856,29 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  favoriteCircle: {
+    position: "absolute",
+    right: 64,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   thumbnailBadge: { position: "absolute" },
   content: { padding: 20, gap: 12 },
@@ -829,18 +888,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   categoryBadge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  categoryText: { fontSize: 12, fontWeight: "600" },
-  title: { fontSize: 22, fontWeight: "800", lineHeight: 28 },
-  instructor: { fontSize: 14 },
-  statsRow: { flexDirection: "row", paddingVertical: 14 },
-  statItem: { flex: 1, alignItems: "center", gap: 3 },
-  statValue: { fontSize: 14, fontWeight: "700" },
-  statLabel: { fontSize: 11 },
-  sectionTitle: { fontSize: 18, fontWeight: "700", marginTop: 8 },
-  description: { fontSize: 14, lineHeight: 22 },
+  categoryText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  title: { fontSize: 22, fontFamily: "Fredoka_700Bold", lineHeight: 28 },
+  instructor: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  sectionTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold", marginTop: 8 },
+  description: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
   tags: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   tag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  tagText: { fontSize: 12, fontWeight: "500" },
+  tagText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   progressCard: { 
     borderRadius: 16, 
     padding: 18, 
@@ -857,8 +912,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center"
   },
-  progressLabel: { fontSize: 13, fontWeight: "600", marginBottom: 4 },
-  progressPct: { fontSize: 24, fontWeight: "800" },
+  progressLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
+  progressPct: { fontSize: 24, fontFamily: "Fredoka_700Bold" },
   completeBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -869,7 +924,7 @@ const styles = StyleSheet.create({
   },
   completeBadgeText: {
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
     color: "#FFF",
   },
   progressTrack: { height: 8, borderRadius: 4 },
@@ -879,10 +934,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  progressSub: { fontSize: 13, fontWeight: "500" },
-  progressRemaining: { fontSize: 12 },
+  progressSub: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  progressRemaining: { fontSize: 12, fontFamily: "Inter_400Regular" },
   curriculumSubtitle: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
     marginBottom: 12,
     marginTop: -8,
   },
@@ -896,7 +952,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   moduleNum: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  moduleNumText: { fontSize: 13, fontWeight: "700" },
+  moduleNumText: { fontSize: 13, fontFamily: "Fredoka_700Bold" },
   moduleInfo: { flex: 1, gap: 4 },
   lessonProgressTrack: {
     height: 3,
@@ -907,16 +963,16 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
   },
-  moduleTitle: { fontSize: 14, fontWeight: "600" },
+  moduleTitle: { fontSize: 14, fontFamily: "Fredoka_600SemiBold" },
   moduleMetaRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  moduleDuration: { fontSize: 12 },
+  moduleDuration: { fontSize: 12, fontFamily: "Inter_400Regular" },
   watchedPercentage: {
     fontSize: 11,
-    fontWeight: "600",
+    fontFamily: "Inter_600SemiBold",
   },
   quizCard: {
     flexDirection: "row",
@@ -926,34 +982,88 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 8,
   },
-  quizTitle: { fontSize: 15, fontWeight: "700", color: "#FFF" },
-  quizSub: { fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 2 },
+  quizTitle: { fontSize: 15, fontFamily: "Fredoka_700Bold", color: "#FFF" },
+  quizSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginTop: 2 },
   cta: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, borderTopWidth: 1 },
   ctaRow: { flexDirection: "row", alignItems: "center", gap: 16 },
-  ctaPrice: { fontSize: 22, fontWeight: "800" },
+  ctaPrice: { fontSize: 22, fontFamily: "Fredoka_700Bold" },
   ctaBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
-    minHeight: 52,
+    borderRadius: 24,
+    height: 48,
   },
-  ctaBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  certBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14 },
-  certBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  // ── Review styles ──────────────────────────────
+  ctaBtnText: { fontSize: 16, fontFamily: 'Fredoka_600SemiBold', color: '#FFF' },
+  certBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, marginBottom: 8 },
+  certBtnText: { fontSize: 15, fontFamily: 'Fredoka_600SemiBold', color: '#fff' },
+  primaryButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingHorizontal: 16,
+  },
+  enrollGradientBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 28,
+    height: 56,
+  },
+  enrollBtnText: {
+    fontSize: 16,
+    fontFamily: "Fredoka_600SemiBold",
+    color: "#FFF",
+  },
+  tabBar: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#D6E9F2",
+    marginBottom: 16,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  tabText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+  },
+  statsStrip: {
+    flexDirection: "row",
+    gap: 8,
+    marginVertical: 14,
+  },
+  statChip: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  statValue: {
+    fontSize: 14,
+    fontFamily: "Fredoka_600SemiBold",
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
   avgRatingRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   avgRatingText: {
     fontSize: 16,
-    fontWeight: "700" as const,
+    fontFamily: "Fredoka_700Bold",
   },
   rateCard: {
     borderRadius: 16,
@@ -963,7 +1073,7 @@ const styles = StyleSheet.create({
   },
   rateTitle: {
     fontSize: 16,
-    fontWeight: "700" as const,
+    fontFamily: "Fredoka_700Bold",
   },
   commentInput: {
     borderWidth: 1,
@@ -972,29 +1082,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     minHeight: 80,
-    textAlignVertical: "top" as const,
+    textAlignVertical: "top",
   },
   submitBtn: {
     paddingVertical: 12,
     borderRadius: 10,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: 44,
   },
   submitBtnText: {
     fontSize: 15,
-    fontWeight: "700" as const,
+    fontFamily: "Fredoka_700Bold",
     color: "#FFF",
   },
   thankYouRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingVertical: 8,
   },
   thankYouText: {
     fontSize: 15,
-    fontWeight: "600" as const,
+    fontFamily: "Inter_600SemiBold",
   },
   reviewItem: {
     borderRadius: 12,
@@ -1004,25 +1114,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   reviewHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   reviewMeta: {
     fontSize: 11,
-    fontWeight: "500" as const,
+    fontFamily: "Inter_500Medium",
   },
   reviewComment: {
     fontSize: 13,
     lineHeight: 19,
-    fontStyle: "italic" as const,
+    fontStyle: "italic",
   },
   showAllBtn: {
     paddingVertical: 8,
-    alignItems: "center" as const,
+    alignItems: "center",
   },
   showAllText: {
     fontSize: 14,
-    fontWeight: "600" as const,
+    fontFamily: "Inter_600SemiBold",
   },
 });

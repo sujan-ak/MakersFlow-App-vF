@@ -1,4 +1,4 @@
-﻿import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -14,7 +14,7 @@ export default function TermsOfServiceScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Pressable onPress={() => router.back()}>
-          <Feather name="arrow-left" size={22} color={colors.foreground} />
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Terms of Service</Text>
         <View style={{ width: 22 }} />
@@ -146,10 +146,10 @@ export default function TermsOfServiceScreen() {
         <Text style={[styles.body, { color: colors.foreground }]}>
           If you have any questions about these Terms of Service, please contact us at:
         </Text>
-        <Text style={[styles.body, { color: colors.foreground, fontWeight: "600" }]}>
+        <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Email: support@makersflow.com
         </Text>
-        <Text style={[styles.body, { color: colors.foreground, fontWeight: "600" }]}>
+        <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Support: Settings → Help & Support
         </Text>
       </ScrollView>
@@ -167,10 +167,10 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
-  lastUpdated: { fontSize: 12, fontStyle: "italic", marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginTop: 24, marginBottom: 8 },
-  subheading: { fontSize: 14, fontWeight: "600", marginTop: 12, marginBottom: 6 },
-  body: { fontSize: 14, lineHeight: 22, marginBottom: 12 },
-  bulletItem: { fontSize: 14, lineHeight: 22, marginBottom: 6, paddingLeft: 8 },
+  headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
+  lastUpdated: { fontSize: 12, fontStyle: "italic", fontFamily: "Inter_400Regular", marginBottom: 16 },
+  sectionTitle: { fontSize: 16, fontFamily: "Fredoka_700Bold", marginTop: 24, marginBottom: 8 },
+  subheading: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", marginTop: 12, marginBottom: 6 },
+  body: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 12 },
+  bulletItem: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 6, paddingLeft: 8 },
 });

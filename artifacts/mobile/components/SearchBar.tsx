@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
@@ -12,8 +12,8 @@ interface SearchBarProps {
 export function SearchBar({ value, onChangeText, placeholder = "Search..." }: SearchBarProps) {
   const colors = useColors();
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Feather name="search" size={18} color={colors.mutedForeground} />
+    <View style={styles.container}>
+      <Ionicons name="search" size={18} color="#0B6FAD" />
       <TextInput
         style={[styles.input, { color: colors.foreground }]}
         value={value}
@@ -23,7 +23,7 @@ export function SearchBar({ value, onChangeText, placeholder = "Search..." }: Se
         returnKeyType="search"
       />
       {value.length > 0 && (
-        <Feather name="x" size={16} color={colors.mutedForeground} onPress={() => onChangeText("")} />
+        <Ionicons name="close-circle" size={18} color="#5A7A8C" onPress={() => onChangeText("")} />
       )}
     </View>
   );
@@ -34,10 +34,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24, // rounded-full
     borderWidth: 1.5,
+    borderColor: "#D6E9F2",
+    backgroundColor: "#FFFFFF", // white
     minHeight: 48,
   },
   input: {
