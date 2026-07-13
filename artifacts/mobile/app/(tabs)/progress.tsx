@@ -10,6 +10,7 @@ import {
   View,
   Image,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
@@ -70,6 +71,9 @@ export default function ProgressScreen() {
     weeklyActivity: [],
     recentlyCompleted: [],
   });
+
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
 
   const loadStatsAndCourses = useCallback(async (isRefreshing = false) => {
     if (!user?.id) {
@@ -249,6 +253,41 @@ export default function ProgressScreen() {
         weeklyActivity,
         recentlyCompleted: topRecentlyCompleted,
       });
+
+      // Fetch Leaderboard from Supabase
+      setIsLoadingLeaderboard(true);
+      try {
+        const { data: streakData, error: streakError } = await supabase
+          .from('streaks')
+          .select('user_id, longest_streak')
+          .order('longest_streak', { ascending: false })
+          .limit(10);
+
+        if (!streakError && streakData && streakData.length > 0) {
+          const userIds = streakData.map((s) => s.user_id);
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', userIds);
+
+          if (!profilesError && profilesData) {
+            const mapped = streakData.map((s, index) => {
+              const profile = profilesData.find((p) => p.id === s.user_id);
+              return {
+                rank: index + 1,
+                name: profile?.full_name || "Unknown Student",
+                points: s.longest_streak,
+                isSelf: s.user_id === user.id,
+              };
+            });
+            setLeaderboard(mapped);
+          }
+        }
+      } catch (err) {
+        console.error('[Progress] Error loading leaderboard:', err);
+      } finally {
+        setIsLoadingLeaderboard(false);
+      }
 
     } catch (err) {
       console.error('[Progress] Error loading stats & courses:', err);
@@ -674,19 +713,25 @@ export default function ProgressScreen() {
                 <Ionicons name="trophy" size={32} color="#F59E0B" />
                 <Text style={styles.leaderboardTitle}>Weekly Leaderboard</Text>
               </View>
-              {MOCK_LEADERBOARD.map((item) => (
-                <View
-                  key={item.rank}
-                  style={[
-                    styles.leaderboardRow,
-                    item.isSelf && { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" },
-                  ]}
-                >
-                  <Text style={styles.leaderboardRank}>#{item.rank}</Text>
-                  <Text style={[styles.leaderboardName, item.isSelf && { color: "#0B6FAD" }]}>{item.name}</Text>
-                  <Text style={styles.leaderboardPoints}>{item.points} pts</Text>
-                </View>
-              ))}
+              {isLoadingLeaderboard ? (
+                <ActivityIndicator color="#0B6FAD" style={{ marginTop: 20 }} />
+              ) : leaderboard.length === 0 ? (
+                <Text style={styles.emptyActivityText}>No leaderboard entries yet.</Text>
+              ) : (
+                leaderboard.map((item) => (
+                  <View
+                    key={item.rank}
+                    style={[
+                      styles.leaderboardRow,
+                      item.isSelf && { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" },
+                    ]}
+                  >
+                    <Text style={styles.leaderboardRank}>#{item.rank}</Text>
+                    <Text style={[styles.leaderboardName, item.isSelf && { color: "#0B6FAD" }]}>{item.name}</Text>
+                    <Text style={styles.leaderboardPoints}>{item.points} {item.points === 1 ? 'day' : 'days'}</Text>
+                  </View>
+                ))
+              )}
             </View>
           )}
         </>
