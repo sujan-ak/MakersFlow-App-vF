@@ -98,7 +98,7 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={styles.iconWrap}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.accent }]}>
             <Ionicons name="person-add" size={32} color="#0B6FAD" />
           </View>
           <Text style={[styles.title, { color: colors.foreground }]}>Complete your profile</Text>
@@ -118,7 +118,7 @@ export default function OnboardingScreen() {
           {/* Full Name */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Full Name</Text>
-            <View style={[styles.inputWrapper, { borderColor: fullNameError ? "#DC2626" : "#D6E9F2" }]}>
+            <View style={[styles.inputWrapper, { borderColor: fullNameError ? "#DC2626" : colors.border, backgroundColor: colors.input }]}>
               <Ionicons name="person" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
@@ -135,7 +135,7 @@ export default function OnboardingScreen() {
           {/* Age */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Age</Text>
-            <View style={[styles.inputWrapper, { borderColor: ageError ? "#DC2626" : "#D6E9F2" }]}>
+            <View style={[styles.inputWrapper, { borderColor: ageError ? "#DC2626" : colors.border, backgroundColor: colors.input }]}>
               <Ionicons name="information-circle" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
@@ -152,7 +152,7 @@ export default function OnboardingScreen() {
           {/* Grade */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Grade / Class</Text>
-            <View style={[styles.inputWrapper, { borderColor: gradeError ? "#DC2626" : "#D6E9F2" }]}>
+            <View style={[styles.inputWrapper, { borderColor: gradeError ? "#DC2626" : colors.border, backgroundColor: colors.input }]}>
               <Ionicons name="book" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
@@ -168,7 +168,7 @@ export default function OnboardingScreen() {
           {/* School Name */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>School Name</Text>
-            <View style={[styles.inputWrapper, { borderColor: schoolError ? "#DC2626" : "#D6E9F2" }]}>
+            <View style={[styles.inputWrapper, { borderColor: schoolError ? "#DC2626" : colors.border, backgroundColor: colors.input }]}>
               <Ionicons name="school" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
@@ -215,7 +215,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: "#DCF7F4",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
@@ -242,7 +241,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1.5,
-    backgroundColor: "#FFFFFF",
     minHeight: 48,
   },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },

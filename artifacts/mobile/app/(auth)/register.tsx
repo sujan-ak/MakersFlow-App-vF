@@ -44,6 +44,10 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  // ── Email verification pending state ──────────────────────────────────────
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  // ─────────────────────────────────────────────────────────────────────────
   const [grade, setGrade] = useState("");
   const [school, setSchool] = useState("");
   const [nameError, setNameError] = useState("");
@@ -85,18 +89,16 @@ export default function RegisterScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        
-        // Size validation: > 2MB
+
         if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
           Alert.alert("Image too large", "Image too large, please choose a smaller photo");
           return;
         }
 
-        // Type validation: jpeg and png only
         const uri = asset.uri.toLowerCase();
         const extension = uri.split('.').pop() || '';
         const validExtensions = ['jpg', 'jpeg', 'png'];
-        
+
         if (!validExtensions.includes(extension) && !uri.startsWith('data:image/jpeg') && !uri.startsWith('data:image/png')) {
           Alert.alert("Invalid format", "Only image/jpeg and image/png files are allowed.");
           return;
@@ -117,20 +119,14 @@ export default function RegisterScreen() {
       const filename = `${userId}_avatar.jpg`;
       const { data, error } = await supabase.storage
         .from('avatars')
-        .upload(filename, blob, {
-          contentType: 'image/jpeg',
-          upsert: true
-        });
-      
+        .upload(filename, blob, { contentType: 'image/jpeg', upsert: true });
+
       if (error) {
         console.error('Error uploading avatar:', error);
         return null;
       }
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filename);
-      
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filename);
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
       return publicUrl;
     } catch (e) {
@@ -144,9 +140,9 @@ export default function RegisterScreen() {
     setError("");
     setGoogleLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     const result = await loginWithGoogle();
-    
+
     if (result.success) {
       const profile = (result as any).profile;
       setGoogleLoading(false);
@@ -173,54 +169,44 @@ export default function RegisterScreen() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     let hasError = false;
 
-    if (!name) {
-      setNameError("Name is required");
-      hasError = true;
-    }
-
+    if (!name) { setNameError("Name is required"); hasError = true; }
     if (!email) {
-      setEmailError("Email is required");
-      hasError = true;
+      setEmailError("Email is required"); hasError = true;
     } else if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email address");
-      hasError = true;
+      setEmailError("Please enter a valid email address"); hasError = true;
     }
-
     if (!password) {
-      setPasswordError("Password is required");
-      hasError = true;
+      setPasswordError("Password is required"); hasError = true;
     } else if (password.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
-      hasError = true;
+      setPasswordError("Password must be at least 8 characters"); hasError = true;
     }
-
     if (!confirm) {
-      setConfirmError("Please confirm your password");
-      hasError = true;
+      setConfirmError("Please confirm your password"); hasError = true;
     } else if (password !== confirm) {
-      setConfirmError("Passwords do not match");
-      hasError = true;
+      setConfirmError("Passwords do not match"); hasError = true;
     }
-
-    if (!grade) {
-      setGradeError("Grade is required");
-      hasError = true;
-    }
-
-    if (!school) {
-      setSchoolError("School is required");
-      hasError = true;
-    }
-
+    if (!grade) { setGradeError("Grade is required"); hasError = true; }
+    if (!school) { setSchoolError("School is required"); hasError = true; }
     if (hasError) return;
 
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     const result = await register(name, email, password, grade, school);
     setLoading(false);
-    
+
     if (result.success) {
+      if (result.needsEmailVerification) {
+        // Supabase Confirm Email is ON — signUp returned a user but no session.
+        // Do NOT upload the avatar (no authenticated session → storage RLS would
+        // reject it) and do NOT navigate into the app. Show the verification
+        // prompt instead; the user must verify then sign in normally.
+        setRegisteredEmail(email);
+        setEmailVerificationSent(true);
+        return;
+      }
+
+      // Auto-confirm is ON — a session was created immediately. Proceed as before.
       if (avatarUri) {
         try {
           const { data: { user: supabaseUser } } = await supabase.auth.getUser();
@@ -235,6 +221,43 @@ export default function RegisterScreen() {
     } else {
       setError(result.error || "Registration failed. Please try again.");
     }
+  }
+
+  // ── Email verification pending screen — rendered as an early return so the
+  // registration form JSX below stays completely unchanged.
+  if (emailVerificationSent) {
+    return (
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <ScrollView
+          style={[styles.container, { backgroundColor: colors.background }]}
+          contentContainerStyle={[styles.verifyContent, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.verifyContainer}>
+            <View style={[styles.verifyIconWrap, { backgroundColor: colors.accent }]}>
+              <Ionicons name="mail-unread" size={40} color="#0B6FAD" />
+            </View>
+            <Text style={[styles.verifyTitle, { color: colors.foreground }]}>Check your email</Text>
+            <Text style={[styles.verifyBody, { color: colors.mutedForeground }]}>
+              {"We've sent a verification link to\n"}
+              <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>
+                {registeredEmail}
+              </Text>
+            </Text>
+            <Text style={[styles.verifyHint, { color: colors.mutedForeground }]}>
+              Please verify your email before signing in. Check your spam folder if you don't see it.
+            </Text>
+            <Pressable
+              style={[styles.verifyBtn, { backgroundColor: "#0B6FAD" }]}
+              onPress={() => router.replace("/(auth)/login")}
+            >
+              <Text style={styles.verifyBtnText}>Go to Sign In</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
   }
 
   return (
@@ -266,9 +289,9 @@ export default function RegisterScreen() {
             style={({ pressed }) => [
               styles.googleBtn,
               {
-                backgroundColor: '#fff',
+                backgroundColor: colors.card,
                 borderWidth: 1.5,
-                borderColor: '#D6E9F2',
+                borderColor: colors.border,
                 borderRadius: 12,
                 height: 52,
                 elevation: 2,
@@ -276,18 +299,18 @@ export default function RegisterScreen() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 10,
-                opacity: pressed ? 0.85 : 1
+                opacity: pressed ? 0.85 : 1,
               },
             ]}
             onPress={handleGoogleSignup}
             disabled={googleLoading}
           >
             {googleLoading ? (
-              <ActivityIndicator size="small" color="#1F2937" />
+              <ActivityIndicator size="small" color={colors.foreground} />
             ) : (
               <>
-                <Ionicons name="logo-google" size={18} color="#1F2937" />
-                <Text style={[styles.googleBtnText, { color: "#1F2937", fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
+                <Ionicons name="logo-google" size={18} color={colors.foreground} />
+                <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
               </>
             )}
           </Pressable>
@@ -300,7 +323,7 @@ export default function RegisterScreen() {
 
           {/* Avatar Picker */}
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
-            <Pressable onPress={pickAvatar} style={styles.avatarContainer}>
+            <Pressable onPress={pickAvatar} style={[styles.avatarContainer, { backgroundColor: colors.card }]}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
               ) : (
@@ -320,25 +343,23 @@ export default function RegisterScreen() {
           ) : null}
 
           {[
-            { label: "Full Name", value: name, setter: setName, icon: "person", placeholder: "Your full name", keyboard: "default" as const, secure: false, error: nameError, setError: setNameError, focused: nameFocused, setFocused: setNameFocused },
-            { label: "Email", value: email, setter: setEmail, icon: "mail", placeholder: "your@email.com", keyboard: "email-address" as const, secure: false, error: emailError, setError: setEmailError, focused: emailFocused, setFocused: setEmailFocused },
+            { label: "Full Name", value: name, setter: setName, icon: "person", placeholder: "Your full name", keyboard: "default" as const, error: nameError, setError: setNameError, focused: nameFocused, setFocused: setNameFocused },
+            { label: "Email", value: email, setter: setEmail, icon: "mail", placeholder: "your@email.com", keyboard: "email-address" as const, error: emailError, setError: setEmailError, focused: emailFocused, setFocused: setEmailFocused },
           ].map((field) => (
             <View style={styles.fieldGroup} key={field.label}>
               <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
               <View style={[
-                styles.inputWrapper, 
-                { 
-                  borderColor: field.error ? "#DC2626" : (field.focused ? "#0B6FAD" : "#D6E9F2"),
+                styles.inputWrapper,
+                {
+                  borderColor: field.error ? "#DC2626" : (field.focused ? "#0B6FAD" : colors.border),
+                  backgroundColor: colors.card,
                 }
               ]}>
                 <Ionicons name={field.icon as any} size={16} color="#0B6FAD" />
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   value={field.value}
-                  onChangeText={(text) => {
-                    field.setter(text);
-                    field.setError("");
-                  }}
+                  onChangeText={(text) => { field.setter(text); field.setError(""); }}
                   onFocus={() => field.setFocused(true)}
                   onBlur={() => field.setFocused(false)}
                   placeholder={field.placeholder}
@@ -355,19 +376,17 @@ export default function RegisterScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
             <View style={[
-              styles.inputWrapper, 
-              { 
-                borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : "#D6E9F2"),
+              styles.inputWrapper,
+              {
+                borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  setPasswordError("");
-                }}
+                onChangeText={(text) => { setPassword(text); setPasswordError(""); }}
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
                 placeholder="Min 8 characters"
@@ -386,11 +405,7 @@ export default function RegisterScreen() {
             {password && (
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: getStrengthColor() }}>
-                  Strength: {
-                    strength <= 1 ? "Weak" :
-                    strength === 2 ? "Fair" :
-                    strength === 3 ? "Strong" : "Very Strong"
-                  }
+                  Strength: {strength <= 1 ? "Weak" : strength === 2 ? "Fair" : strength === 3 ? "Strong" : "Very Strong"}
                 </Text>
               </View>
             )}
@@ -399,12 +414,7 @@ export default function RegisterScreen() {
                 {[1, 2, 3, 4].map((step) => (
                   <View
                     key={step}
-                    style={[
-                      styles.strengthSegment,
-                      {
-                        backgroundColor: step <= strength ? getStrengthColor() : "#D6E9F2",
-                      },
-                    ]}
+                    style={[styles.strengthSegment, { backgroundColor: step <= strength ? getStrengthColor() : "#D6E9F2" }]}
                   />
                 ))}
               </View>
@@ -415,19 +425,17 @@ export default function RegisterScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Confirm Password</Text>
             <View style={[
-              styles.inputWrapper, 
-              { 
-                borderColor: confirmError ? "#DC2626" : (confirmFocused ? "#0B6FAD" : "#D6E9F2"),
+              styles.inputWrapper,
+              {
+                borderColor: confirmError ? "#DC2626" : (confirmFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={confirm}
-                onChangeText={(text) => {
-                  setConfirm(text);
-                  setConfirmError("");
-                }}
+                onChangeText={(text) => { setConfirm(text); setConfirmError(""); }}
                 onFocus={() => setConfirmFocused(true)}
                 onBlur={() => setConfirmFocused(false)}
                 placeholder="Repeat password"
@@ -442,19 +450,17 @@ export default function RegisterScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Grade</Text>
             <View style={[
-              styles.inputWrapper, 
-              { 
-                borderColor: gradeError ? "#DC2626" : (gradeFocused ? "#0B6FAD" : "#D6E9F2"),
+              styles.inputWrapper,
+              {
+                borderColor: gradeError ? "#DC2626" : (gradeFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="book" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={grade}
-                onChangeText={(text) => {
-                  setGrade(text);
-                  setGradeError("");
-                }}
+                onChangeText={(text) => { setGrade(text); setGradeError(""); }}
                 onFocus={() => setGradeFocused(true)}
                 onBlur={() => setGradeFocused(false)}
                 placeholder="e.g., 10th Grade"
@@ -468,19 +474,17 @@ export default function RegisterScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>School</Text>
             <View style={[
-              styles.inputWrapper, 
-              { 
-                borderColor: schoolError ? "#DC2626" : (schoolFocused ? "#0B6FAD" : "#D6E9F2"),
+              styles.inputWrapper,
+              {
+                borderColor: schoolError ? "#DC2626" : (schoolFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="school" size={16} color="#0B6FAD" />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 value={school}
-                onChangeText={(text) => {
-                  setSchool(text);
-                  setSchoolError("");
-                }}
+                onChangeText={(text) => { setSchool(text); setSchoolError(""); }}
                 onFocus={() => setSchoolFocused(true)}
                 onBlur={() => setSchoolFocused(false)}
                 placeholder="Your school name"
@@ -523,8 +527,6 @@ export default function RegisterScreen() {
               <Text style={[styles.termsLink, { color: "#0B6FAD" }]}>Privacy Policy</Text>
             </Pressable>
           </View>
-
-
         </View>
 
         <View style={styles.footer}>
@@ -565,7 +567,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1.5,
-    backgroundColor: "#FFFFFF",
     minHeight: 48,
   },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
@@ -595,10 +596,10 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 8,
   },
-  termsRow: { 
-    flexDirection: "row", 
-    flexWrap: "wrap", 
-    justifyContent: "center", 
+  termsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
   },
@@ -627,7 +628,6 @@ const styles = StyleSheet.create({
     borderRadius: 45,
     borderWidth: 1.5,
     borderColor: "#D6E9F2",
-    backgroundColor: "#F3FBFB",
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
@@ -650,4 +650,42 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 12 },
   divider: { flex: 1, height: 1 },
   dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  // ── Email verification pending screen ─────────────────────────────────────
+  verifyContent: {
+    paddingHorizontal: 24,
+    flexGrow: 1,
+  },
+  verifyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingHorizontal: 8,
+  },
+  verifyIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  verifyTitle: { fontSize: 24, fontFamily: "Fredoka_700Bold", textAlign: "center" },
+  verifyBody: { fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
+  verifyHint: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 16,
+  },
+  verifyBtn: {
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    marginTop: 8,
+  },
+  verifyBtnText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold", color: "#FFF" },
 });

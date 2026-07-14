@@ -199,7 +199,8 @@ export default function LoginScreen() {
             <View style={[
               styles.inputWrapper, 
               { 
-                borderColor: emailError ? "#DC2626" : (emailFocused ? "#0B6FAD" : "#D6E9F2"),
+                borderColor: emailError ? "#DC2626" : (emailFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="mail" size={16} color="#0B6FAD" />
@@ -228,7 +229,8 @@ export default function LoginScreen() {
             <View style={[
               styles.inputWrapper, 
               { 
-                borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : "#D6E9F2"),
+                borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="lock-closed" size={16} color="#0B6FAD" />
@@ -284,9 +286,9 @@ export default function LoginScreen() {
             style={({ pressed }) => [
               styles.googleBtn,
               {
-                backgroundColor: '#fff',
+                backgroundColor: colors.card,
                 borderWidth: 1.5,
-                borderColor: '#D6E9F2',
+                borderColor: colors.border,
                 borderRadius: 12,
                 height: 52,
                 elevation: 2,
@@ -301,11 +303,11 @@ export default function LoginScreen() {
             disabled={googleLoading}
           >
             {googleLoading ? (
-              <ActivityIndicator size="small" color="#1F2937" />
+              <ActivityIndicator size="small" color={colors.foreground} />
             ) : (
               <>
-                <Ionicons name="logo-google" size={18} color="#1F2937" />
-                <Text style={[styles.googleBtnText, { color: "#1F2937", fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
+                <Ionicons name="logo-google" size={18} color={colors.foreground} />
+                <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
               </>
             )}
           </Pressable>
@@ -326,8 +328,8 @@ export default function LoginScreen() {
                   style={[
                     styles.providerBtn,
                     {
-                      backgroundColor: isActive ? "#0B6FAD" : "#FFFFFF",
-                      borderColor: isActive ? "transparent" : "#D6E9F2",
+                      backgroundColor: isActive ? "#0B6FAD" : colors.card,
+                      borderColor: isActive ? "transparent" : colors.border,
                     }
                   ]}
                   onPress={() => setOtpProvider(p)}
@@ -350,7 +352,8 @@ export default function LoginScreen() {
             <View style={[
               styles.inputWrapper, 
               { 
-                borderColor: phoneError ? "#DC2626" : (phoneFocused ? "#0B6FAD" : "#D6E9F2"),
+                borderColor: phoneError ? "#DC2626" : (phoneFocused ? "#0B6FAD" : colors.border),
+                backgroundColor: colors.card,
               }
             ]}>
               <Ionicons name="call" size={16} color="#0B6FAD" />
@@ -433,7 +436,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 16,
     borderWidth: 1.5,
-    backgroundColor: "#FFFFFF",
     minHeight: 48,
   },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },

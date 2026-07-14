@@ -55,7 +55,7 @@ interface AuthContextType {
     password: string,
     grade?: string,
     school?: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; needsEmailVerification?: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
@@ -164,8 +164,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!profile) {
-        devLog('[Auth] Profile not found, creating new profile...');
-        await createUserProfile(supabaseUser);
+        // Trigger may not have fired yet (e.g. email confirmation pending).
+        // Build a minimal user from JWT metadata and wait for the next
+        // onAuthStateChange / foreground refresh to pick up the real row.
+        devLog('[Auth] Profile not found yet — using JWT metadata as fallback');
+        setUser(buildUser(null, supabaseUser));
+        setIsLoading(false);
         return;
       }
 
@@ -336,47 +340,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }
 
-  async function createUserProfile(supabaseUser: SupabaseUser) {
-    devLog('[Auth] Creating profile for user:', supabaseUser.id);
-    try {
-      const profileData = {
-        id: supabaseUser.id,
-        email: supabaseUser.email!,
-        full_name: supabaseUser.user_metadata?.name || supabaseUser.email!.split('@')[0],
-        phone: supabaseUser.user_metadata?.phone || supabaseUser.phone || null,
-        grade: supabaseUser.user_metadata?.grade ?? null,
-        school: supabaseUser.user_metadata?.school ?? null,
-        role: 'pending' as const,
-      };
-
-      const { data, error } = await authService.createProfile(profileData);
-
-      if (error) {
-        devError('[Auth] Profile creation failed:', error.message, error.code);
-        setIsLoading(false);
-        return;
-      }
-
-      if (data) {
-        devLog('[Auth] Profile created successfully');
-        const saved = await profileCache.saveProfile(data);
-        if (!saved) devError('[Auth] Cache write failed after profile creation');
-        setUser(buildUser(data, supabaseUser));
-      }
-    } catch (error: any) {
-      devError('[Auth] Error creating profile:', error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
   async function loginWithGoogle(): Promise<{ success: boolean; error?: string }> {
     try {
       devLog('[Auth] Starting Google OAuth flow...');
       setIsLoading(true);
 
-      // Create redirect URL for OAuth callback
-      const redirectTo = Linking.createURL('/auth/callback');
+      // Build the redirect URI using the registered custom scheme so it
+      // resolves to makersflow://auth/callback in every runtime (Expo Go,
+      // development build, and standalone). Without { scheme } Expo Go
+      // substitutes its own exp:// or http://localhost origin.
+      const redirectTo = Linking.createURL('auth/callback', { scheme: 'makersflow' });
       devLog('[Auth] OAuth redirect URL:', redirectTo);
 
       const { data, error } = await authService.signInWithGoogle(redirectTo);
@@ -404,16 +377,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       devLog('[Auth] Browser session result:', result.type);
 
       if (result.type === 'success') {
-        // Extract tokens from URL and create session
+        // Extract tokens from the callback URL.
+        // Supabase appends tokens in the URL fragment: makersflow://auth/callback#access_token=...&refresh_token=...
+        // new URL() throws on custom schemes in React Native's JS engine, so we
+        // parse the fragment manually instead of relying on the WHATWG URL parser.
         const { url } = result;
-        // Supabase returns tokens in the URL fragment (#), not query string (?)
-        const params = new URL(url.replace('#', '?')).searchParams;
-        
+        const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
+        const params = new URLSearchParams(fragment);
+
         const access_token = params.get('access_token');
         const refresh_token = params.get('refresh_token');
 
         if (access_token && refresh_token) {
-          // Set the session manually
           const { data: sessionData, error: sessionError } = await authService.setSession(
             access_token,
             refresh_token
@@ -426,6 +401,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           devLog('[Auth] Google OAuth successful');
+          setIsLoading(false);
           const userId = sessionData.user?.id || sessionData.session?.user?.id;
           if (userId) {
             const { data: profile } = await authService.getProfile(userId);
@@ -454,7 +430,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     grade?: string,
     school?: string
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; needsEmailVerification?: boolean; error?: string }> {
     try {
       setIsLoading(true);
 
@@ -466,22 +442,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
-        // Explicitly create the profile row — don't rely on onAuthStateChange
-        // firing (it may not if email confirmation is enabled).
-        const profileData = {
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: name,
-          grade: grade ?? null,
-          school: school ?? null,
-          role: 'pending' as const,
-        };
-        const { error: profileError } = await authService.createProfile(profileData);
-        if (profileError) {
-          devError('[Auth] Profile creation error during register:', profileError.message);
-          // Non-fatal — user can still proceed
-        }
-        return { success: true };
+        // Profile is created server-side by the on_auth_user_created trigger.
+        // No client-side INSERT here — the anon role has no active JWT at this
+        // point and would be denied by RLS.
+        //
+        // When Supabase Confirm Email is ON, signUp returns a user but no
+        // session. Signal this to the caller so it can show a verification
+        // prompt instead of navigating into the authenticated app.
+        const needsEmailVerification = !data.session;
+        return { success: true, needsEmailVerification };
       }
 
       return { success: false, error: 'Registration failed' };
