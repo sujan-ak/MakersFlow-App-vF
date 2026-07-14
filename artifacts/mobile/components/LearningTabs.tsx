@@ -138,7 +138,7 @@ export function LearningTabs({ module }: LearningTabsProps) {
                 style={[styles.startQuizBtn, { backgroundColor: colors.primary }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  router.push({ pathname: "/quiz/[id]", params: { id: module.id } });
+                  router.push({ pathname: "/quiz/[id]", params: { id: module.id, title: module.title } });
                 }}
               >
                 <Text style={styles.startQuizBtnText}>Start Quiz</Text>

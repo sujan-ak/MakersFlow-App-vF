@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Platform,
   Pressable,
@@ -181,15 +181,20 @@ export default function LearnScreen() {
     loadData();
   }, [courseId, user?.id]);
 
+  // Show resume modal when switching to a lesson that has saved progress.
+  // Guard: only run after the full data load is done (isLoading=false) so
+  // we never read stale lessonsProgress from a previous lesson (Bug 6).
   useEffect(() => {
-    if (!activeModuleId) return;
+    if (!activeModuleId || isLoading) return;
     const activeProg = lessonsProgress.find((p) => String(p.lesson_id) === activeModuleId);
     const savedTime = activeProg?.current_time_secs;
     if (savedTime && savedTime > 30) {
       setResumeFromTime(savedTime);
       setShowResumeModal(true);
+    } else {
+      setShowResumeModal(false);
     }
-  }, [activeModuleId]);
+  }, [activeModuleId, isLoading]);
 
   if (isLoading) {
     return (
@@ -298,7 +303,9 @@ export default function LearnScreen() {
     showToast(wasAdded ? 'Added to Watch Later' : 'Removed from Watch Later');
   };
 
-  const handleProgressUpdate = async (currentTime: number, duration: number) => {
+  // Stable callbacks — prevent VideoPlayerEnhanced from recreating its
+  // polling interval on every render (Bug 3 & 7)
+  const handleProgressUpdate = useCallback(async (currentTime: number, duration: number) => {
     if (!user?.id || !courseId || !activeModule?.id) return;
     const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
     await upsertLessonProgress(user.id, Number(courseId), Number(activeModule.id), currentTime, watchPercentage);
@@ -308,9 +315,9 @@ export default function LearnScreen() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [user?.id, courseId, activeModule?.id]);
 
-  const handleVideoComplete = async () => {
+  const handleVideoComplete = useCallback(async () => {
     if (!user?.id || !courseId || !activeModule?.id) return;
     await markLessonComplete(user.id, Number(courseId), Number(activeModule.id));
     await completeModule(String(Number(courseId)), String(Number(activeModule.id)));
@@ -351,7 +358,7 @@ export default function LearnScreen() {
     }
 
     setShowCompleteModal(true);
-  };
+  }, [user?.id, courseId, activeModule?.id, totalLessons, enrollment?.completed_at, course?.title, lessons]);
 
   const handleResumeVideo = () => {
     setShowResumeModal(false);

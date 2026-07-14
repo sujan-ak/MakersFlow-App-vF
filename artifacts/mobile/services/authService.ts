@@ -61,6 +61,8 @@ export async function createProfile(profileData: {
   email: string;
   full_name: string;
   role: string;
+  grade?: string | null;
+  school?: string | null;
 }) {
   return await supabase
     .from('profiles')
@@ -81,6 +83,7 @@ export async function updateProfile(
     avatar_url?: string | null;
     age?: number | null;
     onboarding_completed?: boolean;
+    phone?: string | null;
   }
 ) {
   return await supabase

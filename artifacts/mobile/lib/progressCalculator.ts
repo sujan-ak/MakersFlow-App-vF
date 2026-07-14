@@ -2,39 +2,78 @@ import { ModuleProgress, VideoProgress } from "./progressStorage";
 
 export const ProgressCalculator = {
   /**
-   * Calculate consecutive daily learning streak
+   * Calculate consecutive daily learning streak.
+   * Returns { current, longest }.
    */
-  calculateStreak(progressList: any[]): number {
-    const dates = progressList
-      .map((p) => p.last_watched_at ? new Date(p.last_watched_at).toDateString() : null)
-      .filter(Boolean)
-      .filter((date, index, self) => self.indexOf(date) === index)
-      .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime());
+  calculateStreak(progressList: any[]): { current: number; longest: number } {
+    // Build unique YYYY-MM-DD keys from last_watched_at (local time)
+    const daySet = new Set<string>();
+    progressList.forEach((p) => {
+      if (!p.last_watched_at) return;
+      const d = new Date(p.last_watched_at);
+      daySet.add(
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      );
+    });
 
-    if (dates.length === 0) return 0;
+    if (daySet.size === 0) return { current: 0, longest: 0 };
 
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    // Helper: YYYY-MM-DD for any Date
+    const toKey = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-    if (dates[0] !== today && dates[0] !== yesterday) {
-      return 0; // streak broken
-    }
+    // Helper: subtract N days from a YYYY-MM-DD key
+    const subtractDay = (key: string): string => {
+      const d = new Date(key + 'T12:00:00'); // noon avoids DST edge cases
+      d.setDate(d.getDate() - 1);
+      return toKey(d);
+    };
 
-    let streak = 1;
-    let currentDate = new Date(dates[0]!);
+    const addDay = (key: string): string => {
+      const d = new Date(key + 'T12:00:00');
+      d.setDate(d.getDate() + 1);
+      return toKey(d);
+    };
 
-    for (let i = 1; i < dates.length; i++) {
-      const prevDate = new Date(currentDate);
-      prevDate.setDate(prevDate.getDate() - 1);
+    const todayKey     = toKey(new Date());
+    const yesterdayKey = subtractDay(todayKey);
 
-      if (dates[i] === prevDate.toDateString()) {
-        streak++;
-        currentDate = new Date(dates[i]!);
-      } else {
-        break;
+    // ── Current streak ────────────────────────────────────────────────────────
+    // Walk backwards from today; streak is 0 if neither today nor yesterday
+    // has activity (broken streak).
+    let current = 0;
+    const startKey = daySet.has(todayKey)
+      ? todayKey
+      : daySet.has(yesterdayKey)
+      ? yesterdayKey
+      : null;
+
+    if (startKey) {
+      let cursor = startKey;
+      while (daySet.has(cursor)) {
+        current++;
+        cursor = subtractDay(cursor);
       }
     }
-    return streak;
+
+    // ── Longest streak ────────────────────────────────────────────────────────
+    // Sort days ascending and find the longest consecutive run.
+    const asc = Array.from(daySet).sort();
+    let longest = 1;
+    let run = 1;
+    for (let i = 1; i < asc.length; i++) {
+      if (asc[i] === addDay(asc[i - 1])) {
+        run++;
+        if (run > longest) longest = run;
+      } else {
+        run = 1;
+      }
+    }
+
+    // longest must never be less than current
+    longest = Math.max(longest, current);
+
+    return { current, longest };
   },
 
   /**

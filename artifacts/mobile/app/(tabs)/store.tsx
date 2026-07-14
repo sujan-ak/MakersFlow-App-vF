@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Platform,
   Pressable,
@@ -18,82 +18,21 @@ import { SearchBar } from "@/components/SearchBar";
 import { SectionHeader } from "@/components/SectionHeader";
 import { ProductCardSkeleton } from "@/components/SkeletonLoader";
 import { useCart } from "@/context/CartContext";
-import { STORE_CATEGORIES, Product } from "@/data/mockData";
+import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
-import { supabase } from "@/lib/supabase";
-
-const productFallbacks: Record<string, any[]> = {
-  physical: [
-    require('@/assets/images/product_kit_1.png'),
-    require('@/assets/images/product_kit_2.png'),
-    require('@/assets/images/product_kit_3.png'),
-  ],
-  digital: [
-    require('@/assets/images/product_notes_1.png'),
-    require('@/assets/images/product_notes_2.png'),
-    require('@/assets/images/product_notes_3.png'),
-  ]
-};
-
-function mapSupabaseProduct(row: any, index: number): Product {
-  const isCourse =
-    row.is_course === true ||
-    row.category?.toLowerCase() === 'courses' ||
-    row.subcategory?.toLowerCase() === 'courses';
-
-  const isPhysical =
-    !isCourse &&
-    (row.category?.toLowerCase() === 'physical' ||
-      row.subcategory?.toLowerCase() === 'physical kits' ||
-      row.subcategory?.toLowerCase() === 'kit' ||
-      row.subcategory?.toLowerCase() === 'kits');
-
-  const isDigital =
-    isCourse ||
-    row.category?.toLowerCase() === 'digital' ||
-    row.subcategory?.toLowerCase() === 'notes' ||
-    row.subcategory?.toLowerCase() === 'premium resources';
-
-  const category: 'physical' | 'digital' = isPhysical ? 'physical' : isDigital ? 'digital' : 'physical';
-
-  let subcategory: string;
-  if (isCourse) {
-    subcategory = 'Courses';
-  } else if (isPhysical) {
-    subcategory = 'Physical Kits';
-  } else if (row.subcategory?.toLowerCase() === 'notes') {
-    subcategory = 'Notes';
-  } else if (row.subcategory?.toLowerCase() === 'premium resources') {
-    subcategory = 'Premium Resources';
-  } else {
-    subcategory = row.subcategory || (category === 'digital' ? 'Notes' : 'Physical Kits');
-  }
-
-  const thumbnail = row.thumbnail_url
-    ? { uri: row.thumbnail_url }
-    : (productFallbacks[category] || productFallbacks.physical)[index % 3];
-
-  return {
-    id: String(row.id),
-    title: row.title || 'Untitled Product',
-    category,
-    subcategory,
-    price: Number(row.price) || 0,
-    originalPrice: Number(row.original_price) || Number(row.price) || 0,
-    thumbnail,
-    description: row.description || 'No description available.',
-    rating: Number(row.rating) || 0,
-    reviews: Number(row.total_reviews) || 0,
-    inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
-    badge: row.badge || undefined,
-    features: Array.isArray(row.features) ? row.features : [],
-  };
-}
+import { storeRepository } from "@/repositories/storeRepository";
+import { useAuth } from "@/context/AuthContextSupabase";
+import { useNetwork } from "@/context/NetworkContext";
 
 export default function StoreScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { count } = useCart();
+  const { isOffline } = useAuth();
+  const { addReconnectListener } = useNetwork();
+
+  // Debounce ref — prevents rapid reconnect events from triggering repeated refreshes
+  const reconnectDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleShare = async () => {
     const link = "https://edodwaja.com/store";
@@ -125,30 +64,30 @@ export default function StoreScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadProducts = useCallback(async (isRefreshing = false) => {
-    if (!isRefreshing) {
-      setIsLoading(true);
-    }
+    if (!isRefreshing) setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status, is_course, course_id')
-        .or('status.eq.available,status.eq.active');
-
-      if (error) {
-        console.error('[Store] Error loading products:', error);
-        return;
-      }
-
-      if (data) {
-        const mapped = data.map((row, idx) => mapSupabaseProduct(row, idx));
-        setProducts(mapped);
-      }
+      const result = await storeRepository.get(isOffline);
+      setProducts(result.data.products);
     } catch (err) {
-      console.error('[Store] load error:', err);
+      console.error('[Store] loadProducts error:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isOffline]);
+
+  // ── Reconnect listener with debounce (prevents rapid refresh storms) ──────
+  useEffect(() => {
+    const unsubscribe = addReconnectListener(() => {
+      if (reconnectDebounceRef.current) clearTimeout(reconnectDebounceRef.current);
+      reconnectDebounceRef.current = setTimeout(() => {
+        loadProducts(true);
+      }, 1500);
+    });
+    return () => {
+      unsubscribe();
+      if (reconnectDebounceRef.current) clearTimeout(reconnectDebounceRef.current);
+    };
+  }, [addReconnectListener, loadProducts]);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,14 +106,14 @@ export default function StoreScreen() {
   const physicalProducts = products.filter((p) => p.category === "physical");
   const digitalProducts = products.filter((p) => p.category === "digital");
 
+  const storeCategories = [
+    "All",
+    ...Array.from(new Set(products.map((p) => p.subcategory).filter(Boolean))),
+  ];
+
   const filtered = products.filter((p) => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase());
-    const matchCat =
-      activeCategory === "All" ||
-      (activeCategory === "Physical Kits" && p.category === "physical") ||
-      (activeCategory === "Courses" && p.subcategory === "Courses") ||
-      (activeCategory === "Notes" && p.subcategory === "Notes") ||
-      (activeCategory === "Premium Resources" && p.subcategory === "Premium Resources");
+    const matchCat = activeCategory === "All" || p.subcategory === activeCategory;
     return matchSearch && matchCat;
   });
 
@@ -221,7 +160,7 @@ export default function StoreScreen() {
           <SearchBar value={search} onChangeText={setSearch} placeholder="Search products..." />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
-          {STORE_CATEGORIES.map((cat) => (
+          {storeCategories.map((cat) => (
             <Pressable
               key={cat}
               style={[

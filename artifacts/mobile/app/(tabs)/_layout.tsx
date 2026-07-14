@@ -70,7 +70,9 @@ function TabLayout() {
             </View>
           ),
           tabBarLabelStyle: {
-            display: "none" // Hide label for FAB tab
+            fontSize: 11,
+            fontFamily: "Inter_600SemiBold",
+            marginTop: 4,
           },
           tabBarAccessibilityLabel: "Courses tab",
         }}

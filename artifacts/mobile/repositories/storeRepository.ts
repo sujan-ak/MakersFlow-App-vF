@@ -1,0 +1,174 @@
+/**
+ * storeRepository.ts
+ *
+ * Provides all product data for the Store screen.
+ * The screen calls only storeRepository.get() — it never knows if data came
+ * from Supabase or the local cache.
+ *
+ * Cache strategy
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Store products are entirely public (no user-specific data).
+ *   - Key: CACHED_PRODUCTS_CATALOG   TTL: 30 min   (CACHE_POLICY.STORE_PRODUCTS_TTL_MS)
+ *
+ * Refresh strategy
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Online:  fetch → write cache → return live data
+ * Offline: read cache → return stale (or empty if cold)
+ *
+ * Invalidation
+ * ─────────────────────────────────────────────────────────────────────────────
+ * cacheManager evicts version-mismatched entries on read.
+ * TTL expiry returns stale=true on RepositoryResult; next online load overwrites.
+ */
+
+import { supabase } from '@/lib/supabase';
+import { STORAGE_KEYS } from '@/constants/storageKeys';
+import { CACHE_POLICY } from '@/constants/cachePolicy';
+import { cacheManager, networkResult, cacheResult, RepositoryResult } from '@/services/cacheManager';
+import { isNetworkError } from '@/lib/networkUtils';
+import { Product } from '@/data/mockData';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+export interface StoreData {
+  products: Product[];
+}
+
+export const EMPTY_STORE_DATA: StoreData = { products: [] };
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Extracts the first URL from a thumbnail_url that may be a comma-separated
+ *  list or a JSON array (as stored when admin uploads multiple images). */
+function firstThumbnailUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      const arr = JSON.parse(trimmed);
+      return Array.isArray(arr) && arr[0] ? String(arr[0]) : null;
+    } catch { /* fall through */ }
+  }
+  const first = trimmed.split(',')[0].trim();
+  return first || null;
+}
+
+// ── Product mapper (lifted from screen — single source of truth) ─────────────
+const productFallbacks: Record<string, any[]> = {
+  physical: [
+    require('@/assets/images/product_kit_1.png'),
+    require('@/assets/images/product_kit_2.png'),
+    require('@/assets/images/product_kit_3.png'),
+  ],
+  digital: [
+    require('@/assets/images/product_notes_1.png'),
+    require('@/assets/images/product_notes_2.png'),
+    require('@/assets/images/product_notes_3.png'),
+  ],
+};
+
+function mapRow(row: any, index: number): Product {
+  const isCourse =
+    row.is_course === true ||
+    row.category?.toLowerCase() === 'courses' ||
+    row.subcategory?.toLowerCase() === 'courses';
+
+  const isPhysical =
+    !isCourse &&
+    (row.category?.toLowerCase() === 'physical' ||
+      row.subcategory?.toLowerCase() === 'physical kits' ||
+      row.subcategory?.toLowerCase() === 'kit' ||
+      row.subcategory?.toLowerCase() === 'kits');
+
+  const isDigital =
+    isCourse ||
+    row.category?.toLowerCase() === 'digital' ||
+    row.subcategory?.toLowerCase() === 'notes' ||
+    row.subcategory?.toLowerCase() === 'premium resources';
+
+  const category: 'physical' | 'digital' = isPhysical ? 'physical' : isDigital ? 'digital' : 'physical';
+
+  let subcategory: string;
+  if (isCourse)                                          subcategory = 'Courses';
+  else if (isPhysical)                                   subcategory = 'Physical Kits';
+  else if (row.subcategory?.toLowerCase() === 'notes')   subcategory = 'Notes';
+  else if (row.subcategory?.toLowerCase() === 'premium resources') subcategory = 'Premium Resources';
+  else subcategory = row.subcategory || (category === 'digital' ? 'Notes' : 'Physical Kits');
+
+  const firstUrl = firstThumbnailUrl(row.thumbnail_url);
+  const thumbnail = firstUrl
+    ? { uri: firstUrl }
+    : (productFallbacks[category] || productFallbacks.physical)[index % 3];
+
+  return {
+    id: String(row.id),
+    title: row.title || 'Untitled Product',
+    category,
+    subcategory,
+    price: Number(row.price) || 0,
+    originalPrice: Number(row.original_price) || Number(row.price) || 0,
+    thumbnail,
+    description: row.description || 'No description available.',
+    rating: Number(row.rating) || 0,
+    reviews: Number(row.total_reviews) || 0,
+    inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+    badge: row.badge || undefined,
+    features: Array.isArray(row.features) ? row.features : [],
+  };
+}
+
+// ── Remote fetcher ───────────────────────────────────────────────────────────
+async function fetchProducts(): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from('products')
+    .select(
+      'id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status, is_course, course_id'
+    )
+    .or('status.eq.available,status.eq.active');
+
+  if (error) throw error;
+  return (data ?? []).map((row, idx) => mapRow(row, idx));
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+export const storeRepository = {
+  /**
+   * get() — the only method the screen calls.
+   *
+   * Online:  fetchRemote → write cache → return live data
+   * Offline: read cache  → return stale (or empty if cold)
+   *
+   * The screen does not know which path was taken.
+   */
+  async get(isOffline: boolean): Promise<RepositoryResult<StoreData>> {
+    if (isOffline) {
+      return storeRepository.loadFromCache();
+    }
+
+    try {
+      const products = await fetchProducts();
+      cacheManager.write(STORAGE_KEYS.CACHED_PRODUCTS_CATALOG, products);
+      return networkResult({ products });
+    } catch (err: any) {
+      if (isNetworkError(err)) {
+        console.warn('[storeRepo] Network error — falling back to cache');
+      } else {
+        console.error('[storeRepo] Unexpected fetch error:', err);
+      }
+      return storeRepository.loadFromCache();
+    }
+  },
+
+  /** Load StoreData entirely from local cache. */
+  async loadFromCache(): Promise<RepositoryResult<StoreData>> {
+    const result = await cacheManager.readWithMeta<Product[]>(
+      STORAGE_KEYS.CACHED_PRODUCTS_CATALOG,
+      CACHE_POLICY.STORE_PRODUCTS_TTL_MS
+    );
+
+    const products = result?.data ?? [];
+    const updatedAt = result?.updatedAt ?? new Date().toISOString();
+    return cacheResult({ products }, updatedAt, CACHE_POLICY.STORE_PRODUCTS_TTL_MS);
+  },
+
+  // No clearUserCache() — store data is entirely public.
+};

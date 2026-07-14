@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as Haptics from "expo-haptics";
 import * as ScreenOrientation from "expo-screen-orientation";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
   Dimensions,
@@ -211,14 +211,37 @@ export function VideoPlayerEnhanced({
     };
   }, []);
 
-  // Debug video URL on mount
+  // When videoUrl changes (lesson switch), replace the source and reset
+  // completion flag so the new lesson can fire onComplete (Bug 4 & 5).
+  const prevVideoUrl = useRef(videoUrl);
   useEffect(() => {
-    devLog("[VideoPlayer] Initializing with URL:", videoUrl);
-    devLog("[VideoPlayer] Initial time:", initialTime);
-  }, []);
+    if (!player) return;
+    if (videoUrl !== prevVideoUrl.current) {
+      prevVideoUrl.current = videoUrl;
+      hasEmittedComplete.current = false;
+      lastSaveTime.current = 0;
+      try {
+        player.replace(videoUrl);
+        if (initialTime > 30) {
+          // Small delay to let the new source load before seeking
+          setTimeout(() => {
+            try { player.currentTime = initialTime; } catch {}
+          }, 300);
+        }
+      } catch (err) {
+        devLog('[VideoPlayer] replace error:', err);
+      }
+    }
+    devLog("[VideoPlayer] URL:", videoUrl, "initialTime:", initialTime);
+  }, [videoUrl, player]);
 
   // Auto-hide controls after delay when playing
-  const showControlsWithTimer = () => {
+  // Use a ref for isPlaying so showControlsWithTimer always reads the
+  // current value without needing to be recreated (Bug 2).
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  const showControlsWithTimer = useCallback(() => {
     if (!isMounted.current) return;
     setShowControls(true);
     Animated.timing(overlayOpacity, {
@@ -227,11 +250,9 @@ export function VideoPlayerEnhanced({
       useNativeDriver: true,
     }).start();
 
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-    }
+    if (hideTimer.current) clearTimeout(hideTimer.current);
 
-    if (isPlaying) {
+    if (isPlayingRef.current) {
       hideTimer.current = setTimeout(() => {
         if (!isMounted.current) return;
         Animated.timing(overlayOpacity, {
@@ -239,13 +260,20 @@ export function VideoPlayerEnhanced({
           duration: 100,
           useNativeDriver: true,
         }).start(() => {
-          if (isMounted.current) {
-            setShowControls(false);
-          }
+          if (isMounted.current) setShowControls(false);
         });
       }, 3000);
     }
-  };
+  }, []);  // stable — reads isPlayingRef.current at call time
+
+  // Stable refs for callbacks so the polling interval never needs to be
+  // recreated when the parent re-renders (Bug 3).
+  const onProgressUpdateRef = useRef(onProgressUpdate);
+  const onCompleteRef = useRef(onComplete);
+  const onLoadingStateChangeRef = useRef(onLoadingStateChange);
+  useEffect(() => { onProgressUpdateRef.current = onProgressUpdate; }, [onProgressUpdate]);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  useEffect(() => { onLoadingStateChangeRef.current = onLoadingStateChange; }, [onLoadingStateChange]);
 
   useEffect(() => {
     if (!player) return;
@@ -262,7 +290,12 @@ export function VideoPlayerEnhanced({
         const durationT = player.duration;
         const status = player.status;
 
-        setIsPlaying(playing);
+        // Only update isPlaying state if it actually changed to avoid
+        // unnecessary re-renders fighting with togglePlayPause
+        if (playing !== isPlayingRef.current) {
+          isPlayingRef.current = playing;
+          setIsPlaying(playing);
+        }
         setCurrentTime(currentT);
         setDuration(durationT);
         setIsMuted(player.muted);
@@ -270,7 +303,7 @@ export function VideoPlayerEnhanced({
 
         const loading = status === "loading";
         setIsLoading(loading);
-        onLoadingStateChange?.(loading);
+        onLoadingStateChangeRef.current?.(loading);
 
         // Buffering watchdog — stuck in "loading" for too long
         if (loading) {
@@ -303,14 +336,14 @@ export function VideoPlayerEnhanced({
         // Save progress every 5 seconds
         const now = Date.now();
         if (playing && now - lastSaveTime.current >= 5000) {
-          onProgressUpdate?.(currentT, durationT);
+          onProgressUpdateRef.current?.(currentT, durationT);
           lastSaveTime.current = now;
         }
 
         // Check completion threshold (90%)
         const percentage = durationT > 0 ? (currentT / durationT) * 100 : 0;
         if (percentage >= 90 && !hasEmittedComplete.current) {
-          onComplete?.();
+          onCompleteRef.current?.();
           hasEmittedComplete.current = true;
         }
       } catch (err) {
@@ -322,7 +355,7 @@ export function VideoPlayerEnhanced({
     return () => {
       clearInterval(playingInterval);
     };
-  }, [player, onProgressUpdate, onComplete, onLoadingStateChange]);
+  }, [player]); // stable — only recreate when player instance changes
 
   // Auto-hide effect
   useEffect(() => {
@@ -380,11 +413,14 @@ export function VideoPlayerEnhanced({
     }
   };
 
+  // Single tap only toggles controls visibility.
+  // Play/pause is handled exclusively by the explicit buttons (Bug 1).
   const handleVideoTap = () => {
     if (!showControls) {
       showControlsWithTimer();
     } else {
-      togglePlayPause();
+      // Just reset the hide timer — don't toggle play/pause on a bare tap
+      showControlsWithTimer();
     }
   };
 
@@ -452,16 +488,22 @@ export function VideoPlayerEnhanced({
     if (!isMounted.current || !player) return;
 
     try {
-      const isAtEnd = duration > 0 && currentTime >= duration - 0.5;
+      // Read ground truth from player directly — never from stale React state
+      const currentlyPlaying = player.playing;
+      const isAtEnd = duration > 0 && player.currentTime >= duration - 0.5;
 
-      if (isPlaying) {
+      if (currentlyPlaying) {
         player.pause();
+        setIsPlaying(false);
+        isPlayingRef.current = false;
       } else {
         if (isAtEnd) {
           player.currentTime = 0;
           hasEmittedComplete.current = false;
         }
         player.play();
+        setIsPlaying(true);
+        isPlayingRef.current = true;
       }
       showControlsWithTimer();
     } catch (err) {
@@ -475,8 +517,8 @@ export function VideoPlayerEnhanced({
     if (!duration || duration <= 0 || !isFinite(duration)) return;
 
     try {
-      player.seekBy(15);
-      setCurrentTime(Math.min(duration, currentTime + 15));
+      player.seekBy(10);
+      setCurrentTime(Math.min(duration, currentTime + 10));
       showControlsWithTimer();
     } catch (err) {
       devError("[VideoPlayer] Failed skipForward:", err);
@@ -488,8 +530,8 @@ export function VideoPlayerEnhanced({
     if (!isMounted.current || !player) return;
 
     try {
-      player.seekBy(-15);
-      setCurrentTime(Math.max(0, currentTime - 15));
+      player.seekBy(-10);
+      setCurrentTime(Math.max(0, currentTime - 10));
       showControlsWithTimer();
     } catch (err) {
       devError("[VideoPlayer] Failed skipBackward:", err);
@@ -695,12 +737,24 @@ export function VideoPlayerEnhanced({
           )}
         </View>
 
-        {/* Center Controls (Large Play/Pause Button) */}
+        {/* Center Controls (Large Play/Pause Button + Skip Buttons) */}
         <View style={styles.centerPlayOverlayContainer}>
           {showControls && (
-            <Pressable onPress={togglePlayPause} style={styles.centerPlayPauseBtn}>
-              <Feather name={isPlaying ? "pause" : "play"} size={36} color="#FFF" style={isPlaying ? {} : { marginLeft: 4 }} />
-            </Pressable>
+            <View style={styles.centerPlaybackButtons}>
+              <Pressable onPress={skipBackward} style={styles.centerPlayPauseBtn}>
+                <Feather name="rotate-ccw" size={22} color="#FFF" />
+                <Text style={{ color: "#FFF", fontSize: 9, fontWeight: "bold", marginTop: 2 }}>10s</Text>
+              </Pressable>
+
+              <Pressable onPress={togglePlayPause} style={[styles.centerPlayPauseBtn, { width: 70, height: 70, borderRadius: 35 }]}>
+                <Feather name={isPlaying ? "pause" : "play"} size={36} color="#FFF" style={isPlaying ? {} : { marginLeft: 4 }} />
+              </Pressable>
+
+              <Pressable onPress={skipForward} style={styles.centerPlayPauseBtn}>
+                <Feather name="rotate-cw" size={22} color="#FFF" />
+                <Text style={{ color: "#FFF", fontSize: 9, fontWeight: "bold", marginTop: 2 }}>10s</Text>
+              </Pressable>
+            </View>
           )}
         </View>
 
@@ -787,6 +841,7 @@ export function VideoPlayerEnhanced({
             contentFit="cover"
             allowsPictureInPicture={false}
           />
+          <View style={StyleSheet.absoluteFill} />
           
           {/* Double Tap Seek Indicators */}
           {showLeftIndicator && (
@@ -839,6 +894,7 @@ export function VideoPlayerEnhanced({
                 contentFit="cover"
                 allowsPictureInPicture={false}
               />
+              <View style={StyleSheet.absoluteFill} />
               
               {/* Double Tap Seek Indicators */}
               {showLeftIndicator && (

@@ -3,10 +3,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
+  FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -56,6 +58,9 @@ export default function CourseDetailScreen() {
   const isFavorite = course ? isFavoriteCourse(course.id) : false;
 
   const [activeTab, setActiveTab] = useState<"overview" | "lessons" | "reviews">("overview");
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const imageListRef = useRef<FlatList>(null);
+  const SCREEN_WIDTH = Dimensions.get("window").width;
 
   const [myReview, setMyReview] = useState<{ rating: number; comment: string } | null>(null);
   const [draftRating, setDraftRating] = useState(0);
@@ -89,9 +94,23 @@ export default function CourseDetailScreen() {
     if (!isRefreshing) {
       setIsLoading(true);
     }
+
+    function parseThumbnailUrls(raw: string | null | undefined): string[] {
+      if (!raw) return [];
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('[')) {
+        try {
+          const arr = JSON.parse(trimmed);
+          if (Array.isArray(arr)) return arr.map(String).filter(Boolean);
+        } catch { /* fall through */ }
+      }
+      return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
     try {
       const courseData = await getCourseById(id);
       if (courseData) {
+        const images = parseThumbnailUrls(courseData.thumbnail_url);
         const mappedCourse = {
           id: String(courseData.id),
           title: courseData.title,
@@ -99,7 +118,10 @@ export default function CourseDetailScreen() {
           level: courseData.level ? (courseData.level.charAt(0).toUpperCase() + courseData.level.slice(1)) : "Beginner",
           price: courseData.price || 0,
           isFree: courseData.is_free,
-          thumbnail: courseData.thumbnail_url ? { uri: courseData.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+          images: images.length > 0 ? images : null,
+          thumbnail: images.length > 0
+            ? { uri: images[0] }
+            : require('@/assets/images/course_robotics.png'),
           instructor: "MakersFlow Instructor",
           rating: 4.8,
           reviews: 120,
@@ -358,9 +380,44 @@ export default function CourseDetailScreen() {
           />
         }
       >
-        {/* Thumbnail Hero Area with overlaid actions */}
+        {/* Thumbnail Hero — swipeable carousel if multiple images */}
         <View style={styles.thumbnailContainer}>
-          <Image source={course.thumbnail} style={styles.thumbnail} />
+          {course.images && course.images.length > 1 ? (
+            <>
+              <FlatList
+                ref={imageListRef}
+                data={course.images}
+                keyExtractor={(_, i) => String(i)}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                  setActiveImageIndex(idx);
+                }}
+                renderItem={({ item }) => (
+                  <Image
+                    source={{ uri: item }}
+                    style={[styles.thumbnail, { width: SCREEN_WIDTH }]}
+                  />
+                )}
+              />
+              {/* Dot indicators */}
+              <View style={styles.dotRow}>
+                {course.images.map((_: any, i: number) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      { backgroundColor: i === activeImageIndex ? "#FFF" : "rgba(255,255,255,0.45)" },
+                    ]}
+                  />
+                ))}
+              </View>
+            </>
+          ) : (
+            <Image source={course.thumbnail} style={styles.thumbnail} />
+          )}
           <View style={styles.overlay} />
           <Pressable
             style={[styles.backCircle, { top: topOffset + 8 }]}
@@ -593,7 +650,7 @@ export default function CourseDetailScreen() {
                     style={[styles.quizCard, { backgroundColor: "#0B6FAD" }]}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      router.push({ pathname: "/quiz/[id]", params: { id: quiz.id } });
+                      router.push({ pathname: "/quiz/[id]", params: { id: quiz.id, title: quiz.title } });
                     }}
                   >
                     <View>
@@ -818,7 +875,21 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   errorText: { fontSize: 16, textAlign: "center", marginTop: 40 },
   thumbnailContainer: { position: "relative", height: 240 },
-  thumbnail: { width: "100%", height: "100%", resizeMode: "cover" },
+  thumbnail: { width: "100%", height: 240, resizeMode: "cover" },
+  dotRow: {
+    position: "absolute",
+    bottom: 48,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
   backCircle: {
     position: "absolute",

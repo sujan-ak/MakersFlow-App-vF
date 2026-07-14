@@ -28,7 +28,7 @@ export default function EditProfileScreen() {
   const { user, updateUser } = useAuth();
 
   const [name, setName] = useState(user?.name ?? "");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(user?.phone ?? "");
   const [grade, setGrade] = useState(user?.grade ?? "");
   const [school, setSchool] = useState(user?.school ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.avatar ?? "");
@@ -41,6 +41,7 @@ export default function EditProfileScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const result = await updateUser({ 
       name, 
+      phone: phone.trim() || undefined,
       grade, 
       school,
       avatar: avatarUri || undefined,

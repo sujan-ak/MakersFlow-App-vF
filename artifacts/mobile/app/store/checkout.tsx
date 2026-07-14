@@ -2,12 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -30,6 +32,120 @@ import {
   createRazorpayOrder,
   verifyRazorpayPayment,
 } from "@/services/razorpayService";
+
+// ─── Slide-to-Pay Button ─────────────────────────────────────────────────────
+
+function SlideToPayButton({
+  amount,
+  onSlideComplete,
+  loading,
+}: {
+  amount: number;
+  onSlideComplete: () => void;
+  loading: boolean;
+}) {
+  const TRACK_WIDTH = 340; // approximate; thumb travel = TRACK_WIDTH - 48 - 8
+  const THUMB_SIZE = 48;
+  const PADDING = 4;
+  const MAX_SLIDE = TRACK_WIDTH - THUMB_SIZE - PADDING * 2;
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [completed, setCompleted] = useState(false);
+
+  // Pulse animation on the chevrons to hint sliding
+  useEffect(() => {
+    if (loading || completed) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [loading, completed]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gs) => {
+        const clamped = Math.max(0, Math.min(gs.dx, MAX_SLIDE));
+        translateX.setValue(clamped);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx >= MAX_SLIDE * 0.85) {
+          Animated.timing(translateX, {
+            toValue: MAX_SLIDE,
+            duration: 120,
+            useNativeDriver: true,
+          }).start(() => {
+            setCompleted(true);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            onSlideComplete();
+          });
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // Reset when loading finishes (payment failed / dismissed)
+  useEffect(() => {
+    if (!loading && !completed) {
+      translateX.setValue(0);
+    }
+    if (!loading) setCompleted(false);
+  }, [loading]);
+
+  return (
+    <View style={styles.slideTrack}>
+      <LinearGradient
+        colors={["#0B6FAD", "#17E5D3"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {loading ? (
+        <ActivityIndicator color="#FFF" />
+      ) : (
+        <>
+          {/* Hint chevrons */}
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, opacity: pulseAnim },
+            ]}
+            pointerEvents="none"
+          >
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.6)" />
+            <Text style={styles.slideLabel}>Slide to Pay ₹{amount}</Text>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.6)" />
+          </Animated.View>
+
+          {/* Draggable thumb */}
+          <Animated.View
+            style={[styles.slideThumb, { transform: [{ translateX }] }]}
+            {...panResponder.panHandlers}
+          >
+            {completed ? (
+              <Ionicons name="checkmark" size={22} color="#0B6FAD" />
+            ) : (
+              <Ionicons name="chevron-forward" size={22} color="#0B6FAD" />
+            )}
+          </Animated.View>
+        </>
+      )}
+    </View>
+  );
+}
 
 export default function CheckoutScreen() {
   const colors = useColors();
@@ -90,7 +206,7 @@ export default function CheckoutScreen() {
   const [formCity, setFormCity] = useState("");
   const [formState, setFormState] = useState("");
   const [formPostalCode, setFormPostalCode] = useState("");
-  const [formPhone, setFormPhone] = useState("");
+  const [formPhone, setFormPhone] = useState("+91");
 
   const [showPayment, setShowPayment] = useState(false);
   const [razorpayParams, setRazorpayParams] = useState<RazorpayPaymentParams | null>(null);
@@ -139,7 +255,7 @@ export default function CheckoutScreen() {
       });
   }, [user?.id]);
 
-  async function loadAddresses() {
+  async function loadAddresses(keepSelectedId?: string) {
     if (!user?.id) return;
     const { data, error } = await supabase
       .from("shipping_addresses")
@@ -148,20 +264,25 @@ export default function CheckoutScreen() {
       .order("is_default", { ascending: false });
     if (error || !data) return;
     setAddresses(data);
-    const def = data.find((a) => a.is_default) ?? data[0];
-    if (def) {
-      setSelectedAddressId(String(def.id));
-      setName(def.full_name);
-      setPhone(def.phone);
+    // Only auto-select default if we don't already have a specific id to keep
+    if (keepSelectedId) {
+      setSelectedAddressId(keepSelectedId);
+    } else {
+      const def = data.find((a) => a.is_default) ?? data[0];
+      if (def) {
+        setSelectedAddressId(String(def.id));
+        setName(def.full_name);
+        setPhone(def.phone);
+      }
     }
   }
 
-  useEffect(() => { loadAddresses(); }, [user?.id]);
+  useEffect(() => { loadAddresses(undefined); }, [user?.id]);
 
   const resetAddressForm = () => {
     setEditingAddressId(null);
     setFormFullName(""); setFormAddressLine1(""); setFormAddressLine2("");
-    setFormCity(""); setFormState(""); setFormPostalCode(""); setFormPhone("");
+    setFormCity(""); setFormState(""); setFormPostalCode(""); setFormPhone("+91");
   };
 
   const handleEditAddress = (addr: any) => {
@@ -172,7 +293,8 @@ export default function CheckoutScreen() {
     setFormCity(addr.city);
     setFormState(addr.state);
     setFormPostalCode(addr.postal_code);
-    setFormPhone(addr.phone);
+    const ph = addr.phone ?? "";
+    setFormPhone(ph.startsWith("+91") ? ph : `+91${ph}`);
     setShowAddressForm(true);
   };
 
@@ -180,8 +302,9 @@ export default function CheckoutScreen() {
     if (!formFullName.trim() || !formAddressLine1.trim() || !formCity.trim() || !formState.trim() || !formPostalCode.trim() || !formPhone.trim()) {
       Alert.alert("Validation Error", "All fields except Address Line 2 are required."); return;
     }
-    if (!/^\d{10}$/.test(formPhone.trim())) {
-      Alert.alert("Validation Error", "Phone must be a 10-digit number."); return;
+    const rawPhone = formPhone.trim().replace(/^\+91/, "");
+    if (!/^\d{10}$/.test(rawPhone)) {
+      Alert.alert("Validation Error", "Phone must be a 10-digit number after +91."); return;
     }
     if (!/^\d{6}$/.test(formPostalCode.trim())) {
       Alert.alert("Validation Error", "Pincode must be exactly 6 digits."); return;
@@ -196,18 +319,47 @@ export default function CheckoutScreen() {
       city: formCity.trim(),
       state: formState.trim(),
       postal_code: formPostalCode.trim(),
-      phone: formPhone.trim(),
+      phone: formPhone.trim().replace(/^\+91/, ""),
     };
 
-    const { error } = editingAddressId
-      ? await supabase.from("shipping_addresses").update(addressData).eq("id", Number(editingAddressId))
-      : await supabase.from("shipping_addresses").insert({ ...addressData, is_default: addresses.length === 0 });
+    if (editingAddressId) {
+      const { error } = await supabase.from("shipping_addresses").update(addressData).eq("id", Number(editingAddressId));
+      if (error) { Alert.alert("Error", error.message); return; }
+      setShowAddressForm(false);
+      resetAddressForm();
+      await loadAddresses(selectedAddressId ?? undefined);
+    } else {
+      const isFirst = addresses.length === 0;
+      const { data: inserted, error } = await supabase
+        .from("shipping_addresses")
+        .insert({ ...addressData, is_default: isFirst })
+        .select()
+        .single();
+      if (error) { Alert.alert("Error", error.message); return; }
+      setShowAddressForm(false);
+      resetAddressForm();
+      const newId = inserted?.id ? String(inserted.id) : null;
+      await loadAddresses(newId ?? undefined);
+    }
+  };
 
-    if (error) { Alert.alert("Error", error.message); return; }
-    Alert.alert("Success", "Address saved successfully.");
-    setShowAddressForm(false);
-    resetAddressForm();
-    await loadAddresses();
+  const handleDeleteAddress = (addr: any) => {
+    Alert.alert(
+      "Delete Address",
+      `Remove address for ${addr.full_name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete", style: "destructive",
+          onPress: async () => {
+            const { error } = await supabase.from("shipping_addresses").delete().eq("id", addr.id);
+            if (error) { Alert.alert("Error", error.message); return; }
+            const nextId = String(addr.id) === selectedAddressId ? null : selectedAddressId;
+            await loadAddresses(nextId ?? undefined);
+          },
+        },
+      ]
+    );
   };
 
   async function handleApplyPromo() {
@@ -666,9 +818,14 @@ export default function CheckoutScreen() {
                         <Text style={[styles.addressName, { color: colors.foreground }]}>{addr.full_name}</Text>
                         {addr.is_default && <View style={styles.defaultBadge}><Text style={styles.defaultBadgeText}>Default</Text></View>}
                       </View>
-                      <Pressable onPress={() => handleEditAddress(addr)} hitSlop={8}>
-                        <Ionicons name="create" size={16} color="#0B6FAD" />
-                      </Pressable>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                        <Pressable onPress={() => handleEditAddress(addr)} hitSlop={8}>
+                          <Ionicons name="create" size={16} color="#0B6FAD" />
+                        </Pressable>
+                        <Pressable onPress={() => handleDeleteAddress(addr)} hitSlop={8}>
+                          <Ionicons name="trash" size={16} color="#EF4444" />
+                        </Pressable>
+                      </View>
                     </View>
                     <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ""}</Text>
                     <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.city}, {addr.state} - {addr.postal_code}</Text>
@@ -716,28 +873,7 @@ export default function CheckoutScreen() {
         </ScrollView>
 
         <View style={[styles.cta, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === "web" ? 20 : insets.bottom + 8 }]}>
-          <Pressable
-            style={{ width: "100%", height: 56 }}
-            onPress={handlePay}
-            disabled={loading}
-          >
-            <LinearGradient
-              colors={["#0B6FAD", "#17E5D3"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.payGradientBtn}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons name="lock-closed" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.payBtnText}>Pay ₹{finalTotal}</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#FFF" style={{ marginLeft: "auto" }} />
-                </>
-              )}
-            </LinearGradient>
-          </Pressable>
+          <SlideToPayButton amount={finalTotal} onSlideComplete={handlePay} loading={loading} />
           <Text style={[styles.secureNote, { color: colors.mutedForeground }]}>
             <Ionicons name="lock-closed" size={11} color={colors.mutedForeground} /> Secured by Razorpay · 100% Safe
           </Text>
@@ -767,8 +903,6 @@ export default function CheckoutScreen() {
                   { label: "Address Line 2 (Optional)", value: formAddressLine2, setter: setFormAddressLine2, placeholder: "Area / Landmark" },
                   { label: "City", value: formCity, setter: setFormCity, placeholder: "e.g. Mumbai" },
                   { label: "State", value: formState, setter: setFormState, placeholder: "e.g. Maharashtra" },
-                  { label: "Pincode", value: formPostalCode, setter: setFormPostalCode, placeholder: "6-digit pincode", keyboard: "numeric" as const },
-                  { label: "Phone", value: formPhone, setter: setFormPhone, placeholder: "10-digit phone", keyboard: "phone-pad" as const },
                 ].map((field) => (
                   <View key={field.label} style={styles.fieldGroup}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
@@ -777,6 +911,39 @@ export default function CheckoutScreen() {
                     </View>
                   </View>
                 ))}
+
+                {/* Pincode — max 6 digits */}
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.label, { color: colors.foreground }]}>Pincode</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
+                    <TextInput
+                      style={[styles.input, { color: colors.foreground }]}
+                      value={formPostalCode}
+                      onChangeText={(t) => setFormPostalCode(t.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="6-digit pincode"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                  </View>
+                </View>
+
+                {/* Phone — prefixed with +91 */}
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.label, { color: colors.foreground }]}>Phone</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2", flexDirection: "row", alignItems: "center" }]}>
+                    <Text style={[styles.input, { color: colors.foreground, marginRight: 4 }]}>+91</Text>
+                    <TextInput
+                      style={[styles.input, { flex: 1, color: colors.foreground }]}
+                      value={formPhone.replace(/^\+91/, "")}
+                      onChangeText={(t) => setFormPhone("+91" + t.replace(/\D/g, "").slice(0, 10))}
+                      placeholder="10-digit number"
+                      placeholderTextColor={colors.mutedForeground}
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                    />
+                  </View>
+                </View>
               </ScrollView>
               <View style={styles.modalBtnRow}>
                 <Pressable style={[styles.modalBtn, { backgroundColor: "#0B6FAD" }]} onPress={handleSaveAddress}>
@@ -892,17 +1059,33 @@ const styles = StyleSheet.create({
     height: 2,
     marginHorizontal: 8,
   },
-  payGradientBtn: {
+  slideTrack: {
     width: "100%",
     height: 56,
     borderRadius: 28,
-    flexDirection: "row",
-    alignItems: "center",
+    overflow: "hidden",
     justifyContent: "center",
   },
-  payBtnText: {
-    fontSize: 16,
+  slideThumb: {
+    position: "absolute",
+    left: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  slideLabel: {
+    textAlign: "center",
+    fontSize: 15,
     fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
+    letterSpacing: 0.5,
   },
 });

@@ -10,6 +10,11 @@ import { router } from 'expo-router';
 import { Profile } from '@/types/auth';
 import * as authService from '@/services/authService';
 import { supabase } from '@/lib/supabase';
+import { isNetworkError } from '@/lib/networkUtils';
+import { profileCache } from '@/services/profileCache';
+import { STORAGE_KEYS } from '@/constants/storageKeys';
+import { homeRepository } from '@/repositories/homeRepository';
+import { coursesRepository } from '@/repositories/coursesRepository';
 
 // Configure WebBrowser for OAuth
 WebBrowser.maybeCompleteAuthSession();
@@ -25,6 +30,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  phone?: string;
   avatar?: string;
   grade?: string;
   school?: string;
@@ -39,6 +45,9 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isOffline: boolean;
+  authInitialized: boolean;
+  isAuthenticatedLocally: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (
     name: string,
@@ -59,8 +68,38 @@ interface AuthContextType {
 }
 
 // ── Single-device session enforcement ─────────────────────────────────────────
-const DEVICE_SESSION_KEY = 'device_session_id';
+const DEVICE_SESSION_KEY = STORAGE_KEYS.DEVICE_SESSION_KEY;
 const SESSION_CHECK_INTERVAL_MS = 60_000;
+
+// ── buildUser mapper — single source of truth for User construction ──────────
+export function buildUser(
+  profile: Partial<Profile> | null | undefined,
+  supabaseUser: SupabaseUser
+): User {
+  const email = supabaseUser.email ?? '';
+  const fallbackName = email.split('@')[0] || 'User';
+  return {
+    id: supabaseUser.id,
+    email,
+    name:
+      profile?.full_name ||
+      supabaseUser.user_metadata?.name ||
+      fallbackName,
+    phone: profile?.phone || supabaseUser.phone || undefined,
+    avatar: profile?.avatar_url || undefined,
+    grade: profile?.grade || undefined,
+    school: profile?.school || undefined,
+    age: profile?.age || undefined,
+    role: profile?.role || 'authenticated',
+    joinedDate: profile?.created_at
+      ? new Date(profile.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          year: 'numeric',
+        })
+      : '',
+    onboarding_completed: profile?.onboarding_completed || false,
+  };
+}
 
 function generateSessionId(): string {
   // RFC4122-ish v4 without extra deps
@@ -76,21 +115,90 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  // True briefly right after this device claims the session, so the periodic
-  // validator doesn't race the claim-write and log the user out on login.
+  const [isOffline, setIsOffline] = useState(false);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [isAuthenticatedLocally, setIsAuthenticatedLocally] = useState(false);
   const justEstablishedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Get initial session
-    authService.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        loadUserProfile(session.user);
-      } else {
-        setIsLoading(false);
+  // ── Startup helper: restore Supabase session from local storage ────────────
+  async function restoreSession(): Promise<Session | null> {
+    try {
+      const { data: { session } } = await authService.getSession();
+      return session;
+    } catch (err) {
+      devError('[Auth] restoreSession failed:', err);
+      if (isNetworkError(err)) setIsOffline(true);
+      // Fallback: read from in-memory Supabase client state (no network)
+      try {
+        const { data: { session: fallback } } = await supabase.auth.getSession();
+        return fallback;
+      } catch (fallbackErr) {
+        devError('[Auth] restoreSession fallback failed:', fallbackErr);
+        return null;
       }
-    });
+    }
+  }
+
+  // ── Startup helper: pre-populate user from cache if ID matches ─────────────
+  async function restoreCachedProfile(supabaseUser: SupabaseUser): Promise<Profile | null> {
+    const cached = await profileCache.loadProfile();
+    if (cached && cached.id === supabaseUser.id) {
+      setUser(buildUser(cached, supabaseUser));
+      return cached;
+    }
+    return null;
+  }
+
+  // ── Startup helper: fetch live profile, save to cache, update state ─────────
+  async function fetchProfile(supabaseUser: SupabaseUser, cached: Profile | null): Promise<void> {
+    try {
+      const { data: profile, error } = await authService.getProfile(supabaseUser.id);
+
+      if (error) {
+        devError('[Auth] fetchProfile error:', error.message, error.code);
+        if (isNetworkError(error)) setIsOffline(true);
+        // Use cache or JWT fallback — do not clear user
+        if (!cached) setUser(buildUser(null, supabaseUser));
+        return;
+      }
+
+      if (!profile) {
+        devLog('[Auth] Profile not found, creating new profile...');
+        await createUserProfile(supabaseUser);
+        return;
+      }
+
+      const saved = await profileCache.saveProfile(profile);
+      if (!saved) devError('[Auth] Cache write failed for profile:', supabaseUser.id);
+
+      setUser(buildUser(profile, supabaseUser));
+    } catch (err: any) {
+      devError('[Auth] fetchProfile exception:', err.message);
+      if (isNetworkError(err)) setIsOffline(true);
+      if (!cached) setUser(buildUser(null, supabaseUser));
+    }
+  }
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const restored = await restoreSession();
+      setSession(restored);
+
+      if (restored?.user) {
+        setIsAuthenticatedLocally(true);
+        const cached = await restoreCachedProfile(restored.user);
+        await fetchProfile(restored.user, cached);
+      } else {
+        setUser(null);
+        setSession(null);
+      }
+
+      setIsLoading(false);
+      setAuthInitialized(true);
+    };
+
+    initAuth();
 
     // Listen for auth changes
     const {
@@ -106,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // A fresh sign-in (email / Google / OTP) claims this device as the
       // single active session and registers this device for push.
       if (_event === 'SIGNED_IN' && session?.user) {
+        setIsAuthenticatedLocally(true);
         establishDeviceSession(session.user.id).catch(() => {});
         registerForPushNotifications(session.user.id).catch(() => {});
       }
@@ -114,20 +223,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadUserProfile(session.user);
       } else {
         setUser(null);
+        setIsAuthenticatedLocally(false);
         setIsLoading(false);
       }
     });
 
-    // Handle deep links for OAuth callback
+    // Handle deep links for OAuth callback and password reset
     const handleDeepLink = (event: { url: string }) => {
       const url = event.url;
       devLog('[Auth] Deep link received:', url);
-      
-      // Supabase will automatically handle the OAuth callback
-      // The onAuthStateChange listener will fire when complete
+      if (url.includes('reset-password') || url.includes('type=recovery')) {
+        router.push('/(auth)/reset-password');
+      }
     };
 
-    // Subscribe to deep link events
     const linkingSubscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
@@ -217,44 +326,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
+  // Used by onAuthStateChange (post-login refresh) — reuses fetchProfile helpers
   async function loadUserProfile(supabaseUser: SupabaseUser) {
     devLog('[Auth] Loading profile for user:', supabaseUser.id);
-    try {
-      const { data: profile, error } = await authService.getProfile(supabaseUser.id);
-
-      if (error) {
-        devError('[Auth] Failed to load profile:', error.message, error.code);
-        setIsLoading(false);
-        return;
-      }
-
-      if (!profile) {
-        devLog('[Auth] Profile not found, creating new profile...');
-        await createUserProfile(supabaseUser);
-        return;
-      }
-
-      devLog('[Auth] Profile loaded successfully');
-      setUser({
-        id: profile.id,
-        email: profile.email,
-        name: profile.full_name || profile.email.split('@')[0],
-        avatar: profile.avatar_url || undefined,
-        grade: profile.grade || undefined,
-        school: profile.school || undefined,
-        age: profile.age || undefined,
-        role: profile.role,
-        joinedDate: new Date(profile.created_at).toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric',
-        }),
-        onboarding_completed: profile.onboarding_completed || false,
-      });
-    } catch (error: any) {
-      devError('[Auth] Error loading profile:', error.message);
-    } finally {
-      setIsLoading(false);
-    }
+    const cached = await profileCache.loadProfile();
+    const cachedForUser = (cached && cached.id === supabaseUser.id) ? cached : null;
+    if (cachedForUser) setUser(buildUser(cachedForUser, supabaseUser));
+    await fetchProfile(supabaseUser, cachedForUser);
+    setIsLoading(false);
   }
 
   async function createUserProfile(supabaseUser: SupabaseUser) {
@@ -264,6 +343,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: supabaseUser.id,
         email: supabaseUser.email!,
         full_name: supabaseUser.user_metadata?.name || supabaseUser.email!.split('@')[0],
+        phone: supabaseUser.user_metadata?.phone || supabaseUser.phone || null,
         grade: supabaseUser.user_metadata?.grade ?? null,
         school: supabaseUser.user_metadata?.school ?? null,
         role: 'pending' as const,
@@ -279,19 +359,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data) {
         devLog('[Auth] Profile created successfully');
-        setUser({
-          id: data.id,
-          email: data.email,
-          name: data.full_name || data.email.split('@')[0],
-          avatar: data.avatar_url || undefined,
-          grade: data.grade || undefined,
-          school: data.school || undefined,
-          role: data.role,
-          joinedDate: new Date(data.created_at).toLocaleDateString('en-US', {
-            month: 'short',
-            year: 'numeric',
-          }),
-        });
+        const saved = await profileCache.saveProfile(data);
+        if (!saved) devError('[Auth] Cache write failed after profile creation');
+        setUser(buildUser(data, supabaseUser));
       }
     } catch (error: any) {
       devError('[Auth] Error creating profile:', error.message);
@@ -396,7 +466,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
-        // Profile will be created automatically via loadUserProfile
+        // Explicitly create the profile row — don't rely on onAuthStateChange
+        // firing (it may not if email confirmation is enabled).
+        const profileData = {
+          id: data.user.id,
+          email: data.user.email!,
+          full_name: name,
+          grade: grade ?? null,
+          school: school ?? null,
+          role: 'pending' as const,
+        };
+        const { error: profileError } = await authService.createProfile(profileData);
+        if (profileError) {
+          devError('[Auth] Profile creation error during register:', profileError.message);
+          // Non-fatal — user can still proceed
+        }
         return { success: true };
       }
 
@@ -546,13 +630,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       devLog('[Auth] Logout successful');
+      const cleared = await profileCache.clearProfile();
+      if (!cleared) devError('[Auth] Cache clear failed on logout');
+      // Clear user-specific home cache (progress, notifications).
+      // Public cache (courses, promotions, products) is intentionally preserved.
+      await homeRepository.clearUserCache();
+      await coursesRepository.clearUserCache();
       setUser(null);
       setSession(null);
+      setIsAuthenticatedLocally(false);
     } catch (error) {
       devError('[Auth] Logout exception:', error);
       // Clear state even if signOut fails
+      await profileCache.clearProfile();
+      await homeRepository.clearUserCache();
+      await coursesRepository.clearUserCache();
       setUser(null);
       setSession(null);
+      setIsAuthenticatedLocally(false);
     } finally {
       setIsLoading(false);
     }
@@ -574,6 +669,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (updates.avatar !== undefined) profileUpdates.avatar_url = updates.avatar;
       if (updates.age !== undefined) profileUpdates.age = updates.age;
       if (updates.onboarding_completed !== undefined) profileUpdates.onboarding_completed = updates.onboarding_completed;
+      if (updates.phone !== undefined) profileUpdates.phone = updates.phone;
 
       const { error } = await authService.updateProfile(user.id, profileUpdates);
 
@@ -582,7 +678,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      // Update local user state with the changes
+      // Update local user state — merge only changed fields, no second network request
       const updatedUser = { ...user };
       if (updates.name !== undefined) updatedUser.name = updates.name;
       if (updates.grade !== undefined) updatedUser.grade = updates.grade;
@@ -590,8 +686,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (updates.avatar !== undefined) updatedUser.avatar = updates.avatar;
       if (updates.age !== undefined) updatedUser.age = updates.age;
       if (updates.onboarding_completed !== undefined) updatedUser.onboarding_completed = updates.onboarding_completed;
-      
+      if (updates.phone !== undefined) updatedUser.phone = updates.phone;
+
       setUser(updatedUser);
+
+      // Merge and write cache — no second GET request
+      const existingCache = await profileCache.loadProfile();
+      const mergedProfile: Profile = {
+        ...(existingCache || {} as Profile),
+        id: user.id,
+        email: user.email,
+        full_name: updatedUser.name,
+        grade: updatedUser.grade ?? null,
+        school: updatedUser.school ?? null,
+        avatar_url: updatedUser.avatar ?? null,
+        age: updatedUser.age ?? null,
+        phone: updatedUser.phone ?? null,
+        role: updatedUser.role,
+        onboarding_completed: updatedUser.onboarding_completed ?? false,
+        created_at: existingCache?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const saved = await profileCache.saveProfile(mergedProfile);
+      if (!saved) devError('[Auth] Cache write failed after updateUser');
+
       devLog('[Auth] Profile updated successfully:', updatedUser);
       return { success: true };
     } catch (error: any) {
@@ -604,7 +722,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await authService.resetPasswordForEmail(
         email,
-        'makersflow://reset-password'
+        'makersflow:///(auth)/reset-password'
       );
 
       if (error) {
@@ -741,6 +859,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     isLoading,
     isAuthenticated: !!user && !!session,
+    isOffline,
+    authInitialized,
+    isAuthenticatedLocally,
     login,
     register,
     loginWithGoogle,

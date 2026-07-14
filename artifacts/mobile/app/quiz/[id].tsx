@@ -22,7 +22,7 @@ import { TEXT_STYLES } from "@/constants/typography";
 export default function QuizScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { id: lessonId } = useLocalSearchParams<{ id: string }>();
+  const { id: lessonId, title } = useLocalSearchParams<{ id: string; title?: string }>();
 
   const [questions, setQuestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,7 +213,12 @@ export default function QuizScreen() {
     const score = finalAnswers.reduce((s, ans, i) => (ans === questions[i].correctIndex ? s + 1 : s), 0);
     router.replace({
       pathname: "/quiz/result",
-      params: { quizId: lessonId, score: score.toString(), total: questions.length.toString() },
+      params: { 
+        quizId: lessonId, 
+        score: score.toString(), 
+        total: questions.length.toString(),
+        title: title ?? "Quiz"
+      },
     });
   }
 

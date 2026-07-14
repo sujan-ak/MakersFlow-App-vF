@@ -5,15 +5,14 @@ import React, { useEffect } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { QUIZZES } from "@/data/mockData";
+
 import { useColors } from "@/hooks/useColors";
 import { TEXT_STYLES, TYPOGRAPHY } from "@/constants/typography";
 
 export default function QuizResultScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { quizId, score, total } = useLocalSearchParams<{ quizId: string; score: string; total: string }>();
-  const quiz = QUIZZES.find((q) => q.id === quizId);
+  const { quizId, score, total, title } = useLocalSearchParams<{ quizId: string; score: string; total: string; title?: string }>();
 
   const scoreNum = parseInt(score ?? "0");
   const totalNum = parseInt(total ?? "1");
@@ -62,7 +61,7 @@ export default function QuizResultScreen() {
           <Text style={[styles.gradeText, TEXT_STYLES.label, { color: "#FFF" }]}>{grade}</Text>
         </View>
 
-        <Text style={[styles.title, TEXT_STYLES.sectionTitle, { color: colors.foreground }]}>{quiz?.title ?? "Quiz"}</Text>
+        <Text style={[styles.title, TEXT_STYLES.sectionTitle, { color: colors.foreground }]}>{title ?? "Quiz"}</Text>
         <Text style={[styles.subtitle, TEXT_STYLES.description, { color: colors.mutedForeground }]}>
           You answered {scoreNum} out of {totalNum} questions correctly
         </Text>
@@ -99,7 +98,7 @@ export default function QuizResultScreen() {
       <View style={styles.actions}>
         <Pressable
           style={[styles.btn, { backgroundColor: colors.primary }]}
-          onPress={() => router.push({ pathname: "/quiz/[id]", params: { id: quizId } })}
+          onPress={() => router.push({ pathname: "/quiz/[id]", params: { id: quizId, title } })}
         >
           <Ionicons name="refresh" size={18} color="#FFF" style={{ marginRight: 6 }} />
           <Text style={[styles.btnText, TEXT_STYLES.button, { color: "#FFF" }]}>Retake Quiz</Text>

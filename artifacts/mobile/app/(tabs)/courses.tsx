@@ -1,22 +1,21 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { ScrollView, View, Text, Pressable, StyleSheet, Platform, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
-import { fetchEnrolledCourses } from "@/services/enrollmentService";
-import { fetchCourseProgress } from "@/lib/progressStorage";
 import { CourseProgressCard } from "@/components/CourseProgressCard";
 import { CourseCardSkeleton } from "@/components/SkeletonLoader";
 import { CourseCard } from "@/components/CourseCard";
-import { fetchAllCourses } from "@/services/courseDataProvider";
-import { supabase } from "@/lib/supabase";
+import { coursesRepository } from "@/repositories/coursesRepository";
+import { useNetwork } from "@/context/NetworkContext";
 
 export default function CoursesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, isOffline } = useAuth();
+  const { addReconnectListener } = useNetwork();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isInProgressOpen, setIsInProgressOpen] = useState(true);
@@ -27,91 +26,37 @@ export default function CoursesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("All");
 
+  // Debounce ref — prevents rapid reconnect events from triggering repeated refreshes
+  const reconnectDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Single repository call — screen does not know data origin ─────────────
   const loadData = useCallback(async (isRefreshing = false) => {
-    if (!isRefreshing) {
-      setIsLoading(true);
-    }
+    if (!isRefreshing) setIsLoading(true);
     try {
-      let enrolledMapped: any[] = [];
-      
-      if (user?.id) {
-        const enrollments = await fetchEnrolledCourses(user.id);
-        enrolledMapped = await Promise.all(
-          enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
-            const c = enr.courses;
-            const prog = await fetchCourseProgress(user.id, String(c.id));
-            return {
-              courseId: String(c.id),
-              courseTitle: c.title,
-              instructor: c.courses?.profiles?.full_name || "",
-              thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-              progress: prog.percentage,
-              totalModules: prog.total,
-              completedModules: prog.completed,
-              lastAccessedAt: enr.enrolled_at || new Date().toISOString(),
-              timeSpent: 0,
-            };
-          })
-        );
-        setEnrolledCourses(enrolledMapped);
-      } else {
-        setEnrolledCourses([]);
-      }
-
-      const allPub = await fetchAllCourses();
-      
-      let reviewStats: Record<string, { ratingSum: number; count: number }> = {};
-      try {
-        const { data: reviewsData } = await supabase
-          .from('reviews')
-          .select('course_id, rating');
-        if (reviewsData) {
-          reviewsData.forEach((rev: any) => {
-            const cId = String(rev.course_id);
-            if (!reviewStats[cId]) {
-              reviewStats[cId] = { ratingSum: 0, count: 0 };
-            }
-            reviewStats[cId].ratingSum += Number(rev.rating) || 0;
-            reviewStats[cId].count += 1;
-          });
-        }
-      } catch (err) {
-        console.error('[CoursesScreen] Failed to load reviews:', err);
-      }
-
-      const enrolledIds = enrolledMapped.map(ec => String(ec.courseId));
-
-      const unenrolledMapped = allPub
-        .filter((c: any) => !enrolledIds.includes(String(c.id)))
-        .map((c: any) => {
-          const stats = reviewStats[String(c.id)];
-          const rating = stats ? Number((stats.ratingSum / stats.count).toFixed(1)) : 0;
-          const reviews = stats ? stats.count : 0;
-
-          return {
-            id: String(c.id),
-            title: c.title,
-            category: c.category || "General",
-            level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
-            price: c.price || 0,
-            isFree: c.is_free,
-            thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-            instructor: c.profiles?.full_name || "",
-            rating,
-            reviews,
-            description: c.description || "",
-            modules: []
-          };
-        });
-
-      setBrowseMoreCourses(unenrolledMapped);
+      const result = await coursesRepository.get(user?.id, isOffline);
+      setEnrolledCourses(result.data.enrollments);
+      setBrowseMoreCourses(result.data.catalog);
     } catch (err) {
-      console.error('[CoursesScreen] Error fetching courses:', err);
+      console.error('[CoursesScreen] loadData error:', err);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [user?.id]);
+  }, [user?.id, isOffline]);
+
+  // ── Reconnect listener with debounce (prevents rapid refresh storms) ──────
+  useEffect(() => {
+    const unsubscribe = addReconnectListener(() => {
+      if (reconnectDebounceRef.current) clearTimeout(reconnectDebounceRef.current);
+      reconnectDebounceRef.current = setTimeout(() => {
+        loadData(true);
+      }, 1500);
+    });
+    return () => {
+      unsubscribe();
+      if (reconnectDebounceRef.current) clearTimeout(reconnectDebounceRef.current);
+    };
+  }, [addReconnectListener, loadData]);
 
   useFocusEffect(
     useCallback(() => {

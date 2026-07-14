@@ -38,7 +38,6 @@ export default function TransactionsScreen() {
         .from("orders")
         .select("*")
         .eq("user_id", user.id)
-        .in("status", ["paid", "completed", "refunded", "cancelled"])
         .order("created_at", { ascending: false });
 
       console.log("[TransactionsScreen] Query results for user:", user.id, "data:", data, "error:", error);
@@ -196,7 +195,7 @@ export default function TransactionsScreen() {
                 <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>
                   {isRefund ? "Amount Refunded" : "Amount Paid"}
                 </Text>
-                <Text style={[styles.amountValue, { color: isRefund ? "#EF4444" : "#10B981" }]}>
+                <Text style={[styles.amountValue, { color: "#EF4444" }]}>
                   {isRefund ? "-" : ""}₹{item.total.toLocaleString("en-IN")}
                 </Text>
               </View>

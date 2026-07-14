@@ -178,6 +178,26 @@ async function checkCourseCompletionAndSetCompletedAt(userId: string, courseId: 
 }
 
 export async function markLessonComplete(userId: string, courseId: string | number, lessonId: string | number) {
+  // Fetch existing progress and lesson duration to preserve accumulated time
+  const [existingProgress, lessonData] = await Promise.all([
+    supabase
+      .from('lesson_progress')
+      .select('time_spent_secs')
+      .eq('user_id', userId)
+      .eq('lesson_id', Number(lessonId))
+      .maybeSingle(),
+    supabase
+      .from('lessons')
+      .select('duration_secs')
+      .eq('id', Number(lessonId))
+      .maybeSingle(),
+  ]);
+
+  const existingSecs = existingProgress.data?.time_spent_secs || 0;
+  const durationSecs = lessonData.data?.duration_secs || 0;
+  // Use whichever is larger: what was already tracked or the lesson duration
+  const timeSpentSecs = Math.max(existingSecs, durationSecs);
+
   const { error } = await supabase.from('lesson_progress').upsert(
     {
       user_id: userId,
@@ -185,6 +205,7 @@ export async function markLessonComplete(userId: string, courseId: string | numb
       course_id: Number(courseId),
       is_completed: true,
       watch_percentage: 100,
+      time_spent_secs: timeSpentSecs,
       last_watched_at: new Date().toISOString(),
     },
     { onConflict: 'user_id,course_id,lesson_id' },
@@ -215,6 +236,19 @@ export async function upsertLessonProgress(
   const currentPct = currentProgress?.watch_percentage || 0;
   const finalPct = wasCompleted ? 100 : Math.max(currentPct, Math.round(watchPercentage));
 
+  // Accumulate time: use the larger of current position or what was already stored
+  const { data: existingRow } = await supabase
+    .from('lesson_progress')
+    .select('time_spent_secs')
+    .eq('user_id', userId)
+    .eq('lesson_id', Number(lessonId))
+    .maybeSingle();
+
+  const accumulatedSecs = Math.max(
+    existingRow?.time_spent_secs || 0,
+    Math.floor(currentTimeSecs)
+  );
+
   const { error } = await supabase.from('lesson_progress').upsert(
     {
       user_id: userId,
@@ -222,7 +256,7 @@ export async function upsertLessonProgress(
       course_id: Number(courseId),
       current_time_secs: Math.floor(currentTimeSecs),
       watch_percentage: finalPct,
-      time_spent_secs: Math.floor(currentTimeSecs),
+      time_spent_secs: accumulatedSecs,
       is_completed: isCompleted,
       last_watched_at: new Date().toISOString(),
     },

@@ -27,14 +27,11 @@ import { WatchlistCard } from "@/components/WatchlistCard";
 import { ProductCard } from "@/components/ProductCard";
 import { HomeSkeleton } from "@/components/SkeletonLoader";
 import { useAuth } from "@/context/AuthContextSupabase";
-import { supabase } from "@/lib/supabase";
 import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useProgress } from "@/context/ProgressContext";
-import { fetchAllCourses } from "@/services/courseDataProvider";
-import { fetchEnrolledCourses } from "@/services/enrollmentService";
-import { fetchCourseProgress } from "@/lib/progressStorage";
-import { ProgressCalculator } from "@/lib/progressCalculator";
+import { homeRepository, EMPTY_HOME_DATA } from "@/repositories/homeRepository";
+import { useNetwork } from "@/context/NetworkContext";
 
 const CATEGORY_DETAILS = [
   { name: "Robotics", icon: "construct", desc: "Build & program smart autonomous robots", btnText: "Start Now", btnColor: "#0B6FAD", textColor: "#FFF" },
@@ -170,7 +167,8 @@ function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCar
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, isOffline } = useAuth();
+  const { isConnected, addReconnectListener } = useNetwork();
   const { watchlist } = useProgress();
   const scrollViewRef = useRef<ScrollView>(null);
   const [popularCoursesY, setPopularCoursesY] = useState(0);
@@ -192,183 +190,48 @@ export default function HomeScreen() {
   const [totalHoursLearned, setTotalHoursLearned] = useState(0);
   const [categories, setCategories] = useState<string[]>([]);
 
+  // Debounce ref — prevents rapid reconnect events from triggering repeated refreshes
+  const reconnectDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Single repository call — screen does not know data origin ─────────────
   const loadData = useCallback(async (isRefreshing = false) => {
-    if (!isRefreshing) {
-      setIsLoading(true);
-    }
+    if (!isRefreshing) setIsLoading(true);
     try {
       await refreshProgress().catch(() => {});
 
-      try {
-        const { data: promoData, error: promoError } = await supabase
-          .from('promotions')
-          .select('*')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false });
-        if (promoError) {
-          setPromotions([]);
-        } else {
-          const now = new Date().getTime();
-          const activePromos = (promoData ?? []).filter(p => !p.expires_at || new Date(p.expires_at).getTime() > now);
-          setPromotions(activePromos);
-        }
-      } catch (e) {
-        setPromotions([]);
-      }
+      const result = await homeRepository.get(user?.id, isOffline);
+      const data = result.data;
 
-      if (user?.id) {
-        try {
-          const lastSeen = await AsyncStorage.getItem("announcements_last_seen");
-          const [{ count: personalCount }, broadcast] = await Promise.all([
-            supabase
-              .from("notifications")
-              .select("id", { count: "exact", head: true })
-              .eq("user_id", user.id)
-              .eq("is_read", false),
-            supabase
-              .from("announcements")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "published")
-              .gt("created_at", lastSeen ?? "1970-01-01"),
-          ]);
-          setUnreadNotifCount((personalCount ?? 0) + (broadcast.count ?? 0));
-        } catch {
-          // table fallbacks
-        }
-      }
-
-      let reviewStats: Record<string, { ratingSum: number; count: number }> = {};
-      try {
-        const { data: reviewsData, error: reviewsError } = await supabase
-          .from('reviews')
-          .select('course_id, rating');
-
-        if (!reviewsError && reviewsData) {
-          reviewsData.forEach((rev: any) => {
-            const cId = String(rev.course_id);
-            if (!reviewStats[cId]) {
-              reviewStats[cId] = { ratingSum: 0, count: 0 };
-            }
-            reviewStats[cId].ratingSum += Number(rev.rating) || 0;
-            reviewStats[cId].count += 1;
-          });
-        }
-      } catch (err) {
-        console.error('[Home] Failed to load reviews:', err);
-      }
-
-      const all = await fetchAllCourses();
-      const mapped = all.map((c: any) => {
-        const stats = reviewStats[String(c.id)];
-        const rating = stats ? Number((stats.ratingSum / stats.count).toFixed(1)) : 0;
-        const reviews = stats ? stats.count : 0;
-
-        return {
-          id: String(c.id),
-          title: c.title,
-          category: c.category || "General",
-          level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
-          price: c.price || 0,
-          isFree: c.is_free,
-          thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
-          instructor: c.profiles?.full_name || "",
-          rating,
-          reviews,
-          description: c.description || "",
-          modules: []
-        };
-      });
-      setCourses(mapped);
-      setPopularCourses(mapped.slice(0, 8));
-
-      if (user?.id) {
-        const enrollments = await fetchEnrolledCourses(user.id);
-        const mappedEnrolled = await Promise.all(
-          enrollments.filter((enr: any) => enr.courses).map(async (enr: any) => {
-            const c = enr.courses;
-            const prog = await fetchCourseProgress(user.id, String(c.id));
-            return {
-              courseId: String(c.id),
-              progress: prog.percentage,
-              completedAt: enr.completed_at || null,
-            };
-          })
-        );
-        setEnrolledCourses(mappedEnrolled);
-
-        const { data: lpData } = await supabase
-          .from('lesson_progress')
-          .select('course_id, lesson_id, time_spent_secs, is_completed, last_watched_at')
-          .eq('user_id', user.id);
-        if (lpData) {
-          const streak = ProgressCalculator.calculateStreak(lpData);
-          setLearningStreak(streak);
-
-          const completed = lpData.filter((p) => p.is_completed).length;
-          setTotalLessonsCompleted(completed);
-
-          const timeSecs = lpData.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
-          setTotalHoursLearned(Number((timeSecs / 3600).toFixed(1)));
-        }
-
-        try {
-          const { data: streakTableData, error: streakTableError } = await supabase
-            .from('streaks')
-            .select('longest_streak')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          if (!streakTableError && streakTableData) {
-            setLongestStreak(Number(streakTableData.longest_streak) || 0);
-          } else {
-            setLongestStreak(0);
-          }
-        } catch {
-          setLongestStreak(0);
-        }
-      } else {
-        setEnrolledCourses([]);
-      }
-
-      try {
-        const { data: kitData, error: kitError } = await supabase
-          .from('products')
-          .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock')
-          .or('status.eq.available,status.eq.active')
-          .neq('category', 'digital')
-          .order('created_at', { ascending: false })
-          .limit(8);
-
-        if (!kitError && kitData) {
-          const kitFallbacks = [
-            require('@/assets/images/product_kit_1.png'),
-            require('@/assets/images/product_kit_2.png'),
-            require('@/assets/images/product_kit_3.png'),
-          ];
-          const mappedKits: Product[] = kitData.map((row: any, idx: number) => ({
-            id: String(row.id),
-            title: row.title || "Untitled Product",
-            category: 'physical',
-            subcategory: row.subcategory || "Physical Kits",
-            price: Number(row.price) || 0,
-            originalPrice: Number(row.original_price) || Number(row.price) || 0,
-            thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : kitFallbacks[idx % 3],
-            description: row.description || "No description available.",
-            rating: 0,
-            reviews: 0,
-            inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
-            features: [],
-          }));
-          setPopularKits(mappedKits);
-        }
-      } catch (err) {
-        console.error('[Home] Error fetching popular kits:', err);
-      }
+      setPromotions(data.promotions);
+      setCourses(data.courses);
+      setPopularCourses(data.popularCourses);
+      setPopularKits(data.popularKits as Product[]);
+      setEnrolledCourses(data.progress.enrolledCourses);
+      setLearningStreak(data.progress.learningStreak);
+      setLongestStreak(data.progress.longestStreak);
+      setTotalLessonsCompleted(data.progress.totalLessonsCompleted);
+      setTotalHoursLearned(data.progress.totalHoursLearned);
+      setUnreadNotifCount(data.unreadNotifCount);
     } catch (err) {
-      console.error('[Home] Error fetching courses:', err);
+      console.error('[Home] loadData error:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, isOffline]);
+
+  // ── Reconnect listener with debounce (prevents rapid refresh storms) ──────
+  useEffect(() => {
+    const unsubscribe = addReconnectListener(() => {
+      if (reconnectDebounceRef.current) clearTimeout(reconnectDebounceRef.current);
+      reconnectDebounceRef.current = setTimeout(() => {
+        loadData(true);
+      }, 1500);
+    });
+    return () => {
+      unsubscribe();
+      if (reconnectDebounceRef.current) clearTimeout(reconnectDebounceRef.current);
+    };
+  }, [addReconnectListener, loadData]);
 
   useFocusEffect(
     useCallback(() => {

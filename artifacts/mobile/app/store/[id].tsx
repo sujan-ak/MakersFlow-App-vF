@@ -23,6 +23,15 @@ import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { DetailSkeleton } from "@/components/SkeletonLoader";
+import { StarRating } from "@/components/StarRating";
+import { useAuth } from "@/context/AuthContextSupabase";
+import {
+  fetchProductReviews,
+  fetchMyProductReview,
+  upsertProductReview,
+  type ProductReview,
+} from "@/services/productReviewService";
+import { ActivityIndicator, TextInput } from "react-native";
 
 const productFallbacks: Record<string, any[]> = {
   physical: [
@@ -88,6 +97,49 @@ export default function ProductDetailScreen() {
   const isWishlisted = isProductInWishlist(String(id));
   const [localQty, setLocalQty] = useState(1);
 
+  const { user } = useAuth();
+  const [allReviews, setAllReviews] = useState<ProductReview[]>([]);
+  const [myReview, setMyReview] = useState<ProductReview | null>(null);
+  const [avgRating, setAvgRating] = useState<number | null>(null);
+  const [hasPurchased, setHasPurchased] = useState(false);
+  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  // Review form states
+  const [draftRating, setDraftRating] = useState(0);
+  const [draftComment, setDraftComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+
+  const handleSubmitReview = async () => {
+    if (!user?.id || !id || draftRating === 0) return;
+    setReviewSubmitting(true);
+    try {
+      await upsertProductReview(user.id, id, draftRating, draftComment);
+      setReviewSubmitted(true);
+      
+      // Reload reviews
+      const reviewsData = await fetchProductReviews(id);
+      setAllReviews(reviewsData);
+      
+      const myReviewData = await fetchMyProductReview(user.id, id);
+      setMyReview(myReviewData);
+      
+      if (reviewsData.length > 0) {
+        const sum = reviewsData.reduce((acc, r) => acc + r.rating, 0);
+        setAvgRating(sum / reviewsData.length);
+      } else {
+        setAvgRating(null);
+      }
+      
+      Alert.alert("Success", "Your review has been submitted for moderation.");
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "Failed to submit review. Please try again.");
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
   const handleToggleWishlist = async () => {
     requireAuth(async () => {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -136,13 +188,55 @@ export default function ProductDetailScreen() {
       if (data) {
         setProduct(mapSupabaseProduct(data));
       }
+
+      // Load reviews
+      const reviewsData = await fetchProductReviews(id);
+      setAllReviews(reviewsData);
+
+      // Calculate average rating dynamically
+      if (reviewsData.length > 0) {
+        const sum = reviewsData.reduce((acc, r) => acc + r.rating, 0);
+        setAvgRating(sum / reviewsData.length);
+      } else {
+        setAvgRating(null);
+      }
+
+      // If user is authenticated, check my review & purchase status
+      if (user?.id) {
+        const myReviewData = await fetchMyProductReview(user.id, id);
+        setMyReview(myReviewData);
+        if (myReviewData) {
+          setDraftRating(myReviewData.rating);
+          setDraftComment(myReviewData.comment || "");
+        }
+
+        // Check if user has purchased this product
+        const { data: userOrders, error: ordersErr } = await supabase
+          .from("orders")
+          .select("items")
+          .eq("user_id", user.id)
+          .in("status", ["paid", "completed"]);
+
+        if (!ordersErr && userOrders) {
+          const bought = userOrders.some((order: any) => {
+            let itemsList: any[] = [];
+            try {
+              itemsList = typeof order.items === "string" ? JSON.parse(order.items) : order.items;
+            } catch (e) {
+              itemsList = Array.isArray(order.items) ? order.items : [];
+            }
+            return Array.isArray(itemsList) && itemsList.some((item: any) => String(item.id) === String(id));
+          });
+          setHasPurchased(bought);
+        }
+      }
     } catch (err) {
       console.error('[ProductDetail] load error:', err);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   useEffect(() => {
     loadProduct(false);
@@ -246,18 +340,17 @@ export default function ProductDetailScreen() {
             </View>
           </View>
 
-          {/* Mapped stars loop to filled Ionicons */}
           <View style={styles.ratingRow}>
             {[1, 2, 3, 4, 5].map((i) => (
               <Ionicons
                 key={i}
-                name={i <= Math.round(product.rating) ? "star" : "star-outline"}
+                name={i <= Math.round(avgRating ?? product.rating) ? "star" : "star-outline"}
                 size={16}
-                color={i <= Math.round(product.rating) ? "#F59E0B" : "#D6E9F2"}
+                color={i <= Math.round(avgRating ?? product.rating) ? "#F59E0B" : "#D6E9F2"}
               />
             ))}
             <Text style={[styles.ratingText, { color: colors.mutedForeground }]}>
-              {product.rating} ({product.reviews} reviews)
+              {(avgRating ?? product.rating).toFixed(1)} ({allReviews.length || product.reviews} review{(allReviews.length || product.reviews) !== 1 ? "s" : ""})
             </Text>
           </View>
 
@@ -319,6 +412,121 @@ export default function ProductDetailScreen() {
               <Text style={[styles.featureText, { color: colors.foreground }]}>{feat}</Text>
             </View>
           ))}
+
+          {/* Average Rating Block (Muted Background) */}
+          {allReviews.length > 0 && (
+            <View style={[styles.avgRatingRowBlock, { backgroundColor: colors.muted, borderRadius: 14, marginTop: 16 }]}>
+              <StarRating rating={Math.round(avgRating ?? 0)} size={20} readonly />
+              <Text style={[styles.avgRatingText, { color: colors.foreground }]}>
+                {(avgRating ?? 0).toFixed(1)}{" "}
+                <Text style={{ color: colors.mutedForeground, fontWeight: "400" }}>
+                  ({allReviews.length} rating{allReviews.length !== 1 ? "s" : ""})
+                </Text>
+              </Text>
+            </View>
+          )}
+
+          {/* Rate Product Card (Only if user has purchased the product) */}
+          {hasPurchased && (
+            <View style={[styles.rateCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
+              {reviewSubmitted ? (
+                <View style={styles.thankYouRow}>
+                  <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                  <Text style={[styles.thankYouText, { color: "#10B981" }]}>
+                    Thanks for your review!
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.rateTitle, { color: colors.foreground }]}>
+                    {myReview ? "Update your rating" : "Rate this product"}
+                  </Text>
+                  <StarRating
+                    rating={draftRating}
+                    onRatingChange={setDraftRating}
+                    size={32}
+                  />
+                  {draftRating > 0 && (
+                    <>
+                      <TextInput
+                        style={[
+                          styles.commentInput,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                            color: colors.foreground,
+                          },
+                        ]}
+                        placeholder="Share your thoughts (optional)..."
+                        placeholderTextColor={colors.mutedForeground}
+                        value={draftComment}
+                        onChangeText={setDraftComment}
+                        multiline
+                        numberOfLines={3}
+                        maxLength={500}
+                      />
+                      <Pressable
+                        style={[
+                          styles.submitBtn,
+                          { backgroundColor: "#0B6FAD", opacity: reviewSubmitting ? 0.6 : 1 },
+                        ]}
+                        onPress={handleSubmitReview}
+                        disabled={reviewSubmitting}
+                      >
+                        {reviewSubmitting ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                          <Text style={styles.submitBtnText}>
+                            {myReview ? "Update Review" : "Submit Review"}
+                          </Text>
+                        )}
+                      </Pressable>
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+
+          {/* Review List */}
+          {allReviews.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 8 }]}>Reviews</Text>
+              {(showAllReviews ? allReviews : allReviews.slice(0, 3)).map((review: any) => (
+                <View
+                  key={review.id}
+                  style={[styles.reviewItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  <View style={styles.reviewHeader}>
+                    <StarRating rating={review.rating} size={14} readonly />
+                    <Text style={[styles.reviewMeta, { color: colors.mutedForeground }]}>
+                      Verified Buyer ·{" "}
+                      {new Date(review.created_at).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </Text>
+                  </View>
+                  {!!review.comment && (
+                    <Text style={[styles.reviewComment, { color: colors.foreground }]}>
+                      "{review.comment}"
+                    </Text>
+                  )}
+                </View>
+              ))}
+              {allReviews.length > 3 && (
+                <Pressable
+                  onPress={() => setShowAllReviews((prev) => !prev)}
+                  style={styles.showAllBtn}
+                >
+                  <Text style={[styles.showAllText, { color: "#0B6FAD" }]}>
+                    {showAllReviews ? "Show less" : `Show all ${allReviews.length} reviews →`}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -523,5 +731,86 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
+  },
+  avgRatingRowBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  avgRatingText: {
+    fontSize: 16,
+    fontFamily: "Fredoka_700Bold",
+  },
+  rateCard: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+  },
+  rateTitle: {
+    fontSize: 16,
+    fontFamily: "Fredoka_700Bold",
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  submitBtn: {
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  submitBtnText: {
+    fontSize: 15,
+    fontFamily: "Fredoka_700Bold",
+    color: "#FFF",
+  },
+  thankYouRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  thankYouText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  reviewItem: {
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  reviewMeta: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+  },
+  reviewComment: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontStyle: "italic",
+  },
+  showAllBtn: {
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  showAllText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
 });

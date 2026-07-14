@@ -38,7 +38,6 @@ export default function OrdersScreen() {
         .from('orders')
         .select('*')
         .eq('user_id', user.id)
-        .in('status', ['paid', 'completed', 'failed', 'refunded', 'refund_requested'])
         .order('created_at', { ascending: false });
 
       console.log("[OrdersScreen] Query results for user:", user.id, "data:", data, "error:", error);
@@ -239,7 +238,7 @@ export default function OrdersScreen() {
                 ))}
                 <View style={[styles.totalRow, { borderTopColor: "#D6E9F2" }]}>
                   <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Total Paid</Text>
-                  <Text style={[styles.totalAmount, { color: "#0B6FAD" }]}>₹{order.total}</Text>
+                  <Text style={[styles.totalAmount, { color: "#EF4444" }]}>₹{order.total}</Text>
                 </View>
                 {order.tax > 0 && (
                   <Text style={[styles.date, { color: colors.mutedForeground, marginTop: 4 }]}>
