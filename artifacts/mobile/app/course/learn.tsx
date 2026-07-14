@@ -86,7 +86,7 @@ export default function LearnScreen() {
         const { data } = await supabase
           .from("lesson_resources")
           .select("id, title, url, type")
-          .eq("lesson_id", activeModuleId)
+          .eq("lesson_id", Number(activeModuleId))
           .order("created_at", { ascending: true });
         setLessonResources((data as any[]) ?? []);
       } catch {
@@ -96,7 +96,7 @@ export default function LearnScreen() {
         const { data } = await supabase
           .from("lesson_notes")
           .select("content, position")
-          .eq("lesson_id", activeModuleId)
+          .eq("lesson_id", Number(activeModuleId))
           .order("position", { ascending: true });
         setLessonNotes(((data as any[]) ?? []).map((n) => n.content));
       } catch {
@@ -301,9 +301,9 @@ export default function LearnScreen() {
   const handleProgressUpdate = async (currentTime: number, duration: number) => {
     if (!user?.id || !courseId || !activeModule?.id) return;
     const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-    await upsertLessonProgress(user.id, courseId, activeModule.id, currentTime, watchPercentage);
+    await upsertLessonProgress(user.id, Number(courseId), Number(activeModule.id), currentTime, watchPercentage);
     try {
-      const progressData = await fetchCourseLessonsProgress(user.id, courseId);
+      const progressData = await fetchCourseLessonsProgress(user.id, Number(courseId));
       setLessonsProgress(progressData);
     } catch (e) {
       console.error(e);
@@ -312,11 +312,11 @@ export default function LearnScreen() {
 
   const handleVideoComplete = async () => {
     if (!user?.id || !courseId || !activeModule?.id) return;
-    await markLessonComplete(user.id, courseId, activeModule.id);
-    await completeModule(courseId, activeModule.id);
+    await markLessonComplete(user.id, Number(courseId), Number(activeModule.id));
+    await completeModule(String(Number(courseId)), String(Number(activeModule.id)));
     let updatedProgress: any[] = [];
     try {
-      updatedProgress = await fetchCourseLessonsProgress(user.id, courseId);
+      updatedProgress = await fetchCourseLessonsProgress(user.id, Number(courseId));
       setLessonsProgress(updatedProgress);
     } catch (e) {
       console.error(e);
@@ -327,8 +327,8 @@ export default function LearnScreen() {
     if (totalLessons > 0 && completedCount >= totalLessons) {
       if (!enrollment?.completed_at) {
         try {
-          await completeCourse(user.id, courseId);
-          const enrollData = await getEnrollment(user.id, courseId);
+          await completeCourse(user.id, Number(courseId));
+          const enrollData = await getEnrollment(user.id, Number(courseId));
           setEnrollment(enrollData);
         } catch (e) {
           console.error('[CompleteCourse] error:', e);
@@ -360,16 +360,16 @@ export default function LearnScreen() {
   const handleStartOver = async () => {
     if (!user?.id || !courseId || !activeModule?.id) return;
     setShowResumeModal(false);
-    await upsertLessonProgress(user.id, courseId, activeModule.id, 0, 0);
-    const progressData = await fetchCourseLessonsProgress(user.id, courseId);
+    await upsertLessonProgress(user.id, Number(courseId), Number(activeModule.id), 0, 0);
+    const progressData = await fetchCourseLessonsProgress(user.id, Number(courseId));
     setLessonsProgress(progressData);
   };
 
   const handleReplayLesson = async () => {
     if (!user?.id || !courseId || !activeModule?.id) return;
     setShowCompleteModal(false);
-    await upsertLessonProgress(user.id, courseId, activeModule.id, 0, 0);
-    const progressData = await fetchCourseLessonsProgress(user.id, courseId);
+    await upsertLessonProgress(user.id, Number(courseId), Number(activeModule.id), 0, 0);
+    const progressData = await fetchCourseLessonsProgress(user.id, Number(courseId));
     setLessonsProgress(progressData);
   };
 

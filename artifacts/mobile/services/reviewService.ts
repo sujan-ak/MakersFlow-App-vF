@@ -11,7 +11,7 @@ export interface Review {
 }
 
 /** Fetch all reviews for a course, newest first */
-export async function fetchCourseReviews(courseId: string): Promise<Review[]> {
+export async function fetchCourseReviews(courseId: string | number): Promise<Review[]> {
   const { data, error } = await supabase
     .from("reviews")
     .select("id, user_id, course_id, rating, comment, status, created_at")
@@ -25,7 +25,7 @@ export async function fetchCourseReviews(courseId: string): Promise<Review[]> {
 /** Fetch the current user's review for a course (or null) */
 export async function fetchMyReview(
   userId: string,
-  courseId: string
+  courseId: string | number
 ): Promise<Review | null> {
   const { data, error } = await supabase
     .from("reviews")
@@ -40,7 +40,7 @@ export async function fetchMyReview(
 /** Insert or update the user's review (one per user per course) */
 export async function upsertReview(
   userId: string,
-  courseId: string,
+  courseId: string | number,
   rating: number,
   comment: string
 ): Promise<void> {

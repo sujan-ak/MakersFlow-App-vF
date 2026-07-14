@@ -288,7 +288,9 @@ export default function HomeScreen() {
             const c = enr.courses;
             const prog = await fetchCourseProgress(user.id, String(c.id));
             return {
+              courseId: String(c.id),
               progress: prog.percentage,
+              completedAt: enr.completed_at || null,
             };
           })
         );
@@ -411,7 +413,7 @@ export default function HomeScreen() {
     }
   };
 
-  const completedCount = enrolledCourses.filter((p) => p.progress === 100).length;
+  const completedCount = enrolledCourses.filter((p) => p.completedAt !== null).length;
   const avgProgress =
     enrolledCourses.length > 0
       ? Math.round(

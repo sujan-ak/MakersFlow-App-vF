@@ -41,6 +41,8 @@ export default function OrdersScreen() {
         .in('status', ['paid', 'completed', 'failed', 'refunded', 'refund_requested'])
         .order('created_at', { ascending: false });
 
+      console.log("[OrdersScreen] Query results for user:", user.id, "data:", data, "error:", error);
+
       if (error) {
         console.error('[Orders] Error fetching orders:', error);
         return;

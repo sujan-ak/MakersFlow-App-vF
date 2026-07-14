@@ -134,7 +134,50 @@ export const ProgressStorage = {
   },
 };
 
-export async function markLessonComplete(userId: string, courseId: string, lessonId: string) {
+async function checkCourseCompletionAndSetCompletedAt(userId: string, courseId: string | number) {
+  try {
+    const { data: modules } = await supabase
+      .from('modules')
+      .select('id')
+      .eq('course_id', Number(courseId));
+    const moduleIds = (modules ?? []).map((m) => m.id);
+    if (moduleIds.length === 0) return;
+
+    const { data: lessons } = await supabase
+      .from('lessons')
+      .select('id')
+      .in('module_id', moduleIds);
+    const lessonIds = (lessons ?? []).map((l) => l.id);
+    if (lessonIds.length === 0) return;
+
+    const { data: progress } = await supabase
+      .from('lesson_progress')
+      .select('lesson_id, is_completed')
+      .eq('user_id', userId)
+      .in('lesson_id', lessonIds);
+
+    const completedCount = (progress ?? []).filter((p) => p.is_completed).length;
+
+    if (completedCount === lessonIds.length) {
+      await supabase
+        .from('enrollments')
+        .update({ completed_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('course_id', Number(courseId));
+    } else {
+      await supabase
+        .from('enrollments')
+        .update({ completed_at: null })
+        .eq('user_id', userId)
+        .eq('course_id', Number(courseId))
+        .not('completed_at', 'is', null);
+    }
+  } catch (err) {
+    console.error('[progressStorage] checkCourseCompletionAndSetCompletedAt failed:', err);
+  }
+}
+
+export async function markLessonComplete(userId: string, courseId: string | number, lessonId: string | number) {
   const { error } = await supabase.from('lesson_progress').upsert(
     {
       user_id: userId,
@@ -144,18 +187,19 @@ export async function markLessonComplete(userId: string, courseId: string, lesso
       watch_percentage: 100,
       last_watched_at: new Date().toISOString(),
     },
-    { onConflict: 'user_id,lesson_id' },
+    { onConflict: 'user_id,course_id,lesson_id' },
   );
   if (error) {
     if (isAuthError(error)) emitSessionExpired();
     throw error;
   }
+  await checkCourseCompletionAndSetCompletedAt(userId, courseId);
 }
 
 export async function upsertLessonProgress(
   userId: string,
-  courseId: string,
-  lessonId: string,
+  courseId: string | number,
+  lessonId: string | number,
   currentTimeSecs: number,
   watchPercentage: number,
 ) {
@@ -182,43 +226,52 @@ export async function upsertLessonProgress(
       is_completed: isCompleted,
       last_watched_at: new Date().toISOString(),
     },
-    { onConflict: 'user_id,lesson_id' },
+    { onConflict: 'user_id,course_id,lesson_id' },
   );
   if (error) {
     console.error('[progress] upsert error', error);
     // Token refresh failed mid-lesson → surface a re-login prompt instead of
     // silently dropping progress saves (see sessionEvents listener in learn.tsx)
     if (isAuthError(error)) emitSessionExpired();
+  } else {
+    await checkCourseCompletionAndSetCompletedAt(userId, courseId);
   }
 }
 
-export async function fetchCourseProgress(userId: string, courseId: string) {
+export async function fetchCourseProgress(userId: string, courseId: string | number) {
   const { data: modules } = await supabase
     .from('modules')
     .select('id')
     .eq('course_id', Number(courseId));
   const moduleIds = (modules ?? []).map((m) => m.id);
-  if (moduleIds.length === 0) return { completed: 0, total: 0, percentage: 0 };
+  if (moduleIds.length === 0) return { completed: 0, total: 0, percentage: 0, watchMinutes: 0 };
 
   const { data: lessons } = await supabase
     .from('lessons')
     .select('id')
     .in('module_id', moduleIds);
   const lessonIds = (lessons ?? []).map((l) => l.id);
-  if (lessonIds.length === 0) return { completed: 0, total: 0, percentage: 0 };
+  if (lessonIds.length === 0) return { completed: 0, total: 0, percentage: 0, watchMinutes: 0 };
 
   const { data: progress } = await supabase
     .from('lesson_progress')
-    .select('lesson_id, is_completed')
+    .select('lesson_id, is_completed, time_spent_secs, watch_percentage')
     .eq('user_id', userId)
     .in('lesson_id', lessonIds);
 
   const completed = (progress ?? []).filter((p) => p.is_completed).length;
   const total = lessonIds.length;
-  return { completed, total, percentage: total ? Math.round((completed / total) * 100) : 0 };
+
+  const totalTimeSpentSecs = (progress ?? []).reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
+  const watchMinutes = totalTimeSpentSecs / 60;
+
+  const totalWatchPercentage = (progress ?? []).reduce((sum, p) => sum + (p.watch_percentage || 0), 0);
+  const percentage = total ? Math.round(totalWatchPercentage / total) : 0;
+
+  return { completed, total, percentage, watchMinutes };
 }
 
-export async function fetchCourseLessonsProgress(userId: string, courseId: string) {
+export async function fetchCourseLessonsProgress(userId: string, courseId: string | number) {
   const { data, error } = await supabase
     .from('lesson_progress')
     .select('lesson_id, current_time_secs, watch_percentage, is_completed')
@@ -333,13 +386,44 @@ export async function fetchRemoteProgress(userId: string): Promise<UserCoursePro
         }
       });
 
-      if (enrollment.completed_at) {
+      // Calculate average watch percentage across all lessons in this course
+      let watchPctSum = 0;
+      modules.forEach((mod: any) => {
+        const modLessons = mod.lessons ?? [];
+        modLessons.forEach((les: any) => {
+          const lp = progressList.find((p) => String(p.lesson_id) === String(les.id));
+          if (lp) {
+            watchPctSum += lp.watch_percentage || 0;
+          }
+        });
+      });
+      const computedPct = totalLessons ? Math.round(watchPctSum / totalLessons) : 0;
+
+      const allLessonsCompleted = totalLessons > 0 && completedLessons === totalLessons;
+
+      if (allLessonsCompleted) {
         courseProgressObj.progress = 100;
+        if (!enrollment.completed_at) {
+          const nowStr = new Date().toISOString();
+          await supabase
+            .from('enrollments')
+            .update({ completed_at: nowStr })
+            .eq('user_id', userId)
+            .eq('course_id', Number(courseId));
+          courseProgressObj.completedAt = nowStr;
+        } else {
+          courseProgressObj.completedAt = enrollment.completed_at;
+        }
       } else {
-        courseProgressObj.progress = totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0;
-      }
-      if (courseProgressObj.progress === 100 && !courseProgressObj.completedAt) {
-        courseProgressObj.completedAt = courseProgressObj.lastAccessedAt;
+        courseProgressObj.progress = computedPct;
+        courseProgressObj.completedAt = undefined;
+        if (enrollment.completed_at) {
+          await supabase
+            .from('enrollments')
+            .update({ completed_at: null })
+            .eq('user_id', userId)
+            .eq('course_id', Number(courseId));
+        }
       }
 
       results.push(courseProgressObj);

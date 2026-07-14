@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 
-export async function getCourseById(courseId: string) {
+export async function getCourseById(courseId: string | number) {
   const { data, error } = await supabase
     .from('courses')
     .select('id, title, slug, category, level, price, is_free, thumbnail_url, description')
@@ -11,7 +11,7 @@ export async function getCourseById(courseId: string) {
   return data;
 }
 
-export async function getCourseModules(courseId: string) {
+export async function getCourseModules(courseId: string | number) {
   const { data: modules, error: modulesError } = await supabase
     .from('modules')
     .select('id, title, order_index')

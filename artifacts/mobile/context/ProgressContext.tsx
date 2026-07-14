@@ -58,13 +58,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     try {
       let allProgress = await fetchRemoteProgress(user.id);
       
-      if (!allProgress || allProgress.length === 0) {
-        allProgress = await ProgressStorage.loadAllCourseProgress(user.id);
-      } else {
-        // Save to local storage for offline use
-        for (const p of allProgress) {
-          await ProgressStorage.saveCourseProgress(p);
-        }
+      // Save to local storage for offline use
+      for (const p of allProgress) {
+        await ProgressStorage.saveCourseProgress(p);
       }
 
       const progressMap = new Map<string, UserCourseProgress>();
@@ -75,6 +71,15 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       setWatchlist(loadedWatchlist);
     } catch (error) {
       console.error("Failed to load progress:", error);
+      // Fallback to local storage on error (e.g. offline)
+      try {
+        const localProgress = await ProgressStorage.loadAllCourseProgress(user.id);
+        const progressMap = new Map<string, UserCourseProgress>();
+        localProgress.forEach((p) => progressMap.set(p.courseId, p));
+        setCourseProgress(progressMap);
+      } catch (localError) {
+        console.error("Failed to load local progress fallback:", localError);
+      }
     } finally {
       setIsLoading(false);
     }

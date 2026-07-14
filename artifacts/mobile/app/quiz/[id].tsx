@@ -48,7 +48,7 @@ export default function QuizScreen() {
         const { data, error } = await supabase
           .from('quiz_questions')
           .select('id, question_text, options, correct_option_index, position')
-          .eq('lesson_id', lessonId)
+          .eq('lesson_id', Number(lessonId))
           .order('position', { ascending: true });
 
         if (error) {

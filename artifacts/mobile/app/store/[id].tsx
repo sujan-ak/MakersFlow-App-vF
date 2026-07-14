@@ -125,7 +125,7 @@ export default function ProductDetailScreen() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('id', id)
+        .eq('id', Number(id))
         .single();
 
       if (error) {

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 
-export async function enrollInCourse(userId: string, courseId: string, isFree: boolean) {
+export async function enrollInCourse(userId: string, courseId: string | number, isFree: boolean) {
   const expiresAt = new Date();
   expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
@@ -58,7 +58,7 @@ export async function fetchEnrolledCourses(userId: string) {
   );
 }
 
-export async function isEnrolled(userId: string, courseId: string): Promise<boolean> {
+export async function isEnrolled(userId: string, courseId: string | number): Promise<boolean> {
   const { data } = await supabase
     .from('enrollments')
     .select('id, payment_status, courses(is_free)')
@@ -74,7 +74,7 @@ export async function isEnrolled(userId: string, courseId: string): Promise<bool
   );
 }
 
-export async function getEnrollment(userId: string, courseId: string) {
+export async function getEnrollment(userId: string, courseId: string | number) {
   const { data, error } = await supabase
     .from('enrollments')
     .select('id, user_id, course_id, enrolled_at, completed_at, payment_status, expires_at')
@@ -91,7 +91,7 @@ export function isExpired(enrollment: any): boolean {
   return expiryDate.getTime() < Date.now();
 }
 
-export async function completeCourse(userId: string, courseId: string) {
+export async function completeCourse(userId: string, courseId: string | number) {
   const { data: enrollment, error: fetchError } = await supabase
     .from('enrollments')
     .select('completed_at')

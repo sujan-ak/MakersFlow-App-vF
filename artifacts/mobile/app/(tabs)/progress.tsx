@@ -27,11 +27,12 @@ import { fetchEnrolledCourses } from "@/services/enrollmentService";
 import { supabase } from "@/lib/supabase";
 import { ProgressCalculator } from "@/lib/progressCalculator";
 import { HomeSkeleton } from "@/components/SkeletonLoader";
+import { fetchCourseProgress } from "@/lib/progressStorage";
 
-function formatTotalTime(totalSeconds: number): string {
-  const minutes = Math.round(totalSeconds / 60);
+function formatTotalTime(totalMinutes: number): string {
+  const minutes = Math.round(totalMinutes);
   if (minutes < 60) return `${minutes} min`;
-  const hours = totalSeconds / 3600;
+  const hours = totalMinutes / 60;
   return `${hours.toFixed(1)} hrs`;
 }
 
@@ -114,71 +115,28 @@ export default function ProgressScreen() {
       const progressList = progressData ?? [];
 
       let completedCoursesCount = 0;
-      let notStartedCoursesCount = 0;
-
-      const courseProgressListMap = new Map<string, any[]>();
-      progressList.forEach((p) => {
-        const cId = String(p.course_id);
-        if (!courseProgressListMap.has(cId)) {
-          courseProgressListMap.set(cId, []);
-        }
-        courseProgressListMap.get(cId)!.push(p);
-      });
-
-      const moduleCache = new Map<string, any[]>();
-      const getCachedModules = async (courseId: string) => {
-        if (!moduleCache.has(courseId)) {
-          moduleCache.set(courseId, await getCourseModules(courseId));
-        }
-        return moduleCache.get(courseId);
-      };
-
-      for (const enr of enrollments) {
-        if (enr.completed_at) {
-          completedCoursesCount++;
-        } else {
-          const courseId = String(enr.course_id);
-          const courseModules = await getCachedModules(courseId) || [];
-          const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
-          
-          if (lessonIds.length > 0) {
-            const courseProg = courseProgressListMap.get(courseId) ?? [];
-            const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
-            if (completedLessons === lessonIds.length) {
-              completedCoursesCount++;
-            } else if (completedLessons === 0 && courseProg.length === 0) {
-              notStartedCoursesCount++;
-            }
-          } else {
-            notStartedCoursesCount++;
-          }
-        }
-      }
-
-      const coursesInProgress = Math.max(0, totalCoursesEnrolled - completedCoursesCount - notStartedCoursesCount);
-      const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
-
+      let coursesInProgress = 0;
       let progressSum = 0;
       const enrolledProgressList = [];
+
       for (const enr of enrollments) {
         const courseId = String(enr.course_id);
         const courseDetails = mapped.find((c: any) => c.id === courseId);
         if (!courseDetails) continue;
 
-        let courseProgPct = 0;
-        if (enr.completed_at) {
-          courseProgPct = 100;
-        } else {
-          const courseModules = await getCachedModules(courseId) || [];
-          const lessonIds = courseModules.flatMap((m: any) => (m.lessons ?? []).map((l: any) => l.id));
-          if (lessonIds.length > 0) {
-            const courseProg = courseProgressListMap.get(courseId) ?? [];
-            const completedLessons = courseProg.filter((p) => p.is_completed && lessonIds.includes(p.lesson_id)).length;
-            courseProgPct = Math.round((completedLessons / lessonIds.length) * 100);
-          }
-        }
+        // Use same fetchCourseProgress function
+        const prog = await fetchCourseProgress(user.id, courseId);
+        const courseProgPct = prog.percentage;
 
         progressSum += courseProgPct;
+
+        if (enr.completed_at !== null) {
+          completedCoursesCount++;
+        }
+
+        if (courseProgPct > 0 && courseProgPct < 100) {
+          coursesInProgress++;
+        }
 
         enrolledProgressList.push({
           courseId,
@@ -190,7 +148,10 @@ export default function ProgressScreen() {
       setEnrolledCoursesProgress(enrolledProgressList);
 
       const averageProgress = totalCoursesEnrolled > 0 ? Math.round(progressSum / totalCoursesEnrolled) : 0;
-      const totalTimeSpent = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
+      // watch time: SUM(time_spent_secs) from lesson_progress / 60
+      const totalTimeSpentSecs = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
+      const totalTimeSpent = totalTimeSpentSecs / 60;
+      const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
       const learningStreak = ProgressCalculator.calculateStreak(progressList);
 
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -217,6 +178,14 @@ export default function ProgressScreen() {
           lessonsCompleted: dayCompleted,
         });
       }
+
+      const moduleCache = new Map<string, any[]>();
+      const getCachedModules = async (courseId: string) => {
+        if (!moduleCache.has(courseId)) {
+          moduleCache.set(courseId, await getCourseModules(courseId));
+        }
+        return moduleCache.get(courseId);
+      };
 
       const recentlyCompleted: any[] = [];
       for (const p of progressList) {
@@ -652,7 +621,7 @@ export default function ProgressScreen() {
                     { id: "1", title: "First Step", desc: "Start learning", earned: stats.totalLessonsCompleted > 0, icon: "trophy" },
                     { id: "2", title: "Streak Master", desc: "3 Days streak", earned: stats.learningStreak >= 3, icon: "ribbon" },
                     { id: "3", title: "Graduate", desc: "Complete 1 course", earned: stats.coursesCompleted > 0, icon: "medal" },
-                    { id: "4", title: "Fast Track", desc: "Spend 2 hours", earned: stats.totalTimeSpent >= 7200, icon: "star" },
+                    { id: "4", title: "Fast Track", desc: "Spend 2 hours", earned: stats.totalTimeSpent >= 120, icon: "star" },
                   ].map((badge) => (
                     <View
                       key={badge.id}

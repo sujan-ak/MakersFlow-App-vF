@@ -38,8 +38,10 @@ export default function TransactionsScreen() {
         .from("orders")
         .select("*")
         .eq("user_id", user.id)
-        .in("status", ["paid", "completed", "refunded"])
+        .in("status", ["paid", "completed", "refunded", "cancelled"])
         .order("created_at", { ascending: false });
+
+      console.log("[TransactionsScreen] Query results for user:", user.id, "data:", data, "error:", error);
 
       if (error) {
         console.error("[Transactions] Error fetching transactions:", error);
@@ -68,6 +70,7 @@ export default function TransactionsScreen() {
             items: itemsList.map((i: any) => i.title || "Untitled Product").join(", "),
             total: Number(order.total_amount) || 0,
             status: order.status,
+            refund_id: order.refund_id || null,
             created_at: order.created_at,
           };
         });
@@ -93,7 +96,10 @@ export default function TransactionsScreen() {
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const totalSpent = transactions.reduce((sum, t) => sum + t.total, 0);
+  const totalSpent = transactions.reduce((sum, t) => {
+    const isRefund = t.refund_id !== null || t.status === "cancelled" || t.status === "refunded";
+    return sum + (isRefund ? -t.total : t.total);
+  }, 0);
 
   if (isLoading) {
     return (
@@ -149,15 +155,15 @@ export default function TransactionsScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const isCredit = item.status === "refunded";
+          const isRefund = item.refund_id !== null || item.status === "cancelled" || item.status === "refunded";
           return (
             <View style={[styles.transactionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.cardHeader}>
-                <View style={[styles.iconCircle, { backgroundColor: isCredit ? "#DCF7F4" : "#E8F4F9" }]}>
+                <View style={[styles.iconCircle, { backgroundColor: isRefund ? "#FEE2E2" : "#E8F4F9" }]}>
                   <Ionicons
-                    name={isCredit ? "arrow-down-circle" : "arrow-up-circle"}
+                    name={isRefund ? "arrow-down-circle" : "arrow-up-circle"}
                     size={22}
-                    color={isCredit ? "#17E5D3" : "#0B6FAD"}
+                    color={isRefund ? "#EF4444" : "#0B6FAD"}
                   />
                 </View>
                 <View style={styles.cardHeaderDetails}>
@@ -168,8 +174,8 @@ export default function TransactionsScreen() {
                     {item.date}
                   </Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: isCredit ? "#FEE2E2" : "#DCF7F4" }]}>
-                  <Text style={[styles.statusText, { color: isCredit ? "#EF4444" : "#0B6FAD" }]}>
+                <View style={[styles.statusBadge, { backgroundColor: isRefund ? "#FEE2E2" : "#DCF7F4" }]}>
+                  <Text style={[styles.statusText, { color: isRefund ? "#EF4444" : "#0B6FAD" }]}>
                     {item.status ? item.status.toUpperCase() : "PAID"}
                   </Text>
                 </View>
@@ -187,9 +193,11 @@ export default function TransactionsScreen() {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
               <View style={styles.cardFooter}>
-                <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>Amount Paid</Text>
-                <Text style={[styles.amountValue, { color: isCredit ? "#10B981" : colors.foreground }]}>
-                  {isCredit ? "+" : "-"}₹{item.total.toLocaleString("en-IN")}
+                <Text style={[styles.amountLabel, { color: colors.mutedForeground }]}>
+                  {isRefund ? "Amount Refunded" : "Amount Paid"}
+                </Text>
+                <Text style={[styles.amountValue, { color: isRefund ? "#EF4444" : "#10B981" }]}>
+                  {isRefund ? "-" : ""}₹{item.total.toLocaleString("en-IN")}
                 </Text>
               </View>
             </View>

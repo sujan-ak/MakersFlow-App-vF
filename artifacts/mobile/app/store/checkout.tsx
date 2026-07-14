@@ -359,6 +359,8 @@ export default function CheckoutScreen() {
         items: orderItems,
       };
 
+      console.log("[Checkout] Preparing database order insertion. finalTotal:", finalTotal, "orderPayload:", JSON.stringify(orderPayload, null, 2));
+
       const { error: rpcError } = await supabase.rpc("complete_paid_order", {
         p_order: orderPayload,
         p_product_ids: items.map((i) => String(i.product.id)),
@@ -371,6 +373,7 @@ export default function CheckoutScreen() {
         let payload: Record<string, any> = { ...orderPayload };
         let orderError: any = null;
         for (let attempt = 0; attempt < 6; attempt++) {
+          console.log(`[Checkout] Attempting legacy orders insert. attempt: ${attempt}, payload:`, JSON.stringify(payload, null, 2));
           const { error: insErr } = await supabase.from("orders").insert(payload);
           orderError = insErr;
           if (!insErr) break;
