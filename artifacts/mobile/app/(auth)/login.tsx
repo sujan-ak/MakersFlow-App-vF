@@ -178,12 +178,12 @@ export default function LoginScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={[styles.appName, { color: "#0F2A3D" }]}>MAKERSFLOW</Text>
+          <Text style={[styles.appName, { color: colors.foreground }]}>MAKERSFLOW</Text>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>Learn · Explore · Excel</Text>
         </View>
 
         <View style={styles.form}>
-          <Text style={[styles.title, { color: "#0F2A3D" }]}>Welcome back!</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Welcome back!</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Sign in to continue your learning journey</Text>
 
           {error ? (
@@ -195,7 +195,7 @@ export default function LoginScreen() {
 
           {/* Email input */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: "#0F2A3D" }]}>Email</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
             <View style={[
               styles.inputWrapper, 
               { 
@@ -224,7 +224,7 @@ export default function LoginScreen() {
 
           {/* Password input */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: "#0F2A3D" }]}>Password</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
             <View style={[
               styles.inputWrapper, 
               { 
@@ -253,7 +253,7 @@ export default function LoginScreen() {
           </View>
 
           <Pressable onPress={() => router.push("/(auth)/forgot-password")} style={styles.forgotRow}>
-            <Text style={[styles.forgotText, { color: "#0B6FAD" }]}>Forgot password?</Text>
+            <Text style={[styles.forgotText, { color: "#0B6FAD", fontSize: 14, fontFamily: "Inter_600SemiBold" }]}>Forgot password?</Text>
           </Pressable>
 
           {/* Login Button */}
@@ -283,7 +283,19 @@ export default function LoginScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.googleBtn,
-              { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2", opacity: pressed ? 0.85 : 1 },
+              {
+                backgroundColor: '#fff',
+                borderWidth: 1.5,
+                borderColor: '#D6E9F2',
+                borderRadius: 12,
+                height: 52,
+                elevation: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                opacity: pressed ? 0.85 : 1
+              },
             ]}
             onPress={handleGoogleLogin}
             disabled={googleLoading}
@@ -292,8 +304,8 @@ export default function LoginScreen() {
               <ActivityIndicator size="small" color="#1F2937" />
             ) : (
               <>
-                <Ionicons name="logo-google" size={18} color="#1F2937" style={{ marginRight: 8 }} />
-                <Text style={[styles.googleBtnText, { color: "#1F2937" }]}>Continue with Google</Text>
+                <Ionicons name="logo-google" size={18} color="#1F2937" />
+                <Text style={[styles.googleBtnText, { color: "#1F2937", fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
               </>
             )}
           </Pressable>

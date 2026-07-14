@@ -135,7 +135,7 @@ export default function StoreScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
-          <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>Store</Text>
+          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Store</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
               style={styles.whiteSquareBtn}
@@ -266,7 +266,7 @@ export default function StoreScreen() {
       {/* Cart FAB bottom-right */}
       {count > 0 && (
         <Pressable
-          style={styles.cartFab}
+          style={[styles.cartFab, { bottom: insets.bottom + 80 }]}
           onPress={handleCartPress}
         >
           <Ionicons name="cart" size={24} color="#FFF" />

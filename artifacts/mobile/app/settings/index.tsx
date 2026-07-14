@@ -51,7 +51,7 @@ export default function SettingsScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.menuCard, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
+        <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {SETTINGS.map((item, idx) => (
             <React.Fragment key={item.label}>
               <Pressable
@@ -68,7 +68,7 @@ export default function SettingsScreen() {
                 <Ionicons name="chevron-forward" size={18} color="#0B6FAD" />
               </Pressable>
               {idx < SETTINGS.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: "#D6E9F2" }]} />
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
               )}
             </React.Fragment>
           ))}

@@ -16,6 +16,7 @@ import {
   Text,
   View,
   Share,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "@/context/CartContext";
@@ -69,6 +70,22 @@ function mapSupabaseProduct(row: any): Product {
     ? { uri: row.thumbnail_url } 
     : (productFallbacks[category] || productFallbacks.physical)[index % 3];
 
+  let images: any[] = [];
+  let rawImages = row.images;
+  if (typeof rawImages === 'string') {
+    try {
+      rawImages = JSON.parse(rawImages);
+    } catch (err) {
+      rawImages = [];
+    }
+  }
+
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    images = rawImages.map((img: string) => ({ uri: img }));
+  } else {
+    images = [thumbnail];
+  }
+
   return {
     id: String(row.id),
     title: row.title || "Untitled Product",
@@ -77,6 +94,7 @@ function mapSupabaseProduct(row: any): Product {
     price: Number(row.price) || 0,
     originalPrice: Number(row.original_price) || Number(row.price) || 0,
     thumbnail,
+    images,
     description: row.description || "No description available.",
     rating: Number(row.rating) || 4.5,
     reviews: Number(row.total_reviews) || 0,
@@ -96,6 +114,8 @@ export default function ProductDetailScreen() {
 
   const isWishlisted = isProductInWishlist(String(id));
   const [localQty, setLocalQty] = useState(1);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const { width: screenWidth } = Dimensions.get("window");
 
   const { user } = useAuth();
   const [allReviews, setAllReviews] = useState<ProductReview[]>([]);
@@ -291,7 +311,45 @@ export default function ProductDetailScreen() {
         }
       >
         <View style={styles.imageContainer}>
-          <Image source={product.thumbnail} style={styles.image} />
+          {product.images && product.images.length > 1 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={(e) => {
+                  const slide = Math.round(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
+                  if (slide !== activeSlide) setActiveSlide(slide);
+                }}
+                scrollEventThrottle={16}
+                style={{ width: screenWidth, height: 280 }}
+                contentContainerStyle={{ height: 280 }}
+              >
+                {product.images.map((img, index) => (
+                  <Image
+                    key={index}
+                    source={img}
+                    style={{ width: screenWidth, height: 280, resizeMode: "cover" }}
+                  />
+                ))}
+              </ScrollView>
+              
+              {/* Pagination Dots */}
+              <View style={styles.paginationContainer}>
+                {product.images.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.paginationDot,
+                      activeSlide === index ? styles.paginationDotActive : styles.paginationDotInactive,
+                    ]}
+                  />
+                ))}
+              </View>
+            </>
+          ) : (
+            <Image source={product.thumbnail} style={styles.image} />
+          )}
           <View style={styles.overlay} />
           <Pressable
             style={[styles.backCircle, { top: topPad + 8 }]}
@@ -383,7 +441,7 @@ export default function ProductDetailScreen() {
                 >
                   <Text style={styles.stepperText}>-</Text>
                 </Pressable>
-                <Text style={styles.quantityVal}>
+                <Text style={[styles.quantityVal, { color: colors.foreground }]}>
                   {isInCart ? (items.find((i) => i.product.id === product.id)?.quantity || 1) : localQty}
                 </Text>
                 <Pressable
@@ -586,6 +644,26 @@ const styles = StyleSheet.create({
   imageContainer: { position: "relative", height: 280 },
   image: { width: "100%", height: "100%", resizeMode: "cover" },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.2)" },
+  paginationContainer: {
+    position: "absolute",
+    bottom: 16,
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 6,
+    zIndex: 10,
+  },
+  paginationDot: {
+    height: 8,
+    borderRadius: 4,
+  },
+  paginationDotActive: {
+    backgroundColor: "#0B6FAD",
+    width: 16,
+  },
+  paginationDotInactive: {
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+    width: 8,
+  },
   backCircle: {
     position: "absolute",
     left: 16,

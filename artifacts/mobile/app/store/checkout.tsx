@@ -53,6 +53,9 @@ function SlideToPayButton({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [completed, setCompleted] = useState(false);
 
+  const onSlideCompleteRef = useRef(onSlideComplete);
+  onSlideCompleteRef.current = onSlideComplete;
+
   // Pulse animation on the chevrons to hint sliding
   useEffect(() => {
     if (loading || completed) return;
@@ -83,7 +86,7 @@ function SlideToPayButton({
           }).start(() => {
             setCompleted(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            onSlideComplete();
+            onSlideCompleteRef.current();
           });
         } else {
           Animated.spring(translateX, {
@@ -99,16 +102,21 @@ function SlideToPayButton({
 
   // Reset when loading finishes (payment failed / dismissed)
   useEffect(() => {
-    if (!loading && !completed) {
+    if (!loading && completed) {
+      // Payment may have failed — reset after a delay
+      setTimeout(() => {
+        setCompleted(false);
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      }, 800);
+    } else if (!loading && !completed) {
       translateX.setValue(0);
     }
-    if (!loading) setCompleted(false);
-  }, [loading]);
+  }, [loading, completed]);
 
   return (
     <View style={styles.slideTrack}>
       <LinearGradient
-        colors={["#0B6FAD", "#17E5D3"]}
+        colors={["#0B6FAD", "#FF6B00"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={StyleSheet.absoluteFill}
@@ -231,7 +239,8 @@ export default function CheckoutScreen() {
       return sum + itemTaxable * (rate / 100);
     }, 0),
   );
-  const isRemoteState = !!(pendingAddress?.state && REMOTE_STATES.has(pendingAddress.state));
+  const activeAddress = addresses.find((a) => String(a.id) === selectedAddressId);
+  const isRemoteState = !!(activeAddress?.state && REMOTE_STATES.has(activeAddress.state));
   const shippingFee =
     hasPhysical && taxable < shippingConfig.threshold
       ? (isRemoteState ? shippingConfig.remoteFee : shippingConfig.fee)
@@ -264,15 +273,18 @@ export default function CheckoutScreen() {
       .order("is_default", { ascending: false });
     if (error || !data) return;
     setAddresses(data);
-    // Only auto-select default if we don't already have a specific id to keep
-    if (keepSelectedId) {
-      setSelectedAddressId(keepSelectedId);
+    
+    const idToSelect = keepSelectedId || selectedAddressId;
+    if (idToSelect && data.some((a) => String(a.id) === idToSelect)) {
+      setSelectedAddressId(idToSelect);
     } else {
       const def = data.find((a) => a.is_default) ?? data[0];
       if (def) {
         setSelectedAddressId(String(def.id));
         setName(def.full_name);
         setPhone(def.phone);
+      } else {
+        setSelectedAddressId(null);
       }
     }
   }
@@ -346,7 +358,7 @@ export default function CheckoutScreen() {
   const handleDeleteAddress = (addr: any) => {
     Alert.alert(
       "Delete Address",
-      `Remove address for ${addr.full_name}?`,
+      "Are you sure you want to remove this address?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -354,8 +366,10 @@ export default function CheckoutScreen() {
           onPress: async () => {
             const { error } = await supabase.from("shipping_addresses").delete().eq("id", addr.id);
             if (error) { Alert.alert("Error", error.message); return; }
-            const nextId = String(addr.id) === selectedAddressId ? null : selectedAddressId;
-            await loadAddresses(nextId ?? undefined);
+            if (selectedAddressId === String(addr.id)) {
+              setSelectedAddressId(null);
+            }
+            await loadAddresses();
           },
         },
       ]
@@ -395,16 +409,22 @@ export default function CheckoutScreen() {
   }
 
   async function handlePay() {
-    const selectedAddress = addresses.find((a) => String(a.id) === selectedAddressId);
+    const activeAddress = addresses.find((a) => String(a.id) === selectedAddressId);
 
-    if (hasPhysical && !selectedAddress) {
-      Alert.alert("Incomplete", "Please add and select a shipping address."); return;
+    if (hasPhysical && !activeAddress) {
+      Alert.alert("Incomplete", "Please add and select a shipping address.");
+      setLoading(false);
+      return;
     }
     if (!hasPhysical && (!name.trim() || !phone.trim())) {
-      Alert.alert("Incomplete", "Please fill in your name and phone number."); return;
+      Alert.alert("Incomplete", "Please fill in your name and phone number.");
+      setLoading(false);
+      return;
     }
     if (!user?.id) {
-      Alert.alert("Login Required", "Please log in to place an order."); return;
+      Alert.alert("Login Required", "Please log in to place an order.");
+      setLoading(false);
+      return;
     }
 
     setLoading(true);
@@ -417,7 +437,12 @@ export default function CheckoutScreen() {
         course_id: (item.product as any).course_id ?? null,
       }));
 
-      const rzpOrder = await createRazorpayOrder(cartItems, finalTotal);
+      let rzpOrder;
+      try {
+        rzpOrder = await createRazorpayOrder(cartItems, finalTotal);
+      } catch (orderErr: any) {
+        throw new Error(orderErr.message ?? "Failed to create Razorpay order.");
+      }
 
       const { data: profile } = await supabase
         .from("profiles")
@@ -425,22 +450,21 @@ export default function CheckoutScreen() {
         .eq("id", user.id)
         .maybeSingle();
 
-      setPendingAddress(selectedAddress);
+      setPendingAddress(activeAddress);
 
       setRazorpayParams({
         orderId:     rzpOrder.id,
         amount:      rzpOrder.amount,
         currency:    rzpOrder.currency,
         keyId:       rzpOrder.key_id,
-        name:        selectedAddress?.full_name ?? name,
+        name:        activeAddress?.full_name ?? name,
         email:       (profile as any)?.email ?? (user as any)?.email ?? "",
-        phone:       selectedAddress?.phone ?? phone,
+        phone:       activeAddress?.phone ?? phone,
         description: `${items.length} item${items.length > 1 ? "s" : ""} from MakersFlow`,
       });
       setShowPayment(true);
     } catch (err: any) {
       Alert.alert("Error", err.message ?? "Could not start payment. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
@@ -564,25 +588,108 @@ export default function CheckoutScreen() {
       try {
         const ordId = Date.now().toString();
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-          <style>body{font-family:Arial,sans-serif;padding:40px;color:#111}
-          h1{color:#0B6FAD}table{width:100%;border-collapse:collapse;margin:20px 0}
-          th,td{padding:10px;border:1px solid #e5e7eb;text-align:left}th{background:#f3f4f6}
-          .total{font-size:18px;font-weight:bold;color:#0B6FAD}
-          .footer{margin-top:40px;font-size:12px;color:#9ca3af}</style></head><body>
-          <h1>MAKERSFLOW</h1><p>Tax Invoice</p>
-          <p><strong>Payment ID:</strong> ${paymentId}</p>
-          <p><strong>Date:</strong> ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
-          <p><strong>Customer:</strong> ${name}</p>
-          <table><thead><tr><th>Item</th><th>Price</th><th>Qty</th><th>Subtotal</th></tr></thead><tbody>
-          ${items.map((i) => `<tr><td>${i.product.title}</td><td>₹${i.product.price}</td><td>${i.quantity}</td><td>₹${i.product.price * i.quantity}</td></tr>`).join("")}
-          </tbody></table>
-          <p>Subtotal: ₹${total}</p>
-          <p>GST: ₹${taxAmount}</p>
-          ${shippingFee > 0 ? `<p>Shipping: ₹${shippingFee}</p>` : ''}
-          ${appliedPromo ? `<p style="color:#17E5D3">Promo (${appliedPromo.code}): -₹${discount}</p>` : ""}
-          <p class="total">Total Paid: ₹${finalTotal}</p>
-          <div class="footer">MakersFlow · Learn · Explore · Excel<br/>Razorpay Payment ID: ${paymentId}</div>
-          </body></html>`;
+<style>
+  body { font-family: Arial, sans-serif; padding: 30px; color: #111; font-size: 12px; }
+  .page { max-width: 750px; margin: 0 auto; }
+  .title { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; letter-spacing: 2px; }
+  .top-grid { display: flex; gap: 0; border: 1px solid #333; margin-bottom: 0; }
+  .seller-box { flex: 1; padding: 12px; border-right: 1px solid #333; }
+  .inv-box { flex: 0 0 200px; padding: 12px; }
+  .inv-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .inv-label { font-weight: bold; font-size: 11px; }
+  .buyer-box { border: 1px solid #333; border-top: none; padding: 12px; margin-bottom: 0; }
+  .buyer-label { font-size: 11px; color: #555; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; border: 1px solid #333; border-top: none; }
+  th { background: #f5f5f5; padding: 8px; text-align: center; border: 1px solid #333; font-size: 11px; font-weight: bold; }
+  td { padding: 8px; border: 1px solid #333; font-size: 11px; vertical-align: top; }
+  .total-row td { font-weight: bold; }
+  .bottom-section { display: flex; gap: 20px; margin-top: 16px; }
+  .words-section { flex: 1; border: 1px solid #333; padding: 12px; }
+  .bank-section { flex: 1; border: 1px solid #333; padding: 12px; }
+  .sig-section { text-align: right; margin-top: 16px; border: 1px solid #333; padding: 12px; }
+  .footer-note { text-align: center; font-size: 10px; color: #888; margin-top: 12px; }
+  .company-name { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+  .section-label { font-weight: bold; font-size: 11px; margin-bottom: 6px; color: #333; }
+</style>
+</head><body>
+<div class="page">
+  <div class="title">TAX INVOICE</div>
+  <div class="top-grid">
+    <div class="seller-box">
+      <div class="company-name">MAKERSFLOW / EDODWAJA PRIVATE LIMITED</div>
+      <div>10-91, Vaddila Street, Near Post Office, Srungavru</div>
+      <div>West Godavari, Andhra Pradesh, Code: 37</div>
+      <div style="margin-top:8px;">State Name: Andhra Pradesh, Code: 37</div>
+    </div>
+    <div class="inv-box">
+      <div class="inv-row"><span class="inv-label">Invoice No.</span><span>${paymentId.slice(-6).toUpperCase()}</span></div>
+      <div class="inv-row"><span class="inv-label">Dated</span><span>${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}</span></div>
+      <div class="inv-row"><span class="inv-label">Payment ID</span><span style="font-size:9px;">${paymentId}</span></div>
+    </div>
+  </div>
+  <div class="buyer-box">
+    <div class="buyer-label">Buyer (Bill to)</div>
+    <div class="company-name">${name}</div>
+    ${pendingAddress ? `<div>${pendingAddress.address_line1 || ''} ${pendingAddress.address_line2 || ''}</div><div>${pendingAddress.city || ''}, ${pendingAddress.state || ''}</div>` : ''}
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40%;">Particulars</th>
+        <th>Qty</th>
+        <th>Rate</th>
+        <th>GST Rate</th>
+        <th>CGST</th>
+        <th>SGST</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((i) => {
+        const gstRate = 18;
+        const baseAmt = i.product.price * i.quantity;
+        const cgst = Math.round(baseAmt * (gstRate / 2) / 100);
+        const sgst = Math.round(baseAmt * (gstRate / 2) / 100);
+        return `<tr>
+          <td>${i.product.title}</td>
+          <td style="text-align:center;">${i.quantity}</td>
+          <td style="text-align:right;">₹${i.product.price}</td>
+          <td style="text-align:center;">${gstRate}%</td>
+          <td style="text-align:right;">₹${cgst}</td>
+          <td style="text-align:right;">₹${sgst}</td>
+          <td style="text-align:right;">₹${baseAmt}</td>
+        </tr>`;
+      }).join('')}
+      ${shippingFee > 0 ? `<tr><td>Shipping &amp; Handling</td><td style="text-align:center;">1</td><td style="text-align:right;">₹${shippingFee}</td><td style="text-align:center;">0%</td><td style="text-align:right;">₹0</td><td style="text-align:right;">₹0</td><td style="text-align:right;">₹${shippingFee}</td></tr>` : ''}
+      ${appliedPromo ? `<tr><td colspan="6">Discount (${appliedPromo.code})</td><td style="text-align:right;color:#059669;">-₹${discount}</td></tr>` : ''}
+      <tr class="total-row">
+        <td colspan="6" style="text-align:right;">Total</td>
+        <td style="text-align:right;">₹${finalTotal}</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="bottom-section">
+    <div class="words-section">
+      <div class="section-label">Amount Chargeable (in words)</div>
+      <div style="font-style:italic;">INR ${finalTotal} Only</div>
+      <div style="margin-top:12px;font-size:10px;">E &amp; O.E</div>
+      <div style="margin-top:8px;"><span class="section-label">Remarks:</span> MakersFlow Order</div>
+    </div>
+    <div class="bank-section">
+      <div class="section-label">Payment Details</div>
+      <div>Account Number: 070405003241</div>
+      <div>Account Holder: EDODWAJA PRIVATE LIMITED</div>
+      <div>IFSC Code: ICIC0000704</div>
+      <div style="margin-top:8px;">for EDODWAJA PRIVATE LIMITED</div>
+    </div>
+  </div>
+  <div class="sig-section">
+    <div style="margin-bottom:40px;"></div>
+    <div>Authorised Signatory</div>
+  </div>
+  <div class="footer-note">This is a Computer Generated Invoice</div>
+</div>
+</body></html>`;
 
         if (Platform.OS === "web") {
           await setInvoicePath(ordId, `html:${html}`);
@@ -629,7 +736,10 @@ export default function CheckoutScreen() {
     Alert.alert(
       "Payment Failed",
       reason || "Your payment could not be completed. No amount has been deducted.",
-      [{ text: "Try Again" }],
+      [
+        { text: "Try Again", onPress: () => setLoading(false) },
+        { text: "Cancel", style: "cancel", onPress: () => setLoading(false) }
+      ],
     );
   }
 
@@ -660,7 +770,7 @@ export default function CheckoutScreen() {
         </View>
 
         {/* Step Indicator */}
-        <View style={styles.stepIndicatorContainer}>
+        <View style={[styles.stepIndicatorContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           {[
             { id: 1, label: "Cart", status: "done" },
             { id: 2, label: "Checkout", status: "current" },
@@ -708,7 +818,7 @@ export default function CheckoutScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Order Summary</Text>
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {items.map((item) => (
               <View key={item.product.id} style={styles.orderItem}>
                 <Image
@@ -729,7 +839,7 @@ export default function CheckoutScreen() {
                     ₹{item.product.price}
                   </Text>
                 </View>
-                <View style={[styles.controlsContainer, { borderColor: "#D6E9F2" }]}>
+                <View style={[styles.controlsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Pressable onPress={() => decrementQuantity(String(item.product.id))} style={styles.controlBtn} hitSlop={8}>
                     <Ionicons name={item.quantity <= 1 ? "trash" : "remove"} size={14} color={item.quantity <= 1 ? "#ef4444" : colors.foreground} />
                   </Pressable>
@@ -781,7 +891,7 @@ export default function CheckoutScreen() {
             </View>
           ) : (
             <View style={styles.promoRow}>
-              <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: promoError ? "#DC2626" : "#D6E9F2", flex: 1 }]}>
+              <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: promoError ? "#DC2626" : colors.border, flex: 1 }]}>
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   value={promoCode}
@@ -809,32 +919,82 @@ export default function CheckoutScreen() {
               </View>
               {addresses.map((addr) => {
                 const isSelected = String(addr.id) === selectedAddressId;
+                const textStyle = {
+                  color: isSelected ? "#FFFFFF" : colors.foreground,
+                };
+                const subTextStyle = {
+                  color: isSelected ? "rgba(255, 255, 255, 0.85)" : colors.mutedForeground,
+                };
                 return (
-                  <Pressable key={addr.id} onPress={() => setSelectedAddressId(String(addr.id))}
-                    style={[styles.addressCard, { backgroundColor: "#FFFFFF", borderColor: isSelected ? "#0B6FAD" : "#D6E9F2", borderWidth: isSelected ? 1.5 : 1 }]}>
-                    <View style={styles.addressCardHeader}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Ionicons name="location" size={16} color="#0B6FAD" />
-                        <Text style={[styles.addressName, { color: colors.foreground }]}>{addr.full_name}</Text>
-                        {addr.is_default && <View style={styles.defaultBadge}><Text style={styles.defaultBadgeText}>Default</Text></View>}
-                      </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <Pressable onPress={() => handleEditAddress(addr)} hitSlop={8}>
-                          <Ionicons name="create" size={16} color="#0B6FAD" />
-                        </Pressable>
-                        <Pressable onPress={() => handleDeleteAddress(addr)} hitSlop={8}>
-                          <Ionicons name="trash" size={16} color="#EF4444" />
-                        </Pressable>
-                      </View>
+                  <Pressable
+                    key={addr.id}
+                    onPress={() => {
+                      setSelectedAddressId(String(addr.id));
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }}
+                    style={[
+                      styles.addressCard,
+                      {
+                        backgroundColor: isSelected ? "#0B6FAD" : colors.card,
+                        borderColor: isSelected ? "#0B6FAD" : colors.border,
+                        borderWidth: isSelected ? 2.5 : 1.2,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 14,
+                        padding: 16,
+                      }
+                    ]}
+                  >
+                    {/* Left Icon Selection Indicator */}
+                    <View style={{ justifyContent: "center", alignItems: "center" }}>
+                      <Ionicons
+                        name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                        size={24}
+                        color={isSelected ? "#FFFFFF" : colors.mutedForeground}
+                      />
                     </View>
-                    <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ""}</Text>
-                    <Text style={[styles.addressText, { color: colors.mutedForeground }]}>{addr.city}, {addr.state} - {addr.postal_code}</Text>
-                    <Text style={[styles.addressText, { color: colors.mutedForeground }]}>Ph: {addr.phone}</Text>
+
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.addressCardHeader}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={[styles.addressName, textStyle, { fontFamily: "Fredoka_700Bold" }]}>
+                            {addr.full_name}
+                          </Text>
+                          {addr.is_default && (
+                            <View style={[styles.defaultBadge, { backgroundColor: isSelected ? "#FFFFFF" : "#0B6FAD" }]}>
+                              <Text style={[styles.defaultBadgeText, { color: isSelected ? "#0B6FAD" : "#FFF" }]}>Default</Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                          <Pressable onPress={() => handleEditAddress(addr)} hitSlop={8}>
+                            <Ionicons name="create" size={18} color={isSelected ? "#FFFFFF" : "#0B6FAD"} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleDeleteAddress(addr)}
+                            hitSlop={12}
+                            style={{ padding: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={18} color={isSelected ? "#FFEBEB" : "#EF4444"} />
+                          </Pressable>
+                        </View>
+                      </View>
+                      
+                      <Text style={[styles.addressText, subTextStyle, { marginTop: 4, fontFamily: "Inter_500Medium" }]}>
+                        {addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ""}
+                      </Text>
+                      <Text style={[styles.addressText, subTextStyle, { fontFamily: "Inter_500Medium" }]}>
+                        {addr.city}, {addr.state} - {addr.postal_code}
+                      </Text>
+                      <Text style={[styles.addressText, textStyle, { fontFamily: "Inter_600SemiBold", marginTop: 4 }]}>
+                        Ph: {addr.phone}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
               {addresses.length === 0 && (
-                <View style={[styles.emptyAddressesCard, { borderColor: "#D6E9F2" }]}>
+                <View style={[styles.emptyAddressesCard, { borderColor: colors.border }]}>
                   <Ionicons name="location" size={24} color={colors.mutedForeground} style={{ marginBottom: 4 }} />
                   <Text style={[styles.emptyAddressesText, { color: colors.mutedForeground }]}>No saved addresses. Please add a shipping address.</Text>
                 </View>
@@ -849,7 +1009,7 @@ export default function CheckoutScreen() {
               ].map((field) => (
                 <View key={field.label} style={styles.fieldGroup}>
                   <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <TextInput
                       style={[styles.input, { color: colors.foreground }]}
                       value={field.value}
@@ -906,7 +1066,7 @@ export default function CheckoutScreen() {
                 ].map((field) => (
                   <View key={field.label} style={styles.fieldGroup}>
                     <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
-                    <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                       <TextInput style={[styles.input, { color: colors.foreground }]} value={field.value} onChangeText={field.setter} placeholder={field.placeholder} placeholderTextColor={colors.mutedForeground} keyboardType={(field as any).keyboard ?? "default"} />
                     </View>
                   </View>
@@ -915,7 +1075,7 @@ export default function CheckoutScreen() {
                 {/* Pincode — max 6 digits */}
                 <View style={styles.fieldGroup}>
                   <Text style={[styles.label, { color: colors.foreground }]}>Pincode</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <TextInput
                       style={[styles.input, { color: colors.foreground }]}
                       value={formPostalCode}
@@ -931,7 +1091,7 @@ export default function CheckoutScreen() {
                 {/* Phone — prefixed with +91 */}
                 <View style={styles.fieldGroup}>
                   <Text style={[styles.label, { color: colors.foreground }]}>Phone</Text>
-                  <View style={[styles.inputWrapper, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2", flexDirection: "row", alignItems: "center" }]}>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row", alignItems: "center" }]}>
                     <Text style={[styles.input, { color: colors.foreground, marginRight: 4 }]}>+91</Text>
                     <TextInput
                       style={[styles.input, { flex: 1, color: colors.foreground }]}

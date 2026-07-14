@@ -4,6 +4,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Application from 'expo-application';
+import { Asset } from 'expo-asset';
 import { TEXT_STYLES, TYPOGRAPHY } from '@/constants/typography';
 
 // Lazy-load: this expo-media-library version needs the ExpoMediaLibraryNext
@@ -31,62 +32,251 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 
-export default function CertificateScreen() {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const { courseName, studentName, completionDate } = useLocalSearchParams<{
-    courseName: string;
-    studentName: string;
-    completionDate: string;
-  }>();
-  const [isGenerating, setIsGenerating] = useState(false);
+const TRANSPARENT_1X1_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-  const displayDate = completionDate
-    ? new Date(completionDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
-    : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const getCertificateHtml = () => `
+function getCertificateHtml(
+  studentName: string,
+  courseName: string,
+  daysCompleted: string,
+  displayDate: string
+) {
+  return `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-      <meta charset="utf-8" />
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Certificate</title>
       <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Georgia, serif; background: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 40px; }
-        .cert { width: 100%; max-width: 800px; border: 8px solid #4F46E5; border-radius: 16px; padding: 60px; text-align: center; position: relative; }
-        .cert::before { content: ''; position: absolute; inset: 12px; border: 2px solid #C7D2FE; border-radius: 10px; pointer-events: none; }
-        .brand { font-size: 13px; letter-spacing: 4px; color: #6366F1; font-family: Arial, sans-serif; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
-        .title { font-size: 42px; color: #1E1B4B; margin: 16px 0 8px; }
-        .subtitle { font-size: 14px; color: #6B7280; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 40px; }
-        .presented { font-size: 14px; color: #9CA3AF; margin-bottom: 8px; }
-        .student { font-size: 38px; color: #4F46E5; border-bottom: 2px solid #E0E7FF; padding-bottom: 12px; margin-bottom: 24px; }
-        .completed { font-size: 14px; color: #6B7280; margin-bottom: 8px; }
-        .course { font-size: 22px; color: #1F2937; font-weight: bold; margin-bottom: 40px; }
-        .date { font-size: 13px; color: #9CA3AF; margin-top: 40px; }
-        .footer { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 24px; border-top: 1px solid #E5E7EB; }
-        .sig { text-align: center; }
-        .sig-line { width: 140px; border-top: 1px solid #374151; margin: 0 auto 6px; }
-        .sig-label { font-size: 11px; color: #6B7280; }
+        *{
+          margin:0;
+          padding:0;
+          box-sizing:border-box;
+          font-family:Arial,sans-serif;
+        }
+        body{
+          background:#f0f6f8;
+          display:flex;
+          justify-content:center;
+          align-items:center;
+          padding:30px;
+        }
+        .certificate{
+          width:297mm;
+          height:210mm;
+          background:linear-gradient(135deg,#dffcff,#ffffff);
+          padding:45px;
+          position:relative;
+          overflow:hidden;
+          border-radius:8px;
+        }
+        .certificate::before{
+          content:"";
+          position:absolute;
+          top:-120px;
+          right:-120px;
+          width:350px;
+          height:350px;
+          background:#78dce8;
+          border-radius:50%;
+          opacity:.35;
+        }
+        .certificate::after{
+          content:"";
+          position:absolute;
+          left:-150px;
+          bottom:-150px;
+          width:320px;
+          height:320px;
+          background:#32cfe0;
+          transform:rotate(45deg);
+          opacity:.25;
+        }
+        .top{
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+        }
+        .logo{
+          max-height:70px;
+          width:auto;
+          object-fit:contain;
+        }
+        h1{
+          text-align:center;
+          margin-top:35px;
+          font-size:56px;
+          color:#1b4b8f;
+          letter-spacing:3px;
+        }
+        h3{
+          text-align:center;
+          color:#5b79b8;
+          margin-bottom:25px;
+        }
+        .name{
+          text-align:center;
+          font-size:42px;
+          color:#124a9f;
+          border-bottom:2px solid #4e87c8;
+          display:inline-block;
+          width:70%;
+          margin:18px auto;
+          padding-bottom:10px;
+        }
+        p{
+          text-align:center;
+          color:#555;
+          margin-top:12px;
+        }
+        .title{
+          text-align:center;
+          margin-top:18px;
+          font-size:34px;
+          color:#1d5db3;
+        }
+        .desc{
+          width:80%;
+          margin:18px auto;
+          line-height:1.7;
+          font-size:16px;
+        }
+        .date{
+          margin-top:20px;
+          font-size:16px;
+          font-weight:bold;
+          color:#1b4b8f;
+        }
+        .bottom{
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-end;
+          margin-top:90px;
+        }
+        .line{
+          width:220px;
+          border-top:2px solid #444;
+          margin-bottom:10px;
+        }
+        .badge{
+          height:110px;
+          filter:drop-shadow(0 8px 18px rgba(0,0,0,.18));
+        }
       </style>
     </head>
     <body>
-      <div class="cert">
-        <div class="brand">MakersFlow</div>
-        <div class="title">Certificate</div>
-        <div class="subtitle">of Completion</div>
-        <div class="presented">This is to certify that</div>
-        <div class="student">${studentName ?? 'Student'}</div>
-        <div class="completed">has successfully completed the course</div>
-        <div class="course">${courseName ?? 'Course'}</div>
-        <div class="date">Issued on ${displayDate}</div>
-        <div class="footer">
-          <div class="sig"><div class="sig-line"></div><div class="sig-label">MakersFlow Team</div></div>
-          <div class="sig"><div class="sig-line"></div><div class="sig-label">Date</div></div>
+      <div class="certificate">
+        <div class="top">
+          <img src="{{FLOW_LOGO}}" class="logo">
+          <img src="{{EDODWAJA_LOGO}}" class="logo">
+        </div>
+        <h1>CERTIFICATE</h1>
+        <h3>OF PARTICIPATION</h3>
+        <p>Presented to</p>
+        <h2 class="name">${studentName}</h2>
+        <p>for successfully completing <b>${daysCompleted}</b> days of participation in</p>
+        <h2 class="title">${courseName}</h2>
+        <h4>"Learn by Doing – Future Tech Explorers"</h4>
+        <p class="desc">
+          and actively engaging in hands-on learning experiences in Robotics,
+          Electronics,
+          Automation,
+          Virtual Reality (VR),
+          Augmented Reality (AR),
+          3D Printing,
+          Artificial Intelligence,
+          and Emerging Technologies through the FLOW BUS initiative.
+        </p>
+        <p class="date">Issued on ${displayDate}</p>
+        <div class="bottom">
+          <div>
+            <div class="line"></div>
+            <h4>The FLOW BUS</h4>
+            <p>FLOW BUS</p>
+          </div>
+          <img src="{{BADGE_IMAGE}}" class="badge">
+          <div>
+            <div class="line"></div>
+            <h4>Madhulash Babu</h4>
+            <p>Founder & CEO</p>
+          </div>
         </div>
       </div>
     </body>
     </html>
   `;
+}
+
+export default function CertificateScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const { courseName, studentName, completionDate, daysCompleted } = useLocalSearchParams<{
+    courseName: string;
+    studentName: string;
+    completionDate: string;
+    daysCompleted?: string;
+  }>();
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  let displayDate = 'N/A';
+  try {
+    const d = completionDate ? new Date(completionDate) : new Date();
+    if (!isNaN(d.getTime())) {
+      displayDate = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+  } catch (err) {
+    console.warn('[Certificate] Invalid completion date:', err);
+  }
+
+  const generateHtmlWithImages = async () => {
+    let flowLogoBase64 = TRANSPARENT_1X1_PNG;
+    let edodwajaLogoBase64 = TRANSPARENT_1X1_PNG;
+    let badgeBase64 = TRANSPARENT_1X1_PNG;
+
+    try {
+      if (Platform.OS !== 'web') {
+        const resolveBase64 = async (module: any) => {
+          try {
+            const asset = Asset.fromModule(module);
+            await asset.downloadAsync();
+            const uri = asset.localUri || asset.uri;
+            if (uri) {
+              const base64Data = await FileSystem.readAsStringAsync(uri, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              const extension = uri.split('.').pop()?.toLowerCase() || 'png';
+              const mime = extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
+              return `data:${mime};base64,${base64Data}`;
+            }
+          } catch (err) {
+            console.warn('[Certificate] Error resolving asset base64:', err);
+          }
+          return TRANSPARENT_1X1_PNG;
+        };
+
+        flowLogoBase64 = await resolveBase64(require('@/assets/images/certificates/flow_logo.png'));
+        edodwajaLogoBase64 = await resolveBase64(require('@/assets/images/certificates/edodwaja_logo.jpg'));
+        badgeBase64 = await resolveBase64(require('@/assets/images/certificates/badge.png'));
+      } else {
+        flowLogoBase64 = 'https://oodqutwsljhvuyotuthu.supabase.co/storage/v1/object/public/partners/Flow%20Logo%20Gradient-%20v2.png';
+        edodwajaLogoBase64 = 'https://oodqutwsljhvuyotuthu.supabase.co/storage/v1/object/public/partners/Ed-Logo-.jpg';
+        badgeBase64 = 'https://via.placeholder.com/150';
+      }
+    } catch (e) {
+      console.error('[Certificate] Asset loading failed:', e);
+    }
+
+    const html = getCertificateHtml(
+      studentName ?? 'Student',
+      courseName ?? 'Course',
+      daysCompleted ?? 'N/A',
+      displayDate
+    );
+    return html
+      .replace('{{FLOW_LOGO}}', flowLogoBase64)
+      .replace('{{EDODWAJA_LOGO}}', edodwajaLogoBase64)
+      .replace('{{BADGE_IMAGE}}', badgeBase64);
+  };
 
   const handleDownload = async () => {
     setIsGenerating(true);
@@ -94,7 +284,8 @@ export default function CertificateScreen() {
       if (Platform.OS === 'web') {
         const printWindow = window.open('', '_blank');
         if (printWindow) {
-          printWindow.document.write(getCertificateHtml());
+          const html = await generateHtmlWithImages();
+          printWindow.document.write(html);
           printWindow.document.close();
           printWindow.focus();
           setTimeout(() => {
@@ -111,7 +302,8 @@ export default function CertificateScreen() {
       const dirInfo = await FileSystem.getInfoAsync(dir);
       if (!dirInfo.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
 
-      const { uri } = await Print.printToFileAsync({ html: getCertificateHtml(), base64: false });
+      const htmlContent = await generateHtmlWithImages();
+      const { uri } = await Print.printToFileAsync({ html: htmlContent, base64: false });
       const dest = `${dir}certificate_${Date.now()}.pdf`;
       await FileSystem.moveAsync({ from: uri, to: dest });
 
@@ -196,16 +388,16 @@ export default function CertificateScreen() {
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}>
         {/* Certificate card */}
-        <View style={[styles.cert, { borderColor: colors.primary }]}>
+        <View style={[styles.cert, { borderColor: '#00BCD4' }]}>
           <View style={[styles.certInner, { borderColor: '#C7D2FE' }]}>
-            <Text style={[styles.brand, TEXT_STYLES.label, { color: colors.primary }]}>MAKERSFLOW</Text>
-            <Text style={[styles.certTitle, TEXT_STYLES.pageTitle, { color: colors.foreground, fontSize: 32 }]}>Certificate</Text>
-            <Text style={[styles.certSubtitle, TEXT_STYLES.label, { color: colors.mutedForeground, letterSpacing: 3 }]}>OF COMPLETION</Text>
+            <Text style={[styles.brand, TEXT_STYLES.label, { color: '#00BCD4' }]}>MAKERSFLOW</Text>
+            <Text style={[styles.certTitle, TEXT_STYLES.pageTitle, { color: '#1a2a3a', fontSize: 32 }]}>Certificate</Text>
+            <Text style={[styles.certSubtitle, TEXT_STYLES.label, { color: '#6B7280', letterSpacing: 3 }]}>OF COMPLETION</Text>
 
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             <Text style={[styles.presented, TEXT_STYLES.description, { color: colors.mutedForeground }]}>This is to certify that</Text>
-            <Text style={[styles.studentName, TEXT_STYLES.pageTitle, { color: colors.primary, fontSize: 28 }]}>{studentName ?? 'Student'}</Text>
+            <Text style={[styles.studentName, TEXT_STYLES.pageTitle, { color: '#0B6FAD', fontSize: 28 }]}>{studentName ?? 'Student'}</Text>
 
             <Text style={[styles.completed, TEXT_STYLES.description, { color: colors.mutedForeground }]}>has successfully completed</Text>
             <Text style={[styles.courseName, TEXT_STYLES.cardTitle, { color: colors.foreground, fontSize: 18 }]}>{courseName ?? 'Course'}</Text>
@@ -213,7 +405,7 @@ export default function CertificateScreen() {
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             <View style={styles.awardRow}>
-              <Feather name="award" size={20} color="#F59E0B" />
+              <Feather name="award" size={20} color="#FF6B00" />
               <Text style={[styles.dateText, TEXT_STYLES.meta, { color: colors.mutedForeground }]}>{displayDate}</Text>
             </View>
 
@@ -247,7 +439,8 @@ export default function CertificateScreen() {
               }
               try {
                 // Generate PDF URI first, then share
-                const { uri } = await Print.printToFileAsync({ html: getCertificateHtml() });
+                const htmlContent = await generateHtmlWithImages();
+                const { uri } = await Print.printToFileAsync({ html: htmlContent });
                 const canShare = await Sharing.isAvailableAsync();
                 if (canShare) {
                   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Certificate' });

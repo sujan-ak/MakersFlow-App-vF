@@ -1,10 +1,11 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
 
 # Expo
 .expo/
+.expo-shared/
 dist/
 web-build/
 expo-env.d.ts
@@ -20,6 +21,7 @@ android/app/build/
 android/local.properties
 android/app/debug.keystore
 
+# Signing keys
 *.orig.*
 *.jks
 *.p8
@@ -30,17 +32,26 @@ android/app/debug.keystore
 # Metro
 .metro-health-check*
 
-# debug
+# Logs
+*.log
+npm-debug.log*
 npm-debug.*
+yarn-debug.log*
 yarn-debug.*
+yarn-error.log*
 yarn-error.*
+pnpm-debug.log*
 
 # macOS
 .DS_Store
-*.pem
 
-# local env files
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Local environment files
 .env
+.env.local
 .env*.local
 
 # TypeScript
@@ -48,6 +59,10 @@ yarn-error.*
 
 # Vercel
 .vercel
+
+# IDE
+.vscode/
+.idea/
 
 # Agents
 .agents/

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
+import { useColors } from "@/hooks/useColors";
 import { TEXT_STYLES } from "@/constants/typography";
 
 // ── Design tokens ────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ const C = {
 
 export default function VerifyOtpScreen() {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
   const { phone, provider } = useLocalSearchParams<{ phone: string; provider?: string }>();
   const { verifyOtp, sendOtp, verifyWhatsappOtp, sendWhatsappOtp } = useAuth();
   const isWhatsapp = provider === "whatsapp";
@@ -103,7 +105,7 @@ export default function VerifyOtpScreen() {
         style={[
           styles.container,
           {
-            backgroundColor: C.bg,
+            backgroundColor: colors.background,
             paddingTop:    insets.top    + 20,
             paddingBottom: insets.bottom + 20,
           },
@@ -114,23 +116,23 @@ export default function VerifyOtpScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backBtn, { opacity: pressed ? 0.7 : 1 }]}
         >
-          <Ionicons name="arrow-back" size={22} color={C.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </Pressable>
 
         {/* Icon box — pale aqua rounded square with filled phone icon */}
         <View style={styles.iconBox}>
-          <Ionicons name="phone-portrait" size={32} color={C.primary} />
+          <Ionicons name="phone-portrait" size={32} color={colors.primary} />
         </View>
 
         {/* Heading */}
-        <Text style={[TEXT_STYLES.pageTitle, styles.title]}>
+        <Text style={[TEXT_STYLES.pageTitle, styles.title, { color: colors.foreground }]}>
           Verify your number
         </Text>
 
         {/* Subtitle */}
         <Text style={[styles.subtitle]}>
           Enter the 6-digit code sent to{" "}
-          <Text style={{ color: C.darkText, fontFamily: "Inter_600SemiBold" }}>
+          <Text style={{ color: colors.foreground, fontFamily: "Inter_600SemiBold" }}>
             {phone}
           </Text>
         </Text>
@@ -139,7 +141,7 @@ export default function VerifyOtpScreen() {
           {/* Error banner */}
           {!!error && (
             <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={15} color={C.error} />
+              <Ionicons name="alert-circle" size={15} color={colors.destructive} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -158,8 +160,8 @@ export default function VerifyOtpScreen() {
                   style={[
                     styles.otpBox,
                     {
-                      backgroundColor: isFilled ? "#F0F9FF" : C.card,
-                      borderColor: isActive ? C.primary : C.border,
+                      backgroundColor: isFilled ? "#F0F9FF" : colors.card,
+                      borderColor: isActive ? colors.primary : colors.border,
                       borderWidth: isActive ? 2 : 1.5,
                     },
                   ]}
@@ -167,7 +169,7 @@ export default function VerifyOtpScreen() {
                   <Text
                     style={[
                       styles.otpDigit,
-                      { color: isFilled ? C.primary : C.mutedText },
+                      { color: isFilled ? colors.primary : colors.mutedForeground },
                     ]}
                   >
                     {digit}
@@ -197,8 +199,8 @@ export default function VerifyOtpScreen() {
               styles.verifyBtn,
               {
                 backgroundColor: isReady
-                  ? pressed ? C.pressed : C.primary
-                  : C.muted,
+                  ? pressed ? colors.primaryPressed : colors.primary
+                  : colors.muted,
                 opacity: loading ? 0.9 : 1,
               },
             ]}
@@ -212,13 +214,13 @@ export default function VerifyOtpScreen() {
                 <Ionicons
                   name="checkmark-circle"
                   size={20}
-                  color={isReady ? "#FFF" : C.mutedText}
+                  color={isReady ? "#FFF" : colors.mutedForeground}
                   style={{ marginRight: 8 }}
                 />
                 <Text
                   style={[
                     styles.verifyBtnText,
-                    { color: isReady ? "#FFF" : C.mutedText },
+                    { color: isReady ? "#FFF" : colors.mutedForeground },
                   ]}
                 >
                   Verify &amp; Continue
@@ -226,7 +228,7 @@ export default function VerifyOtpScreen() {
                 <Ionicons
                   name="chevron-forward"
                   size={18}
-                  color={isReady ? "#FFF" : C.mutedText}
+                  color={isReady ? "#FFF" : colors.mutedForeground}
                   style={{ marginLeft: 8 }}
                 />
               </View>
@@ -240,7 +242,7 @@ export default function VerifyOtpScreen() {
               <Text
                 style={[
                   styles.resendLink,
-                  { color: canResend ? C.primary : C.mutedText },
+                  { color: canResend ? colors.primary : colors.mutedForeground },
                 ]}
               >
                 {canResend ? "Resend code" : `Resend in ${resendCountdown}s`}

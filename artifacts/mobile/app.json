@@ -56,7 +56,8 @@
           "color": "#4F46E5"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

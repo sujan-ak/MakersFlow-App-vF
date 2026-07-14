@@ -12,10 +12,15 @@ import {
   Text,
   TextInput,
   View,
+  Image,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
+import { supabase } from "@/lib/supabase";
 
 function getPasswordStrength(pass: string) {
   if (!pass) return 0;
@@ -47,6 +52,7 @@ export default function RegisterScreen() {
   const [confirmError, setConfirmError] = useState("");
   const [gradeError, setGradeError] = useState("");
   const [schoolError, setSchoolError] = useState("");
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   const [nameFocused, setNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
@@ -60,6 +66,77 @@ export default function RegisterScreen() {
     if (strength <= 1) return "#EF4444";
     if (strength === 2) return "#F59E0B";
     return "#17E5D3";
+  };
+
+  const pickAvatar = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "MakersFlow needs library permission to upload a profile photo.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        
+        // Size validation: > 2MB
+        if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
+          Alert.alert("Image too large", "Image too large, please choose a smaller photo");
+          return;
+        }
+
+        // Type validation: jpeg and png only
+        const uri = asset.uri.toLowerCase();
+        const extension = uri.split('.').pop() || '';
+        const validExtensions = ['jpg', 'jpeg', 'png'];
+        
+        if (!validExtensions.includes(extension) && !uri.startsWith('data:image/jpeg') && !uri.startsWith('data:image/png')) {
+          Alert.alert("Invalid format", "Only image/jpeg and image/png files are allowed.");
+          return;
+        }
+
+        setAvatarUri(asset.uri);
+      }
+    } catch (e) {
+      console.error('Error picking image:', e);
+    }
+  };
+
+  const uploadAvatar = async (userId: string) => {
+    if (!avatarUri) return null;
+    try {
+      const response = await fetch(avatarUri);
+      const blob = await response.blob();
+      const filename = `${userId}_avatar.jpg`;
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(filename, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+      
+      if (error) {
+        console.error('Error uploading avatar:', error);
+        return null;
+      }
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filename);
+      
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+      return publicUrl;
+    } catch (e) {
+      console.error('Exception during avatar upload:', e);
+      return null;
+    }
   };
 
   async function handleGoogleSignup() {
@@ -144,6 +221,16 @@ export default function RegisterScreen() {
     setLoading(false);
     
     if (result.success) {
+      if (avatarUri) {
+        try {
+          const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+          if (supabaseUser) {
+            await uploadAvatar(supabaseUser.id);
+          }
+        } catch (uploadErr) {
+          console.error("Avatar upload failed:", uploadErr);
+        }
+      }
       router.replace("/(auth)/onboarding");
     } else {
       setError(result.error || "Registration failed. Please try again.");
@@ -169,11 +256,62 @@ export default function RegisterScreen() {
         </Pressable>
 
         <View style={styles.header}>
-          <Text style={[styles.title, { color: "#0F2A3D" }]}>Create account</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Create account</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Join thousands of students on MAKERSFLOW</Text>
         </View>
 
         <View style={styles.form}>
+          {/* Google Sign-Up button at the top */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.googleBtn,
+              {
+                backgroundColor: '#fff',
+                borderWidth: 1.5,
+                borderColor: '#D6E9F2',
+                borderRadius: 12,
+                height: 52,
+                elevation: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                opacity: pressed ? 0.85 : 1
+              },
+            ]}
+            onPress={handleGoogleSignup}
+            disabled={googleLoading}
+          >
+            {googleLoading ? (
+              <ActivityIndicator size="small" color="#1F2937" />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={18} color="#1F2937" />
+                <Text style={[styles.googleBtnText, { color: "#1F2937", fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
+              </>
+            )}
+          </Pressable>
+
+          <View style={styles.dividerRow}>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>or</Text>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          </View>
+
+          {/* Avatar Picker */}
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            <Pressable onPress={pickAvatar} style={styles.avatarContainer}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="camera-outline" size={24} color="#0B6FAD" />
+                  <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+                </View>
+              )}
+            </Pressable>
+          </View>
+
           {error ? (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle" size={16} color="#DC2626" />
@@ -186,7 +324,7 @@ export default function RegisterScreen() {
             { label: "Email", value: email, setter: setEmail, icon: "mail", placeholder: "your@email.com", keyboard: "email-address" as const, secure: false, error: emailError, setError: setEmailError, focused: emailFocused, setFocused: setEmailFocused },
           ].map((field) => (
             <View style={styles.fieldGroup} key={field.label}>
-              <Text style={[styles.label, { color: "#0F2A3D" }]}>{field.label}</Text>
+              <Text style={[styles.label, { color: colors.foreground }]}>{field.label}</Text>
               <View style={[
                 styles.inputWrapper, 
                 { 
@@ -215,7 +353,7 @@ export default function RegisterScreen() {
 
           {/* Password field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: "#0F2A3D" }]}>Password</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
             <View style={[
               styles.inputWrapper, 
               { 
@@ -246,6 +384,17 @@ export default function RegisterScreen() {
               <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>Must be at least 8 characters</Text>
             )}
             {password && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: getStrengthColor() }}>
+                  Strength: {
+                    strength <= 1 ? "Weak" :
+                    strength === 2 ? "Fair" :
+                    strength === 3 ? "Strong" : "Very Strong"
+                  }
+                </Text>
+              </View>
+            )}
+            {password && (
               <View style={styles.strengthBarContainer}>
                 {[1, 2, 3, 4].map((step) => (
                   <View
@@ -264,7 +413,7 @@ export default function RegisterScreen() {
 
           {/* Confirm password */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: "#0F2A3D" }]}>Confirm Password</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>Confirm Password</Text>
             <View style={[
               styles.inputWrapper, 
               { 
@@ -291,7 +440,7 @@ export default function RegisterScreen() {
 
           {/* Grade field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: "#0F2A3D" }]}>Grade</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>Grade</Text>
             <View style={[
               styles.inputWrapper, 
               { 
@@ -317,7 +466,7 @@ export default function RegisterScreen() {
 
           {/* School field */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: "#0F2A3D" }]}>School</Text>
+            <Text style={[styles.label, { color: colors.foreground }]}>School</Text>
             <View style={[
               styles.inputWrapper, 
               { 
@@ -343,10 +492,16 @@ export default function RegisterScreen() {
 
           {/* Create Account button */}
           <Pressable
-            style={({ pressed }) => [styles.btn, { backgroundColor: "#0B6FAD", opacity: pressed ? 0.85 : 1 }]}
+            style={({ pressed }) => [styles.btn, { opacity: pressed ? 0.85 : 1, overflow: 'hidden' }]}
             onPress={handleRegister}
             disabled={loading}
           >
+            <LinearGradient
+              colors={["#0B6FAD", "#FF6B00"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -369,24 +524,7 @@ export default function RegisterScreen() {
             </Pressable>
           </View>
 
-          {/* Google signup button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.googleBtn,
-              { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2", opacity: pressed ? 0.85 : 1 },
-            ]}
-            onPress={handleGoogleSignup}
-            disabled={googleLoading}
-          >
-            {googleLoading ? (
-              <ActivityIndicator size="small" color="#1F2937" />
-            ) : (
-              <View style={styles.primaryButtonContent}>
-                <Ionicons name="logo-google" size={18} color="#1F2937" style={{ marginRight: 8 }} />
-                <Text style={[styles.googleBtnText, { color: "#1F2937" }]}>Continue with Google</Text>
-              </View>
-            )}
-          </Pressable>
+
         </View>
 
         <View style={styles.footer}>
@@ -483,4 +621,33 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
   },
+  avatarContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 1.5,
+    borderColor: "#D6E9F2",
+    backgroundColor: "#F3FBFB",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  avatarPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarPlaceholderText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: "#0B6FAD",
+    marginTop: 4,
+  },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 12 },
+  divider: { flex: 1, height: 1 },
+  dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
 });

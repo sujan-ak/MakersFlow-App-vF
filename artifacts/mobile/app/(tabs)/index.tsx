@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Platform,
   Pressable,
@@ -15,6 +15,7 @@ import {
   FlatList,
   ImageBackground,
   RefreshControl,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -41,11 +42,13 @@ const CATEGORY_DETAILS = [
 ];
 
 function CategoryGrid({ onCategoryPress }: { onCategoryPress: (category: string) => void }) {
+  const colors = useColors();
   return (
     <View style={styles.section}>
-      <View style={styles.sectionTitleContainer}>
-        <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>Browse by Category</Text>
-      </View>
+      <SectionHeader
+        title="Browse by Category"
+        onSeeAll={() => onCategoryPress("all")}
+      />
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -142,7 +145,7 @@ function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCar
       <View style={[styles.guestIconContainer, { backgroundColor: "#DCF7F4" }]}>
         <Ionicons name="sparkles" size={32} color="#0B6FAD" />
       </View>
-      <Text style={[styles.guestTitle, { color: "#0F2A3D" }]}>Welcome to MakersFlow</Text>
+      <Text style={[styles.guestTitle, { color: colors.foreground }]}>Welcome to MakersFlow</Text>
       <Text style={[styles.guestSubtitleText, { color: colors.mutedForeground }]}>
         Sign in to track your progress, earn certificates, and continue where you left off.
       </Text>
@@ -157,7 +160,7 @@ function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCar
           style={[styles.guestSecondaryBtn, { borderColor: "#D6E9F2" }]}
           onPress={onBrowseCourses}
         >
-          <Text style={[styles.guestSecondaryBtnText, { color: "#0F2A3D" }]}>Browse Courses</Text>
+          <Text style={[styles.guestSecondaryBtnText, { color: colors.foreground }]}>Browse Courses</Text>
         </Pressable>
       </View>
     </View>
@@ -170,6 +173,7 @@ export default function HomeScreen() {
   const { user, isOffline } = useAuth();
   const { isConnected, addReconnectListener } = useNetwork();
   const { watchlist } = useProgress();
+  const currentTime = useMemo(() => new Date(), []);
   const scrollViewRef = useRef<ScrollView>(null);
   const [popularCoursesY, setPopularCoursesY] = useState(0);
 
@@ -298,14 +302,23 @@ export default function HomeScreen() {
     return "Good night";
   };
 
+  const getGreetingColor = () => {
+    const hour = new Date().getHours();
+    if (hour >= 21 || hour < 5) return "#FF6B00"; // night
+    return "#0B6FAD"; // morning/afternoon/evening
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Fixed Header */}
       <View style={[styles.fixedHeader, { backgroundColor: colors.background, paddingTop: topPad + 16, borderBottomColor: colors.border }]}>
         <View style={styles.header}>
           <View>
-            <Text style={[styles.greeting, { color: "#0B6FAD" }]}>{getGreeting()}</Text>
-            <Text style={[styles.userName, { color: "#0F2A3D" }]}>{user?.name ?? "Student"}</Text>
+            <Text style={[styles.greeting, { color: getGreetingColor() }]}>{getGreeting()}</Text>
+            <Text style={[styles.userName, { color: colors.foreground }]}>{user?.name ?? "Student"}</Text>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+              {currentTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            </Text>
           </View>
           <View style={styles.headerButtons}>
             <Pressable
@@ -314,7 +327,7 @@ export default function HomeScreen() {
             >
               <Ionicons name="notifications" size={20} color="#0B6FAD" />
               {unreadNotifCount > 0 && (
-                <View style={styles.notifBadge}>
+                <View style={[styles.notifBadge, { backgroundColor: "#FF6B00" }]}>
                   <Text style={styles.notifBadgeText}>
                     {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                   </Text>
@@ -536,7 +549,7 @@ export default function HomeScreen() {
       {/* Ecosystem of MakersFlow */}
       <View style={styles.section}>
         <View style={styles.sectionTitleContainer}>
-          <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>Ecosystem of MakersFlow</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Ecosystem of MakersFlow</Text>
         </View>
         <View style={[styles.ecosystemCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.ecosystemHeader}>
@@ -547,11 +560,17 @@ export default function HomeScreen() {
             Discover the brands and partners that make up the MakersFlow ecosystem
           </Text>
           <View style={styles.brandsContainer}>
-            <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Ionicons name="image" size={24} color={colors.mutedForeground} />
+            <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border, overflow: 'hidden' }]}>
+              <Image
+                source={require('@/assets/images/partners/Flow Logo Gradient- v2.png')}
+                style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+              />
             </View>
-            <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Ionicons name="image" size={24} color={colors.mutedForeground} />
+            <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border, overflow: 'hidden' }]}>
+              <Image
+                source={require('@/assets/images/partners/Ed-Logo-.jpg')}
+                style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+              />
             </View>
           </View>
         </View>
@@ -585,7 +604,7 @@ function StreakCarousel({
       value: `${learningStreak} days`,
       icon: "flash",
       bgColor: "#DCF7F4",
-      iconBg: "#17E5D3",
+      iconBg: "#FF6B00",
       label: "Active Days",
     },
     {
@@ -634,7 +653,7 @@ function StreakCarousel({
           <View style={styles.streakCardWrapper}>
             <View style={[styles.streakCard, { backgroundColor: item.bgColor, borderColor: "#D6E9F2" }]}>
               <View style={[styles.streakIconContainer, { backgroundColor: item.iconBg }]}>
-                <Ionicons name={item.icon as any} size={28} color="#0B6FAD" />
+                <Ionicons name={item.icon as any} size={28} color={item.id === "current_streak" ? "#FFF" : "#0B6FAD"} />
               </View>
               <View style={styles.streakContent}>
                 <View style={styles.streakTitleRow}>

@@ -343,7 +343,7 @@ export default function ProfileScreen() {
       <View style={[styles.container, { backgroundColor: colors.background, flex: 1 }]}>
         {/* Header */}
         <View style={{ paddingTop: topPad + 16, paddingHorizontal: 20, paddingBottom: 8 }}>
-          <Text style={[styles.pageTitle, { color: '#0F2A3D' }]}>Profile</Text>
+          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Profile</Text>
         </View>
 
         {/* Guest Banner */}
@@ -385,7 +385,7 @@ export default function ProfileScreen() {
               <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#DCF7F4', alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name={item.icon as any} size={17} color="#0B6FAD" />
               </View>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.foreground, flex: 1 }}>{item.label}</Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: "#0F2A3D", flex: 1 }}>{item.label}</Text>
               <Ionicons name="lock-closed-outline" size={15} color={colors.mutedForeground} />
             </Pressable>
           ))}
@@ -400,7 +400,7 @@ export default function ProfileScreen() {
       contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>Profile</Text>
+      <Text style={[styles.pageTitle, { color: colors.foreground }]}>Profile</Text>
 
       {/* User Banner */}
       <View style={[styles.profileCard, { backgroundColor: "#0B6FAD" }]}>
@@ -468,7 +468,7 @@ export default function ProfileScreen() {
 
       {/* Learning Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Learning</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Learning</Text>
         <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {learningMenuItems.map((item, idx) => (
             <React.Fragment key={item.label}>
@@ -495,7 +495,7 @@ export default function ProfileScreen() {
         <View style={styles.achievementsHeader}>
           <View style={styles.achievementsTitleRow}>
             <Ionicons name="ribbon" size={16} color="#0B6FAD" />
-            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0, color: colors.foreground }]}>
               Achievements & Certificates
             </Text>
           </View>
@@ -572,7 +572,7 @@ export default function ProfileScreen() {
 
       {/* Wishlist Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>My Wishlist</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My Wishlist</Text>
         {wishlistLoading ? (
           <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
             <ActivityIndicator size="small" color="#0B6FAD" />
@@ -609,7 +609,7 @@ export default function ProfileScreen() {
       {/* Other Sections */}
       {otherSections.map((section) => (
         <View key={section.title} style={styles.section}>
-          <Text style={styles.sectionTitle}>{section.title}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{section.title}</Text>
           <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {section.items.map((item, idx) => (
               <React.Fragment key={item.label}>
@@ -660,7 +660,7 @@ export default function ProfileScreen() {
                 </Text>
                 
                 <TextInput
-                  style={[styles.modalInput, { color: colors.foreground, borderColor: "#D6E9F2", backgroundColor: colors.card }]}
+                  style={[styles.modalInput, { color: "#0F2A3D", borderColor: "#D6E9F2", backgroundColor: colors.card }]}
                   placeholder="Password"
                   placeholderTextColor={colors.mutedForeground}
                   secureTextEntry

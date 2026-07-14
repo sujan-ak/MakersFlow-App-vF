@@ -27,6 +27,8 @@ const colors = {
     aquaLight: "#7FF0E5",
     gradientStart: "#0B6FAD",
     gradientEnd: "#17E5D3",
+    orange: "#FF6B00",
+    orangeLight: "#FFF3EC",
   },
   dark: {
     text: "#E8F4FD",
@@ -56,6 +58,8 @@ const colors = {
     aquaLight: "#7FF0E5",
     gradientStart: "#0B6FAD",
     gradientEnd: "#17E5D3",
+    orange: "#FF6B00",
+    orangeLight: "#FFF3EC",
   },
   radius: 12,
 };

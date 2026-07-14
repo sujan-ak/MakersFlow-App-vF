@@ -14,6 +14,7 @@ import {
   ActivityIndicator as RNActivityIndicator,
   Share,
   Linking,
+  TextInput,
 } from "react-native";
 import * as FileSystem from 'expo-file-system/legacy';
 import { getDownloadedPath, setDownloadedPath, removeDownloadedPath } from '@/lib/downloadStorage';
@@ -33,6 +34,7 @@ import { getEnrollment, isExpired, completeCourse } from "@/services/enrollmentS
 import { onSessionExpired } from "@/lib/sessionEvents";
 import { ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetchMyReview, upsertReview } from '@/services/reviewService';
 
 export default function LearnScreen() {
   const colors = useColors();
@@ -68,6 +70,12 @@ export default function LearnScreen() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [isMarkingComplete, setIsMarkingComplete] = useState(false);
+
+  const [myReview, setMyReview] = useState<any>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   useEffect(() => {
     if (!activeModuleId) return;
@@ -196,6 +204,105 @@ export default function LearnScreen() {
     }
   }, [activeModuleId, isLoading]);
 
+  const isCourseCompleted = !!enrollment?.completed_at;
+  const completedModules = lessonsProgress.filter((p) => p.is_completed).length;
+  const effectiveTotalLessons = totalLessons || lessons.length;
+  const remainingModules = isCourseCompleted ? 0 : (effectiveTotalLessons - completedModules);
+  const progressPercentage = isCourseCompleted
+    ? 100
+    : (effectiveTotalLessons > 0 ? Math.min(100, Math.round((completedModules / effectiveTotalLessons) * 100)) : 0);
+
+  const activeModule = lessons.find((m) => m.id === activeModuleId) ?? lessons[0];
+  const activeLessonProgress = lessonsProgress.find((p) => String(p.lesson_id) === activeModule?.id);
+  const initialTime = showResumeModal ? 0 : (activeLessonProgress?.current_time_secs ?? 0);
+  const isSaved = activeModule ? isInWatchLater(activeModule.id) : false;
+
+  // Stable callbacks — prevent VideoPlayerEnhanced from recreating its
+  // polling interval on every render (Bug 3 & 7)
+  const handleProgressUpdate = useCallback(async (currentTime: number, duration: number) => {
+    if (!user?.id || !courseId || !activeModule?.id) return;
+    const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+    await upsertLessonProgress(user.id, Number(courseId), Number(activeModule.id), currentTime, watchPercentage);
+    try {
+      const progressData = await fetchCourseLessonsProgress(user.id, Number(courseId));
+      setLessonsProgress(progressData);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [user?.id, courseId, activeModule?.id]);
+
+  const handleVideoComplete = useCallback(async () => {
+    if (!user?.id || !courseId || !activeModule?.id) return;
+    await markLessonComplete(user.id, Number(courseId), Number(activeModule.id));
+    await completeModule(String(Number(courseId)), String(Number(activeModule.id)));
+    let updatedProgress: any[] = [];
+    try {
+      updatedProgress = await fetchCourseLessonsProgress(user.id, Number(courseId));
+      setLessonsProgress(updatedProgress);
+    } catch (e) {
+      console.error(e);
+    }
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    const completedCount = updatedProgress.filter((p) => p.is_completed).length;
+    if (totalLessons > 0 && completedCount >= totalLessons) {
+      if (!enrollment?.completed_at) {
+        try {
+          await completeCourse(user.id, Number(courseId));
+          const enrollData = await getEnrollment(user.id, Number(courseId));
+          setEnrollment(enrollData);
+        } catch (e) {
+          console.error('[CompleteCourse] error:', e);
+        }
+      }
+      const certKey = `@cert_shown:${user.id}:${courseId}`;
+      const alreadyShown = await AsyncStorage.getItem(certKey);
+      if (!alreadyShown) {
+        await AsyncStorage.setItem(certKey, 'true');
+        router.push({
+          pathname: '/certificate',
+          params: {
+            courseName: course?.title ?? '',
+            studentName: user.name ?? '',
+            completionDate: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+    }
+
+    setShowCompleteModal(true);
+  }, [user?.id, courseId, activeModule?.id, totalLessons, enrollment?.completed_at, course?.title, lessons]);
+
+  useEffect(() => {
+    if (!user?.id || !courseId || isLoading) return;
+    fetchMyReview(user.id, courseId).then((r) => {
+      if (r) {
+        setMyReview(r);
+        setReviewRating(r.rating);
+        setReviewText(r.comment || '');
+      }
+    }).catch(() => {});
+  }, [user?.id, courseId, isLoading]);
+
+  const handleSubmitReview = async () => {
+    if (!user?.id || !courseId || reviewRating === 0) {
+      showToast('Please select a rating first');
+      return;
+    }
+    setIsSubmittingReview(true);
+    try {
+      await upsertReview(user.id, courseId, reviewRating, reviewText);
+      showToast('Review submitted! Thank you.');
+      setShowReviewForm(false);
+      setMyReview({ rating: reviewRating, comment: reviewText });
+    } catch (e) {
+      showToast('Failed to submit review. Please try again.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -213,18 +320,7 @@ export default function LearnScreen() {
     );
   }
 
-  const isCourseCompleted = !!enrollment?.completed_at;
-  const completedModules = lessonsProgress.filter((p) => p.is_completed).length;
-  const effectiveTotalLessons = totalLessons || lessons.length;
-  const remainingModules = isCourseCompleted ? 0 : (effectiveTotalLessons - completedModules);
-  const progressPercentage = isCourseCompleted
-    ? 100
-    : (effectiveTotalLessons > 0 ? Math.min(100, Math.round((completedModules / effectiveTotalLessons) * 100)) : 0);
 
-  const activeModule = lessons.find((m) => m.id === activeModuleId) ?? lessons[0];
-  const activeLessonProgress = lessonsProgress.find((p) => String(p.lesson_id) === activeModule?.id);
-  const initialTime = showResumeModal ? 0 : (activeLessonProgress?.current_time_secs ?? 0);
-  const isSaved = activeModule ? isInWatchLater(activeModule.id) : false;
 
   const showToast = (message: string) => {
     if (Platform.OS === 'android') {
@@ -303,62 +399,7 @@ export default function LearnScreen() {
     showToast(wasAdded ? 'Added to Watch Later' : 'Removed from Watch Later');
   };
 
-  // Stable callbacks — prevent VideoPlayerEnhanced from recreating its
-  // polling interval on every render (Bug 3 & 7)
-  const handleProgressUpdate = useCallback(async (currentTime: number, duration: number) => {
-    if (!user?.id || !courseId || !activeModule?.id) return;
-    const watchPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
-    await upsertLessonProgress(user.id, Number(courseId), Number(activeModule.id), currentTime, watchPercentage);
-    try {
-      const progressData = await fetchCourseLessonsProgress(user.id, Number(courseId));
-      setLessonsProgress(progressData);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [user?.id, courseId, activeModule?.id]);
 
-  const handleVideoComplete = useCallback(async () => {
-    if (!user?.id || !courseId || !activeModule?.id) return;
-    await markLessonComplete(user.id, Number(courseId), Number(activeModule.id));
-    await completeModule(String(Number(courseId)), String(Number(activeModule.id)));
-    let updatedProgress: any[] = [];
-    try {
-      updatedProgress = await fetchCourseLessonsProgress(user.id, Number(courseId));
-      setLessonsProgress(updatedProgress);
-    } catch (e) {
-      console.error(e);
-    }
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    const completedCount = updatedProgress.filter((p) => p.is_completed).length;
-    if (totalLessons > 0 && completedCount >= totalLessons) {
-      if (!enrollment?.completed_at) {
-        try {
-          await completeCourse(user.id, Number(courseId));
-          const enrollData = await getEnrollment(user.id, Number(courseId));
-          setEnrollment(enrollData);
-        } catch (e) {
-          console.error('[CompleteCourse] error:', e);
-        }
-      }
-      const certKey = `@cert_shown:${user.id}:${courseId}`;
-      const alreadyShown = await AsyncStorage.getItem(certKey);
-      if (!alreadyShown) {
-        await AsyncStorage.setItem(certKey, 'true');
-        router.push({
-          pathname: '/certificate',
-          params: {
-            courseName: course?.title ?? '',
-            studentName: user.name ?? '',
-            completionDate: new Date().toISOString(),
-          },
-        });
-        return;
-      }
-    }
-
-    setShowCompleteModal(true);
-  }, [user?.id, courseId, activeModule?.id, totalLessons, enrollment?.completed_at, course?.title, lessons]);
 
   const handleResumeVideo = () => {
     setShowResumeModal(false);
@@ -668,19 +709,71 @@ export default function LearnScreen() {
         showsVerticalScrollIndicator={false}
       >
         {activeTab === "overview" ? (
-          <LearningTabs
-            module={{
-              ...activeModule,
-              resources: lessonResources.map((r) => ({
-                id: r.id,
-                title: r.title,
-                type: r.type ?? "link",
-                size: "",
-                url: r.url,
-              })),
-              notes: lessonNotes,
-            } as any}
-          />
+          <>
+            <LearningTabs
+              module={{
+                ...activeModule,
+                resources: lessonResources.map((r) => ({
+                  id: r.id,
+                  title: r.title,
+                  type: r.type ?? "link",
+                  size: "",
+                  url: r.url,
+                })),
+                notes: lessonNotes,
+              } as any}
+            />
+            {/* Review Section */}
+            <View style={{ margin: 16, padding: 16, backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ fontSize: 16, fontFamily: 'Fredoka_700Bold', color: colors.foreground, marginBottom: 8 }}>
+                {myReview ? 'Your Review' : 'Rate this Course'}
+              </Text>
+              {/* Star rating row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Pressable key={star} onPress={() => { setReviewRating(star); setShowReviewForm(true); }}>
+                    <Ionicons
+                      name={star <= reviewRating ? 'star' : 'star-outline'}
+                      size={28}
+                      color={star <= reviewRating ? '#F59E0B' : colors.border}
+                    />
+                  </Pressable>
+                ))}
+              </View>
+              {showReviewForm && (
+                <>
+                  <TextInput
+                    value={reviewText}
+                    onChangeText={setReviewText}
+                    placeholder="Share your experience (optional)"
+                    placeholderTextColor={colors.mutedForeground}
+                    multiline
+                    numberOfLines={3}
+                    style={{
+                      borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+                      padding: 12, color: colors.foreground, fontFamily: 'Inter_400Regular',
+                      fontSize: 14, minHeight: 80, textAlignVertical: 'top', marginBottom: 12
+                    }}
+                  />
+                  <Pressable
+                    onPress={handleSubmitReview}
+                    disabled={isSubmittingReview}
+                    style={{ backgroundColor: '#0B6FAD', borderRadius: 24, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    {isSubmittingReview
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={{ color: '#fff', fontFamily: 'Fredoka_700Bold', fontSize: 15 }}>Submit Review</Text>
+                    }
+                  </Pressable>
+                </>
+              )}
+              {myReview && !showReviewForm && (
+                <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }}>
+                  {myReview.comment || 'No comment added.'}
+                </Text>
+              )}
+            </View>
+          </>
         ) : (
           <View style={styles.moduleList}>
             {lessons.map((mod, idx) => {
@@ -774,8 +867,8 @@ export default function LearnScreen() {
             onPress={handlePreviousLesson}
             disabled={!getPreviousModule()}
           >
-            <Ionicons name="chevron-back" size={18} color="#0F2A3D" />
-            <Text style={[styles.navBtnText, { color: "#0F2A3D" }]}>Previous</Text>
+            <Ionicons name="chevron-back" size={18} color={colors.foreground} />
+            <Text style={[styles.navBtnText, { color: colors.foreground }]}>Previous</Text>
           </Pressable>
 
           <Pressable

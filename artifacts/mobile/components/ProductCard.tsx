@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View, Alert, Platform, Dimensions } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View, Alert, Platform, Dimensions, FlatList } from "react-native";
 import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
@@ -13,7 +13,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
 interface ProductCardProps {
-  product: Product;
+  product: Product & { images?: string[] };
   onAddedToCart?: () => void;
   gridMode?: boolean;
 }
@@ -24,6 +24,8 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
   const { requireAuth } = useRequireAuth();
   const [isAdding, setIsAdding] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(CARD_WIDTH);
   const discount = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
   const isWishlisted = isProductInWishlist(product.id);
 
@@ -75,6 +77,10 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
     });
   };
 
+  const productImages = product.images && Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : null;
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -84,8 +90,40 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
       ]}
       onPress={() => router.push({ pathname: "/store/[id]", params: { id: product.id } })}
     >
-      <View style={styles.imageContainer}>
-        <Image source={product.thumbnail} style={styles.thumbnail} />
+      <View style={styles.imageContainer} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+        {productImages ? (
+          <View style={{ flex: 1 }}>
+            <FlatList
+              data={productImages}
+              keyExtractor={(item, index) => `${item}_${index}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / (containerWidth || CARD_WIDTH));
+                setActiveIndex(index);
+              }}
+              renderItem={({ item }) => (
+                <Image source={{ uri: item }} style={{ width: containerWidth, height: 120, resizeMode: "cover" }} />
+              )}
+            />
+            {productImages.length > 1 && (
+              <View style={styles.paginationDots}>
+                {productImages.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      { backgroundColor: i === activeIndex ? "#0B6FAD" : "#D6E9F2" }
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          <Image source={product.thumbnail} style={styles.thumbnail} />
+        )}
         {product.badge && (
           <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
             <Text style={styles.badgeText}>{product.badge}</Text>
@@ -291,5 +329,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Fredoka_600SemiBold",
     color: "#FFF",
+  },
+  paginationDots: {
+    position: "absolute",
+    bottom: 6,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 });

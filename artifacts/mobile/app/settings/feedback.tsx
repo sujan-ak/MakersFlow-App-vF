@@ -141,12 +141,12 @@ export default function FeedbackScreen() {
             )}
           </View>
 
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionLabel, { color: colors.foreground }]}>
               Tell us more
             </Text>
             <TextInput
-              style={[styles.textArea, { color: colors.foreground, borderColor: "#D6E9F2", backgroundColor: "#FFFFFF" }]}
+              style={[styles.textArea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
               value={message}
               onChangeText={setMessage}
               placeholder="What did you like or what can we improve?"

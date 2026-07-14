@@ -55,6 +55,7 @@ export interface Product {
   price: number;
   originalPrice: number;
   thumbnail: any;
+  images?: any[];
   description: string;
   rating: number;
   reviews: number;

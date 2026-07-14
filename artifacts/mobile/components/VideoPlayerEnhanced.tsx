@@ -252,19 +252,17 @@ export function VideoPlayerEnhanced({
 
     if (hideTimer.current) clearTimeout(hideTimer.current);
 
-    if (isPlayingRef.current) {
-      hideTimer.current = setTimeout(() => {
-        if (!isMounted.current) return;
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 100,
-          useNativeDriver: true,
-        }).start(() => {
-          if (isMounted.current) setShowControls(false);
-        });
-      }, 3000);
-    }
-  }, []);  // stable — reads isPlayingRef.current at call time
+    hideTimer.current = setTimeout(() => {
+      if (!isMounted.current) return;
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 350, // Slowly vanish over 350ms
+        useNativeDriver: true,
+      }).start(() => {
+        if (isMounted.current) setShowControls(false);
+      });
+    }, 2500); // 2.5 sec delay
+  }, []);
 
   // Stable refs for callbacks so the polling interval never needs to be
   // recreated when the parent re-renders (Bug 3).
@@ -419,8 +417,14 @@ export function VideoPlayerEnhanced({
     if (!showControls) {
       showControlsWithTimer();
     } else {
-      // Just reset the hide timer — don't toggle play/pause on a bare tap
-      showControlsWithTimer();
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }).start(() => {
+        if (isMounted.current) setShowControls(false);
+      });
     }
   };
 
@@ -432,9 +436,9 @@ export function VideoPlayerEnhanced({
   const singleTapTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoWidth = useRef(0);
 
-  const handleVideoPress = (event: any) => {
+  const handleVideoPress = async (event: any) => {
     const now = Date.now();
-    const DOUBLE_TAP_DELAY = 280;
+    const DOUBLE_TAP_DELAY = 300;
     const locationX = event.nativeEvent.locationX;
     const containerW = videoWidth.current || screenDims.width;
     const isLeft = locationX < containerW / 2;
@@ -450,27 +454,27 @@ export function VideoPlayerEnhanced({
         // Seek backward 10s
         player.seekBy(-10);
         setCurrentTime(Math.max(0, currentTime - 10));
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         // Show indicator
         setShowLeftIndicator(true);
         if (leftIndicatorTimeout.current) clearTimeout(leftIndicatorTimeout.current);
         leftIndicatorTimeout.current = setTimeout(() => {
           setShowLeftIndicator(false);
-        }, 500);
+        }, 800);
       } else {
         // Seek forward 10s
         if (duration > 0) {
           player.seekBy(10);
           setCurrentTime(Math.min(duration, currentTime + 10));
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
           // Show indicator
           setShowRightIndicator(true);
           if (rightIndicatorTimeout.current) clearTimeout(rightIndicatorTimeout.current);
           rightIndicatorTimeout.current = setTimeout(() => {
             setShowRightIndicator(false);
-          }, 500);
+          }, 800);
         }
       }
     } else {
@@ -484,6 +488,10 @@ export function VideoPlayerEnhanced({
   };
 
   const togglePlayPause = async () => {
+    if (singleTapTimeout.current) {
+      clearTimeout(singleTapTimeout.current);
+      singleTapTimeout.current = null;
+    }
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isMounted.current || !player) return;
 
@@ -847,7 +855,7 @@ export function VideoPlayerEnhanced({
           {showLeftIndicator && (
             <View style={styles.leftSeekIndicator}>
               <View style={styles.indicatorCircle}>
-                <Text style={styles.indicatorText}>{"<<"}</Text>
+                <Text style={styles.indicatorText}>⏪</Text>
                 <Text style={styles.indicatorSubtext}>10s</Text>
               </View>
             </View>
@@ -856,7 +864,7 @@ export function VideoPlayerEnhanced({
           {showRightIndicator && (
             <View style={styles.rightSeekIndicator}>
               <View style={styles.indicatorCircle}>
-                <Text style={styles.indicatorText}>{">>"}</Text>
+                <Text style={styles.indicatorText}>⏩</Text>
                 <Text style={styles.indicatorSubtext}>10s</Text>
               </View>
             </View>
@@ -900,7 +908,7 @@ export function VideoPlayerEnhanced({
               {showLeftIndicator && (
                 <View style={styles.leftSeekIndicator}>
                   <View style={styles.indicatorCircle}>
-                    <Text style={styles.indicatorText}>{"<<"}</Text>
+                    <Text style={styles.indicatorText}>⏪</Text>
                     <Text style={styles.indicatorSubtext}>10s</Text>
                   </View>
                 </View>
@@ -909,7 +917,7 @@ export function VideoPlayerEnhanced({
               {showRightIndicator && (
                 <View style={styles.rightSeekIndicator}>
                   <View style={styles.indicatorCircle}>
-                    <Text style={styles.indicatorText}>{">>"}</Text>
+                    <Text style={styles.indicatorText}>⏩</Text>
                     <Text style={styles.indicatorSubtext}>10s</Text>
                   </View>
                 </View>
@@ -1052,16 +1060,16 @@ const styles = StyleSheet.create({
     zIndex: 4,
   },
   indicatorCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
   indicatorText: {
     color: "#FFF",
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: "bold",
   },
   indicatorSubtext: {

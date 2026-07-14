@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React from "react";
-import { Dimensions, Image, Pressable, StyleSheet, Text, View, ToastAndroid, Platform, Alert } from "react-native";
+import React, { useState } from "react";
+import { Dimensions, Image, Pressable, StyleSheet, Text, View, ToastAndroid, Platform, Alert, FlatList } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Course } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
@@ -14,7 +14,7 @@ const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
 // 48 = 20px left padding + 8px gap + 20px right padding
 
 interface CourseCardProps {
-  course: Course;
+  course: Course & { images?: string[] };
   horizontal?: boolean;
   compact?: boolean;
 }
@@ -27,6 +27,11 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
   const isEnrolled = !!courseProgress;
   const progress = courseProgress?.progress || 0;
   const isFavorite = isFavoriteCourse(course.id);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(compact ? 170 : CARD_WIDTH);
+  const courseImages = course.images && Array.isArray(course.images) && course.images.length > 0
+    ? course.images
+    : null;
 
   const showToast = (message: string) => {
     if (Platform.OS === 'android') {
@@ -147,8 +152,47 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
       ]}
       onPress={() => router.push({ pathname: "/course/[id]", params: { id: course.id } })}
     >
-      <View style={styles.thumbnailContainer}>
-        <Image source={course.thumbnail} style={compact ? styles.compactThumbnail : styles.thumbnail} />
+      <View style={styles.thumbnailContainer} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+        {courseImages ? (
+          <View style={{ flex: 1 }}>
+            <FlatList
+              data={courseImages}
+              keyExtractor={(item, index) => `${item}_${index}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / (containerWidth || (compact ? 170 : CARD_WIDTH)));
+                setActiveIndex(index);
+              }}
+              renderItem={({ item }) => (
+                <Image
+                  source={{ uri: item }}
+                  style={{
+                    width: containerWidth,
+                    height: compact ? 85 : 110,
+                    resizeMode: "cover"
+                  }}
+                />
+              )}
+            />
+            {courseImages.length > 1 && (
+              <View style={styles.paginationDots}>
+                {courseImages.map((_: any, i: number) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      { backgroundColor: i === activeIndex ? "#0B6FAD" : "#D6E9F2" }
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          <Image source={course.thumbnail} style={compact ? styles.compactThumbnail : styles.thumbnail} />
+        )}
         {badge && (
           <View style={[styles.badge, { backgroundColor: badge.color }]}>
             <Text style={styles.badgeText}>{badge.text}</Text>
@@ -363,5 +407,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginTop: 4,
+  },
+  paginationDots: {
+    position: "absolute",
+    bottom: 6,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 });

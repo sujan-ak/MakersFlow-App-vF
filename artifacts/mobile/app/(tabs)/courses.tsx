@@ -95,7 +95,7 @@ export default function CoursesScreen() {
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <View>
-            <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>
+            <Text style={[styles.pageTitle, { color: colors.foreground }]}>
               {user ? "My Courses" : "Explore Courses"}
             </Text>
             <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
@@ -174,7 +174,7 @@ export default function CoursesScreen() {
               <View style={[styles.guestBanner, { backgroundColor: "#DCF7F4", borderColor: "#D6E9F2" }]}>
                 <View style={styles.guestBannerHeader}>
                   <Ionicons name="information-circle" size={18} color="#0B6FAD" />
-                  <Text style={[styles.guestBannerTitle, { color: "#0F2A3D" }]}>Sign in to track progress</Text>
+                  <Text style={[styles.guestBannerTitle, { color: colors.foreground }]}>Sign in to track progress</Text>
                 </View>
                 <Text style={[styles.guestBannerText, { color: colors.mutedForeground }]}>
                   Log in to see your enrolled courses, certificates, and continue learning where you left off.
@@ -202,7 +202,7 @@ export default function CoursesScreen() {
                     onPress={() => setIsInProgressOpen(!isInProgressOpen)}
                   >
                     <View style={styles.sectionLeft}>
-                      <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                         In Progress
                       </Text>
                       <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
@@ -240,7 +240,7 @@ export default function CoursesScreen() {
                       onPress={() => setIsNotStartedOpen(!isNotStartedOpen)}
                     >
                       <View style={styles.sectionLeft}>
-                        <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>
+                        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                           Not Started
                         </Text>
                         <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
@@ -272,7 +272,7 @@ export default function CoursesScreen() {
                     onPress={() => setIsCompletedOpen(!isCompletedOpen)}
                   >
                     <View style={styles.sectionLeft}>
-                      <Text style={[styles.sectionTitle, { color: "#0F2A3D" }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                         Completed
                       </Text>
                       <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
@@ -307,7 +307,7 @@ export default function CoursesScreen() {
             {/* BROWSE MORE SUBSECTION */}
             {filteredBrowseCourses.length > 0 && (
               <View style={[styles.browseSection, { marginTop: 24 }]}>
-                <Text style={[styles.browseTitle, { color: "#0F2A3D" }]}>
+                <Text style={[styles.browseTitle, { color: colors.foreground }]}>
                   {user ? "Explore More Courses" : "Explore Courses"}
                 </Text>
                 <View style={styles.gridContainer}>

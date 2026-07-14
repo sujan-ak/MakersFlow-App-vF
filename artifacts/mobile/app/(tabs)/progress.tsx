@@ -292,14 +292,14 @@ export default function ProgressScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={{ paddingTop: topPad + 16, paddingHorizontal: 20 }}>
-          <Text style={[styles.pageTitle, { color: '#0F2A3D' }]}>Your Progress</Text>
+          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Your Progress</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Track your learning journey</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 }}>
           <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: '#DCF7F4', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
             <Ionicons name="stats-chart" size={40} color="#0B6FAD" />
           </View>
-          <Text style={{ fontFamily: 'Fredoka_700Bold', fontSize: 22, color: '#0F2A3D', textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'Fredoka_700Bold', fontSize: 22, color: "#0F2A3D", textAlign: 'center' }}>
             Track Your Progress
           </Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.mutedForeground, textAlign: 'center', lineHeight: 22 }}>
@@ -339,7 +339,7 @@ export default function ProgressScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.pageTitle, { color: "#0F2A3D" }]}>Your Progress</Text>
+          <Text style={[styles.pageTitle, { color: colors.foreground }]}>Your Progress</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             Track your learning journey
           </Text>
@@ -408,7 +408,7 @@ export default function ProgressScreen() {
                   <View key={c.courseId} style={styles.courseProgressRowCard}>
                     <Image source={c.thumbnail} style={styles.courseProgressThumbnail} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.courseProgressTitle}>{c.courseTitle}</Text>
+                      <Text style={[styles.courseProgressTitle, { color: colors.foreground }]}>{c.courseTitle}</Text>
                       <View style={styles.courseProgressRow}>
                         <View style={styles.courseProgressTrack}>
                           <LinearGradient
@@ -515,7 +515,7 @@ export default function ProgressScreen() {
               <View style={styles.section}>
                 <View style={styles.activityHeader}>
                   <View>
-                    <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 4, paddingHorizontal: 0 }]}>
+                    <Text style={[styles.sectionTitle, { color: "#0F2A3D", marginBottom: 4, paddingHorizontal: 0 }]}>
                       Weekly Activity
                     </Text>
                     <Text style={[styles.activitySubtitle, { color: colors.mutedForeground }]}>
@@ -680,7 +680,7 @@ export default function ProgressScreen() {
             <View style={styles.leaderboardSection}>
               <View style={styles.leaderboardHeader}>
                 <Ionicons name="trophy" size={32} color="#F59E0B" />
-                <Text style={styles.leaderboardTitle}>Weekly Leaderboard</Text>
+                <Text style={[styles.leaderboardTitle, { color: colors.foreground }]}>Weekly Leaderboard</Text>
               </View>
               {isLoadingLeaderboard ? (
                 <ActivityIndicator color="#0B6FAD" style={{ marginTop: 20 }} />
@@ -696,7 +696,7 @@ export default function ProgressScreen() {
                     ]}
                   >
                     <Text style={styles.leaderboardRank}>#{item.rank}</Text>
-                    <Text style={[styles.leaderboardName, item.isSelf && { color: "#0B6FAD" }]}>{item.name}</Text>
+                    <Text style={[styles.leaderboardName, { color: colors.foreground }, item.isSelf && { color: "#0B6FAD" }]}>{item.name}</Text>
                     <Text style={styles.leaderboardPoints}>{item.points} {item.points === 1 ? 'day' : 'days'}</Text>
                   </View>
                 ))

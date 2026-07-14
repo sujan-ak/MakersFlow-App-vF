@@ -68,7 +68,7 @@ export default function ForgotPasswordScreen() {
         {sent ? (
           <View style={[styles.successBox, { backgroundColor: "#DCFCE7" }]}>
             <Feather name="check-circle" size={18} color="#16A34A" />
-            <Text style={styles.successText}>Reset link sent! Please check your email inbox.</Text>
+            <Text style={styles.successText}>Password reset email sent! Check your inbox.</Text>
           </View>
         ) : (
           <View style={styles.form}>
@@ -103,7 +103,7 @@ export default function ForgotPasswordScreen() {
         )}
 
         <Pressable onPress={() => router.push("/(auth)/login")} style={styles.backToLogin}>
-          <Text style={[styles.backToLoginText, { color: colors.primary }]}>Back to Sign In</Text>
+          <Text style={[styles.backToLoginText, { color: colors.primary }]}>Back to Login</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
