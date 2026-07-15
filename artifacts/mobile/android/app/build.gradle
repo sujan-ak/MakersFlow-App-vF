@@ -88,6 +88,11 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.makersflow.mobile'
+    externalNativeBuild {
+        cmake {
+            buildStagingDirectory = file("C:/cxx")
+        }
+    }
     defaultConfig {
         applicationId 'com.makersflow.mobile'
         minSdkVersion rootProject.ext.minSdkVersion

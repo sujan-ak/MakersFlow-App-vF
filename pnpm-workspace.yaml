@@ -27,6 +27,9 @@
 # ============================================================================
 minimumReleaseAge: 1440
 
+nodeLinker: hoisted
+hoistingLimits: none
+
 minimumReleaseAgeExclude:
   # Exclude @replit scoped packages from the minimum release age check.
   # These are published by Replit and trusted — the supply-chain attack vector
