@@ -64,9 +64,9 @@ export default function LoginScreen() {
     setError("");
     setGoogleLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     const result = await loginWithGoogle();
-    
+
     if (result.success) {
       const profile = (result as any).profile;
       setGoogleLoading(false);
@@ -108,10 +108,10 @@ export default function LoginScreen() {
 
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+
     const result = await login(email, password);
     setLoading(false);
-    
+
     if (result.success) {
       const profile = (result as any).profile;
       if (profile && profile.grade) {
@@ -174,7 +174,7 @@ export default function LoginScreen() {
       >
         <View style={styles.header}>
           <Image
-            source={require("@/assets/images/logo.png")}
+            source={require("@/assets/images/logos/logo.png")}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -197,8 +197,8 @@ export default function LoginScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Email</Text>
             <View style={[
-              styles.inputWrapper, 
-              { 
+              styles.inputWrapper,
+              {
                 borderColor: emailError ? "#DC2626" : (emailFocused ? "#0B6FAD" : colors.border),
                 backgroundColor: colors.card,
               }
@@ -227,8 +227,8 @@ export default function LoginScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Password</Text>
             <View style={[
-              styles.inputWrapper, 
-              { 
+              styles.inputWrapper,
+              {
                 borderColor: passwordError ? "#DC2626" : (passwordFocused ? "#0B6FAD" : colors.border),
                 backgroundColor: colors.card,
               }
@@ -350,8 +350,8 @@ export default function LoginScreen() {
           {/* Phone number field */}
           <View style={styles.fieldGroup}>
             <View style={[
-              styles.inputWrapper, 
-              { 
+              styles.inputWrapper,
+              {
                 borderColor: phoneError ? "#DC2626" : (phoneFocused ? "#0B6FAD" : colors.border),
                 backgroundColor: colors.card,
               }
@@ -392,10 +392,47 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Don't have an account? </Text>
-          <Pressable onPress={() => router.push("/(auth)/register")}>
-            <Text style={[styles.registerLink, { color: "#0B6FAD" }]}>Sign Up</Text>
+        {/* Highlighted Sign Up section */}
+        <View style={{
+          marginTop: 24,
+          marginHorizontal: 0,
+          borderRadius: 20,
+          overflow: "hidden",
+          borderWidth: 1.5,
+          borderColor: "#17E5D3",
+          backgroundColor: "#F0FFFE",
+          paddingVertical: 18,
+          paddingHorizontal: 20,
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 24,
+        }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#17E5D3", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="person-add" size={16} color="#063B4F" />
+            </View>
+            <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>
+              New to MakersFlow?
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textAlign: "center", lineHeight: 18 }}>
+            Join thousands of students learning robotics, AI & electronics
+          </Text>
+          <Pressable
+            onPress={() => router.push("/(auth)/register")}
+            style={({ pressed }) => ({
+              width: "100%",
+              borderRadius: 14,
+              overflow: "hidden",
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <View style={{ paddingVertical: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#17E5D3", borderRadius: 14, flexDirection: "row", gap: 8 }}>
+              <Text style={{ color: "#FFF", fontSize: 15, fontFamily: "Inter_700Bold" }}>
+                Create Free Account
+              </Text>
+              <Ionicons name="arrow-forward" size={16} color="#FFF" />
+            </View>
           </Pressable>
         </View>
       </ScrollView>
@@ -479,7 +516,7 @@ const styles = StyleSheet.create({
   },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 24, paddingBottom: 24 },
   footerText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  registerLink: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  registerLink: { fontSize: 14, fontFamily: "Inter_700Bold" },
   fieldError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#DC2626", marginTop: 4 },
   providerToggle: {
     flexDirection: 'row',

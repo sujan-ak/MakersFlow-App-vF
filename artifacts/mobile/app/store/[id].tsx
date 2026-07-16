@@ -36,9 +36,9 @@ import { ActivityIndicator, TextInput } from "react-native";
 
 const productFallbacks: Record<string, any[]> = {
   physical: [
-    require('@/assets/images/product_kit_1.png'),
-    require('@/assets/images/product_kit_2.png'),
-    require('@/assets/images/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.png'),
+    require('@/assets/images/products/product_kit_2.png'),
+    require('@/assets/images/products/product_kit_3.png'),
   ],
   digital: [
     require('@/assets/images/product_notes_1.png'),
@@ -46,6 +46,57 @@ const productFallbacks: Record<string, any[]> = {
     require('@/assets/images/product_notes_3.png'),
   ]
 };
+
+const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|avi)(\?.*)?$/i;
+
+/**
+ * Extract a normalized image list from a product row, tolerating every
+ * shape the admin portal may save media in:
+ *  - `images` / `media` / `image_urls` / `media_urls` / `gallery` columns
+ *  - JSON strings or real arrays
+ *  - arrays of URL strings OR arrays of objects ({url|uri|src|publicUrl|public_url|path, type})
+ * Videos are filtered out (the slider only renders <Image>).
+ * The thumbnail is always included first and duplicates are removed.
+ */
+function extractProductImages(row: any, thumbnail: any): any[] {
+  const candidates = [row.images, row.media, row.image_urls, row.media_urls, row.gallery];
+  const urls: string[] = [];
+
+  for (let raw of candidates) {
+    if (raw == null) continue;
+    if (typeof raw === 'string') {
+      try {
+        raw = JSON.parse(raw);
+      } catch {
+        // Not JSON — maybe a single URL or a comma-separated list
+        raw = raw.includes(',') ? raw.split(',').map((s: string) => s.trim()) : [raw];
+      }
+    }
+    if (!Array.isArray(raw)) raw = [raw];
+
+    for (const item of raw) {
+      let url: string | null = null;
+      if (typeof item === 'string') {
+        url = item;
+      } else if (item && typeof item === 'object') {
+        // Skip entries explicitly marked as videos
+        if (typeof item.type === 'string' && item.type.toLowerCase().includes('video')) continue;
+        url = item.url || item.uri || item.src || item.publicUrl || item.public_url || item.path || null;
+      }
+      if (url && typeof url === 'string' && url.startsWith('http') && !VIDEO_EXT_RE.test(url)) {
+        urls.push(url);
+      }
+    }
+  }
+
+  // De-dupe while preserving order; put the thumbnail URL first if we have one
+  const thumbUrl: string | null = thumbnail && thumbnail.uri ? thumbnail.uri : null;
+  const ordered = thumbUrl ? [thumbUrl, ...urls.filter((u) => u !== thumbUrl)] : urls;
+  const unique = Array.from(new Set(ordered));
+
+  if (unique.length > 0) return unique.map((u) => ({ uri: u }));
+  return [thumbnail];
+}
 
 function mapSupabaseProduct(row: any): Product {
   const isDigital = row.category?.toLowerCase() === 'digital' || 
@@ -70,21 +121,7 @@ function mapSupabaseProduct(row: any): Product {
     ? { uri: row.thumbnail_url } 
     : (productFallbacks[category] || productFallbacks.physical)[index % 3];
 
-  let images: any[] = [];
-  let rawImages = row.images;
-  if (typeof rawImages === 'string') {
-    try {
-      rawImages = JSON.parse(rawImages);
-    } catch (err) {
-      rawImages = [];
-    }
-  }
-
-  if (Array.isArray(rawImages) && rawImages.length > 0) {
-    images = rawImages.map((img: string) => ({ uri: img }));
-  } else {
-    images = [thumbnail];
-  }
+  const images = extractProductImages(row, thumbnail);
 
   return {
     id: String(row.id),
@@ -107,7 +144,10 @@ function mapSupabaseProduct(row: any): Product {
 export default function ProductDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  // useLocalSearchParams can return string | string[] | undefined — normalise to a clean string
+  const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const id = rawId && rawId !== 'undefined' && !isNaN(Number(rawId)) ? rawId : undefined;
   const { addToCart, items, decrementQuantity } = useCart();
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
   const { requireAuth } = useRequireAuth();
@@ -189,7 +229,11 @@ export default function ProductDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadProduct = useCallback(async (isRefreshing = false) => {
-    if (!id) return;
+    if (!id || isNaN(Number(id))) {
+      console.warn('[ProductDetail] Invalid or missing product id:', id);
+      setIsLoading(false);
+      return;
+    }
     if (!isRefreshing) {
       setIsLoading(true);
     }
@@ -198,15 +242,47 @@ export default function ProductDetailScreen() {
         .from('products')
         .select('*')
         .eq('id', Number(id))
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('[ProductDetail] Error loading product:', error);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!data) {
+        console.warn('[ProductDetail] Product not found for id:', id);
+        setIsLoading(false);
         return;
       }
 
       if (data) {
-        setProduct(mapSupabaseProduct(data));
+        const mapped = mapSupabaseProduct(data);
+
+        // Fallback: some admin portals store gallery media in a separate
+        // `product_media` table instead of a column on `products`.
+        const imagesList = mapped.images ?? [];
+        if (imagesList.length <= 1) {
+          try {
+            const { data: mediaRows } = await supabase
+              .from('product_media')
+              .select('*')
+              .eq('product_id', Number(id));
+            if (mediaRows && mediaRows.length > 0) {
+              const extra = extractProductImages(
+                { images: mediaRows },
+                mapped.thumbnail,
+              );
+              if (extra.length > imagesList.length) {
+                mapped.images = extra;
+              }
+            }
+          } catch {
+            // Table doesn't exist — ignore silently.
+          }
+        }
+
+        setProduct(mapped);
       }
 
       // Load reviews
@@ -428,7 +504,7 @@ export default function ProductDetailScreen() {
           {product.inStock && (
             <View style={styles.quantityContainer}>
               <Text style={[styles.quantityLabel, { color: colors.foreground }]}>Quantity</Text>
-              <View style={styles.stepperWrapper}>
+              <View style={[styles.stepperWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Pressable
                   style={styles.stepperBtn}
                   onPress={() => {
@@ -487,17 +563,40 @@ export default function ProductDetailScreen() {
           {/* Rate Product Card (Only if user has purchased the product) */}
           {hasPurchased && (
             <View style={[styles.rateCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
+              {/* Show current review status badge */}
+              {myReview && !reviewSubmitted && (
+                <View style={{
+                  flexDirection: "row", alignItems: "center", gap: 6,
+                  paddingVertical: 6, paddingHorizontal: 12,
+                  borderRadius: 20, alignSelf: "flex-start", marginBottom: 10,
+                  backgroundColor:
+                    myReview.status === "approved" ? "#DCFCE7" :
+                    myReview.status === "rejected" ? "#FEE2E2" : "#FEF9C3",
+                }}>
+                  <Ionicons
+                    name={myReview.status === "approved" ? "checkmark-circle" : myReview.status === "rejected" ? "close-circle" : "time"}
+                    size={14}
+                    color={myReview.status === "approved" ? "#16A34A" : myReview.status === "rejected" ? "#DC2626" : "#CA8A04"}
+                  />
+                  <Text style={{
+                    fontSize: 12, fontFamily: "Inter_600SemiBold",
+                    color: myReview.status === "approved" ? "#16A34A" : myReview.status === "rejected" ? "#DC2626" : "#CA8A04",
+                  }}>
+                    {myReview.status === "approved" ? "Review Approved" : myReview.status === "rejected" ? "Review Rejected" : "Pending Approval"}
+                  </Text>
+                </View>
+              )}
               {reviewSubmitted ? (
                 <View style={styles.thankYouRow}>
                   <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                   <Text style={[styles.thankYouText, { color: "#10B981" }]}>
-                    Thanks for your review!
+                    Review submitted! It will appear after approval.
                   </Text>
                 </View>
               ) : (
                 <>
                   <Text style={[styles.rateTitle, { color: colors.foreground }]}>
-                    {myReview ? "Update your rating" : "Rate this product"}
+                    {myReview ? "Edit your review" : "Rate this product"}
                   </Text>
                   <StarRating
                     rating={draftRating}
@@ -615,8 +714,11 @@ export default function ProductDetailScreen() {
             style={{ flex: 1.2, height: 48 }}
             onPress={() => {
               requireAuth(() => {
+                if (!product?.id) return;
+                // Add with current local quantity before going to checkout
+                const qty = localQty || 1;
                 if (!isInCart) {
-                  addToCart(product);
+                  for (let i = 0; i < qty; i++) addToCart(product);
                 }
                 router.push("/store/checkout");
               });
@@ -742,10 +844,8 @@ const styles = StyleSheet.create({
   stepperWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: "#D6E9F2",
     paddingHorizontal: 10,
     paddingVertical: 4,
     gap: 12,
@@ -764,7 +864,6 @@ const styles = StyleSheet.create({
   quantityVal: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    color: "#0F2A3D",
   },
   quantityContainer: {
     flexDirection: "row",

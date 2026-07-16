@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useRef, useMemo, useState, useEffect, useCallback } from "react";
 import {
   Platform,
   Pressable,
@@ -48,7 +48,7 @@ export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
   const { courseProgress, watchlist } = useProgress();
   const { user } = useAuth();
-  const [currentTab, setCurrentTab] = useState<"courses" | "stats" | "leaderboard">("stats");
+  const [currentTab, setCurrentTab] = useState<"courses" | "stats" | "leaderboard">("courses");
   const [selectedDay, setSelectedDay] = useState<{
     day: string;
     minutes: number;
@@ -58,6 +58,7 @@ export default function ProgressScreen() {
 
   const [courses, setCourses] = useState<any[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const hasLoadedOnce = useRef(false);
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [enrolledCoursesProgress, setEnrolledCoursesProgress] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,7 +94,7 @@ export default function ProgressScreen() {
         level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
         price: c.price || 0,
         isFree: c.is_free,
-        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/courses/course_robotics.png'),
         instructor: "MakersFlow Instructor",
         rating: 4.8,
         reviews: 120,
@@ -148,11 +149,36 @@ export default function ProgressScreen() {
       setEnrolledCoursesProgress(enrolledProgressList);
 
       const averageProgress = totalCoursesEnrolled > 0 ? Math.round(progressSum / totalCoursesEnrolled) : 0;
-      // watch time: SUM(time_spent_secs) from lesson_progress / 60
-      const totalTimeSpentSecs = progressList.reduce((sum, p) => sum + (p.time_spent_secs || 0), 0);
+
+      // Fetch the published duration of every lesson the user has touched so
+      // learning time reflects real lesson durations (dynamic, not estimates).
+      const touchedLessonIds = Array.from(new Set(progressList.map((p) => p.lesson_id).filter(Boolean)));
+      const lessonDurationSecs = new Map<number, number>();
+      if (touchedLessonIds.length > 0) {
+        const { data: lessonRows } = await supabase
+          .from('lessons')
+          .select('id, duration_secs')
+          .in('id', touchedLessonIds);
+        (lessonRows ?? []).forEach((l: any) => {
+          lessonDurationSecs.set(Number(l.id), Number(l.duration_secs) || 0);
+        });
+      }
+
+      // Credited time per lesson: completed lessons count their full published
+      // duration; in-progress lessons count actual watch time.
+      const creditedSecs = (p: any): number => {
+        const watched = p.time_spent_secs || 0;
+        const duration = lessonDurationSecs.get(Number(p.lesson_id)) || 0;
+        return p.is_completed ? Math.max(watched, duration) : watched;
+      };
+
+      const totalTimeSpentSecs = progressList.reduce((sum, p) => sum + creditedSecs(p), 0);
       const totalTimeSpent = totalTimeSpentSecs / 60;
       const totalLessonsCompleted = progressList.filter((p) => p.is_completed).length;
-      const learningStreak = ProgressCalculator.calculateStreak(progressList);
+      // calculateStreak returns { current, longest } — rendering the raw
+      // object as a React child crashes the screen, so extract the number.
+      const streakResult = ProgressCalculator.calculateStreak(progressList);
+      const learningStreak = streakResult?.current ?? 0;
 
       const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const weeklyActivity = [];
@@ -169,7 +195,7 @@ export default function ProgressScreen() {
           return new Date(p.last_watched_at).toDateString() === dateString;
         });
 
-        const dayMinutes = dayProgress.reduce((sum, p) => sum + (p.time_spent_secs || (p.is_completed ? 300 : 0)), 0) / 60;
+        const dayMinutes = dayProgress.reduce((sum, p) => sum + creditedSecs(p), 0) / 60;
         const dayCompleted = dayProgress.filter(p => p.is_completed).length;
 
         weeklyActivity.push({
@@ -267,7 +293,11 @@ export default function ProgressScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadStatsAndCourses(false);
+      if (!hasLoadedOnce.current) {
+        loadStatsAndCourses(false);
+      } else {
+        loadStatsAndCourses(true);
+      }
     }, [loadStatsAndCourses])
   );
 
@@ -296,10 +326,10 @@ export default function ProgressScreen() {
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Track your learning journey</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: '#DCF7F4', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-            <Ionicons name="stats-chart" size={40} color="#0B6FAD" />
+          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+            <Ionicons name="stats-chart" size={40} color={colors.accentForeground} />
           </View>
-          <Text style={{ fontFamily: 'Fredoka_700Bold', fontSize: 22, color: "#0F2A3D", textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'Fredoka_700Bold', fontSize: 22, color: colors.foreground, textAlign: 'center' }}>
             Track Your Progress
           </Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.mutedForeground, textAlign: 'center', lineHeight: 22 }}>
@@ -312,10 +342,10 @@ export default function ProgressScreen() {
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#fff' }}>Sign In</Text>
           </Pressable>
           <Pressable
-            style={{ borderRadius: 28, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', width: '100%', borderWidth: 1.5, borderColor: '#D6E9F2' }}
+            style={{ borderRadius: 28, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', width: '100%', borderWidth: 1.5, borderColor: colors.border }}
             onPress={() => router.push('/(auth)/register')}
           >
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: '#0B6FAD' }}>Create Account</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: colors.primary }}>Create Account</Text>
           </Pressable>
         </View>
       </View>
@@ -365,12 +395,12 @@ export default function ProgressScreen() {
               key={tab.id}
               style={[
                 styles.segmentBtn,
-                isActive && { backgroundColor: "#0B6FAD" }
+                isActive && { backgroundColor: colors.primary }
               ]}
               onPress={() => setCurrentTab(tab.id as any)}
             >
-              <Ionicons name={tab.icon as any} size={14} color={isActive ? "#FFF" : "#5A7A8C"} />
-              <Text style={[styles.segmentLabel, { color: isActive ? "#FFF" : "#5A7A8C", fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+              <Ionicons name={tab.icon as any} size={14} color={isActive ? "#FFF" : colors.mutedForeground} />
+              <Text style={[styles.segmentLabel, { color: isActive ? "#FFF" : colors.mutedForeground, fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -380,8 +410,8 @@ export default function ProgressScreen() {
 
       {stats.totalCoursesEnrolled === 0 ? (
         <View style={styles.emptyState}>
-          <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
-            <Ionicons name="stats-chart" size={48} color="#17E5D3" />
+          <View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}>
+            <Ionicons name="stats-chart" size={48} color={colors.accentForeground} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
             Your Learning Journey Starts Here!
@@ -401,16 +431,21 @@ export default function ProgressScreen() {
         <>
           {currentTab === "courses" && (
             <View style={{ gap: 12 }}>
-              {coursesWithProgress.length === 0 ? (
-                <Text style={styles.emptyActivityText}>No courses with progress in this tab.</Text>
-              ) : (
+              {isLoadingCourses ? (
+                <ActivityIndicator color="#0B6FAD" style={{ marginTop: 20 }} />
+              ) : coursesWithProgress.length > 0 ? (
+                // Show enrolled courses with progress bars
                 coursesWithProgress.map((c) => (
-                  <View key={c.courseId} style={styles.courseProgressRowCard}>
+                  <Pressable
+                    key={c.courseId}
+                    style={styles.courseProgressRowCard}
+                    onPress={() => router.push({ pathname: "/course/[id]", params: { id: c.courseId } })}
+                  >
                     <Image source={c.thumbnail} style={styles.courseProgressThumbnail} />
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.courseProgressTitle, { color: colors.foreground }]}>{c.courseTitle}</Text>
                       <View style={styles.courseProgressRow}>
-                        <View style={styles.courseProgressTrack}>
+                        <View style={[styles.courseProgressTrack, { backgroundColor: colors.muted }]}>
                           <LinearGradient
                             colors={["#0B6FAD", "#17E5D3"]}
                             start={{ x: 0, y: 0 }}
@@ -421,8 +456,28 @@ export default function ProgressScreen() {
                         <Text style={styles.courseProgressPct}>{c.progress}%</Text>
                       </View>
                     </View>
-                  </View>
+                  </Pressable>
                 ))
+              ) : (
+                // New user — show browse prompt
+                <View style={{ alignItems: "center", paddingVertical: 40, gap: 16 }}>
+                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="book-outline" size={40} color={colors.accentForeground} />
+                  </View>
+                  <Text style={[styles.emptyActivityText, { fontSize: 18, fontFamily: "Fredoka_600SemiBold", color: colors.foreground, textAlign: "center" }]}>
+                    {"Your Learning Journey\nStarts Here!"}
+                  </Text>
+                  <Text style={[styles.emptyActivityText, { textAlign: "center", color: colors.mutedForeground }]}>
+                    {"Enroll in courses to track your progress\nand achieve your learning goals"}
+                  </Text>
+                  <Pressable
+                    style={{ backgroundColor: "#0B6FAD", paddingHorizontal: 28, paddingVertical: 14, borderRadius: 24, flexDirection: "row", alignItems: "center", gap: 8 }}
+                    onPress={() => router.push("/(tabs)/courses")}
+                  >
+                    <Text style={{ color: "#FFF", fontSize: 16, fontFamily: "Fredoka_600SemiBold" }}>Browse Courses</Text>
+                    <Ionicons name="chevron-forward" size={18} color="#FFF" />
+                  </Pressable>
+                </View>
               )}
             </View>
           )}
@@ -451,7 +506,7 @@ export default function ProgressScreen() {
                         cx="50"
                         cy="50"
                         r="40"
-                        stroke="#E8F4F9"
+                        stroke={colors.muted}
                         strokeWidth="8"
                         fill="transparent"
                       />
@@ -492,8 +547,8 @@ export default function ProgressScreen() {
               {/* Time Spent & Learning Streak Cards */}
               <View style={styles.statsRow}>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={[styles.statIconWrapper, { backgroundColor: "#DCF7F4" }]}>
-                    <Ionicons name="time" size={20} color="#0B6FAD" />
+                  <View style={[styles.statIconWrapper, { backgroundColor: colors.accent }]}>
+                    <Ionicons name="time" size={20} color={colors.accentForeground} />
                   </View>
                   <Text style={[styles.statCardValue, { color: colors.foreground }]}>
                     {formatTotalTime(stats.totalTimeSpent)}
@@ -501,8 +556,8 @@ export default function ProgressScreen() {
                   <Text style={[styles.statCardLabel, { color: colors.mutedForeground }]}>Total Time Spent</Text>
                 </View>
                 <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={[styles.statIconWrapper, { backgroundColor: "#DCF7F4" }]}>
-                    <Ionicons name="flash" size={20} color="#0B6FAD" />
+                  <View style={[styles.statIconWrapper, { backgroundColor: colors.accent }]}>
+                    <Ionicons name="flash" size={20} color={colors.accentForeground} />
                   </View>
                   <Text style={[styles.statCardValue, { color: colors.foreground }]}>
                     {stats.learningStreak} Days
@@ -515,16 +570,16 @@ export default function ProgressScreen() {
               <View style={styles.section}>
                 <View style={styles.activityHeader}>
                   <View>
-                    <Text style={[styles.sectionTitle, { color: "#0F2A3D", marginBottom: 4, paddingHorizontal: 0 }]}>
+                    <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 4, paddingHorizontal: 0 }]}>
                       Weekly Activity
                     </Text>
                     <Text style={[styles.activitySubtitle, { color: colors.mutedForeground }]}>
                       Tap on a day to see details
                     </Text>
                   </View>
-                  <View style={[styles.activityBadge, { backgroundColor: "#DCF7F4" }]}>
-                    <Ionicons name="trending-up" size={14} color="#0B6FAD" />
-                    <Text style={[styles.activityBadgeText, { color: "#0B6FAD" }]}>
+                  <View style={[styles.activityBadge, { backgroundColor: colors.accent }]}>
+                    <Ionicons name="trending-up" size={14} color={colors.accentForeground} />
+                    <Text style={[styles.activityBadgeText, { color: colors.accentForeground }]}>
                       {stats.weeklyActivity.reduce((sum: number, d: any) => sum + d.minutes, 0)} min
                     </Text>
                   </View>
@@ -583,9 +638,9 @@ export default function ProgressScreen() {
                   </View>
 
                   {selectedDay && (
-                    <View style={[styles.tooltipCard, { backgroundColor: "#DCF7F4" }]}>
+                    <View style={[styles.tooltipCard, { backgroundColor: colors.accent }]}>
                       <View style={styles.tooltipHeader}>
-                        <Ionicons name="calendar" size={16} color="#0B6FAD" />
+                        <Ionicons name="calendar" size={16} color={colors.accentForeground} />
                         <Text style={[styles.tooltipDay, { color: colors.foreground }]}>
                           {selectedDay.day}
                         </Text>
@@ -638,14 +693,14 @@ export default function ProgressScreen() {
                         style={[
                           styles.badgeIconCircle,
                           {
-                            backgroundColor: badge.earned ? "#DCF7F4" : colors.muted,
+                            backgroundColor: badge.earned ? colors.accent : colors.muted,
                           },
                         ]}
                       >
                         <Ionicons
                           name={badge.icon as any}
                           size={22}
-                          color={badge.earned ? "#0B6FAD" : colors.mutedForeground}
+                          color={badge.earned ? colors.accentForeground : colors.mutedForeground}
                         />
                       </View>
                       <Text style={[styles.badgeTitle, { color: colors.foreground }]}>{badge.title}</Text>
@@ -658,19 +713,19 @@ export default function ProgressScreen() {
               {/* shortcut */}
               <View style={styles.section}>
                 <Pressable
-                  style={[styles.coursesShortcut, { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" }]}
+                  style={[styles.coursesShortcut, { backgroundColor: colors.accent, borderColor: colors.secondary }]}
                   onPress={() => router.push("/(tabs)/courses")}
                 >
-                  <Ionicons name="book" size={20} color="#0B6FAD" />
+                  <Ionicons name="book" size={20} color={colors.accentForeground} />
                   <View style={styles.coursesShortcutText}>
-                    <Text style={[styles.coursesShortcutTitle, { color: "#0B6FAD" }]}>
+                    <Text style={[styles.coursesShortcutTitle, { color: colors.accentForeground }]}>
                       My Enrolled Courses
                     </Text>
                     <Text style={[styles.coursesShortcutSubtitle, { color: colors.mutedForeground }]}>
                       {stats.totalCoursesEnrolled} course{stats.totalCoursesEnrolled !== 1 ? "s" : ""} enrolled
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#0B6FAD" />
+                  <Ionicons name="chevron-forward" size={18} color={colors.accentForeground} />
                 </Pressable>
               </View>
             </>
@@ -685,19 +740,19 @@ export default function ProgressScreen() {
               {isLoadingLeaderboard ? (
                 <ActivityIndicator color="#0B6FAD" style={{ marginTop: 20 }} />
               ) : leaderboard.length === 0 ? (
-                <Text style={styles.emptyActivityText}>No leaderboard entries yet.</Text>
+                <Text style={[styles.emptyActivityText, { color: colors.mutedForeground }]}>No leaderboard entries yet.</Text>
               ) : (
                 leaderboard.map((item) => (
                   <View
                     key={item.rank}
                     style={[
                       styles.leaderboardRow,
-                      item.isSelf && { backgroundColor: "#DCF7F4", borderColor: "#17E5D3" },
+                      item.isSelf && { backgroundColor: colors.accent, borderColor: colors.secondary },
                     ]}
                   >
-                    <Text style={styles.leaderboardRank}>#{item.rank}</Text>
-                    <Text style={[styles.leaderboardName, { color: colors.foreground }, item.isSelf && { color: "#0B6FAD" }]}>{item.name}</Text>
-                    <Text style={styles.leaderboardPoints}>{item.points} {item.points === 1 ? 'day' : 'days'}</Text>
+                    <Text style={[styles.leaderboardRank, { color: colors.primary }]}>#{item.rank}</Text>
+                    <Text style={[styles.leaderboardName, { color: colors.foreground }, item.isSelf && { color: colors.accentForeground }]}>{item.name}</Text>
+                    <Text style={[styles.leaderboardPoints, { color: colors.mutedForeground }]}>{item.points} {item.points === 1 ? 'day' : 'days'}</Text>
                   </View>
                 ))
               )}
@@ -722,7 +777,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -731,7 +785,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
   },
   pageTitle: { fontSize: 26, fontFamily: "Fredoka_700Bold", marginBottom: 4 },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular" },
@@ -940,10 +993,8 @@ const styles = StyleSheet.create({
   // Segmented control selector styling
   segmentedContainer: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: "#D6E9F2",
     marginHorizontal: 20,
     padding: 3,
     marginBottom: 20,
@@ -965,10 +1016,8 @@ const styles = StyleSheet.create({
   courseProgressRowCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
     padding: 12,
     marginHorizontal: 20,
     marginBottom: 12,
@@ -982,7 +1031,6 @@ const styles = StyleSheet.create({
   courseProgressTitle: {
     fontSize: 14,
     fontFamily: "Fredoka_600SemiBold",
-    color: "#0F2A3D",
     marginBottom: 8,
   },
   courseProgressRow: {
@@ -994,7 +1042,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#E8F4F9",
+    backgroundColor: "transparent",
     position: "relative",
     overflow: "hidden",
   },
@@ -1023,41 +1071,34 @@ const styles = StyleSheet.create({
   leaderboardTitle: {
     fontSize: 18,
     fontFamily: "Fredoka_700Bold",
-    color: "#0F2A3D",
-  },
+    },
   leaderboardRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
   leaderboardRank: {
     fontSize: 14,
     fontFamily: "Fredoka_700Bold",
-    color: "#0B6FAD",
     width: 36,
   },
   leaderboardName: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
-    color: "#0F2A3D",
     flex: 1,
   },
   leaderboardPoints: {
     fontSize: 13,
     fontFamily: "Fredoka_600SemiBold",
-    color: "#5A7A8C",
   },
   emptyActivityText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    color: "#5A7A8C",
     marginTop: 20,
   },
   overallCard: {

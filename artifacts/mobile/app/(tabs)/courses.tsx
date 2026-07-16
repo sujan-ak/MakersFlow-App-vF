@@ -28,10 +28,11 @@ export default function CoursesScreen() {
 
   // Debounce ref — prevents rapid reconnect events from triggering repeated refreshes
   const reconnectDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasLoadedOnce = useRef(false);
 
   // ── Single repository call — screen does not know data origin ─────────────
   const loadData = useCallback(async (isRefreshing = false) => {
-    if (!isRefreshing) setIsLoading(true);
+    if (!isRefreshing && !hasLoadedOnce.current) setIsLoading(true);
     try {
       const result = await coursesRepository.get(user?.id, isOffline);
       setEnrolledCourses(result.data.enrollments);
@@ -60,7 +61,11 @@ export default function CoursesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadData(false);
+      if (!hasLoadedOnce.current) {
+        loadData(false);
+      } else {
+        loadData(true); // silent background refresh
+      }
     }, [loadData])
   );
 
@@ -103,7 +108,7 @@ export default function CoursesScreen() {
             </Text>
           </View>
           <Pressable
-            style={styles.cartBtn}
+            style={[styles.cartBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => router.push("/(tabs)/store")}
           >
             <Ionicons name="cart" size={20} color="#0B6FAD" />
@@ -126,8 +131,8 @@ export default function CoursesScreen() {
                 style={[
                   styles.filterChip,
                   {
-                    backgroundColor: isActive ? "#0B6FAD" : "#FFFFFF",
-                    borderColor: isActive ? "transparent" : "#D6E9F2",
+                    backgroundColor: isActive ? colors.primary : colors.card,
+                    borderColor: isActive ? "transparent" : colors.border,
                   }
                 ]}
                 onPress={() => setSelectedCategory(cat)}
@@ -139,7 +144,7 @@ export default function CoursesScreen() {
                   style={[
                     styles.filterChipText,
                     {
-                      color: isActive ? "#FFF" : "#5A7A8C",
+                      color: isActive ? "#FFF" : colors.mutedForeground,
                       fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
                     }
                   ]}
@@ -171,9 +176,9 @@ export default function CoursesScreen() {
         ) : (
           <>
             {!user ? (
-              <View style={[styles.guestBanner, { backgroundColor: "#DCF7F4", borderColor: "#D6E9F2" }]}>
+              <View style={[styles.guestBanner, { backgroundColor: colors.accent, borderColor: colors.border }]}>
                 <View style={styles.guestBannerHeader}>
-                  <Ionicons name="information-circle" size={18} color="#0B6FAD" />
+                  <Ionicons name="information-circle" size={18} color={colors.accentForeground} />
                   <Text style={[styles.guestBannerTitle, { color: colors.foreground }]}>Sign in to track progress</Text>
                 </View>
                 <Text style={[styles.guestBannerText, { color: colors.mutedForeground }]}>
@@ -205,8 +210,8 @@ export default function CoursesScreen() {
                       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                         In Progress
                       </Text>
-                      <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
-                        <Text style={[styles.countText, { color: "#0B6FAD" }]}>
+                      <View style={[styles.countBadge, { backgroundColor: colors.accent }]}>
+                        <Text style={[styles.countText, { color: colors.accentForeground }]}>
                           {inProgressCourses.length}
                         </Text>
                       </View>
@@ -243,8 +248,8 @@ export default function CoursesScreen() {
                         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                           Not Started
                         </Text>
-                        <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
-                          <Text style={[styles.countText, { color: "#0B6FAD" }]}>
+                        <View style={[styles.countBadge, { backgroundColor: colors.accent }]}>
+                          <Text style={[styles.countText, { color: colors.accentForeground }]}>
                             {notStartedCourses.length}
                           </Text>
                         </View>
@@ -275,8 +280,8 @@ export default function CoursesScreen() {
                       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                         Completed
                       </Text>
-                      <View style={[styles.countBadge, { backgroundColor: "#DCF7F4" }]}>
-                        <Text style={[styles.countText, { color: "#0B6FAD" }]}>
+                      <View style={[styles.countBadge, { backgroundColor: colors.accent }]}>
+                        <Text style={[styles.countText, { color: colors.accentForeground }]}>
                           {completedCourses.length}
                         </Text>
                       </View>
@@ -348,7 +353,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -357,7 +361,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
   },
   scroll: {
     paddingTop: 16,

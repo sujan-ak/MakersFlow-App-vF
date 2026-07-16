@@ -13,7 +13,7 @@ export function LearningStreak({ streak, bestStreak = 7 }: LearningStreakProps) 
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.iconContainer, { backgroundColor: "#FEF3C7" }]}>
+      <View style={[styles.iconContainer, { backgroundColor: colors.muted }]}>
                 <Text style={styles.fireEmoji}>🔥</Text>
       </View>
       

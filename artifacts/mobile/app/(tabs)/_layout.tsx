@@ -2,16 +2,69 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContextSupabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase";
 
 function TabLayout() {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
+  const { user } = useAuth();
+  const [hasUnread, setHasUnread] = React.useState(false);
+
+  React.useEffect(() => {
+    const userId = user?.id;
+    if (!userId) {
+      setHasUnread(false);
+      return;
+    }
+
+    async function checkNotifications() {
+      try {
+        const lastSeen = await AsyncStorage.getItem('announcements_last_seen');
+        const [personal, broadcast] = await Promise.all([
+          supabase
+            .from('notifications')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('is_read', false),
+          supabase
+            .from('announcements')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'published')
+            .gt('created_at', lastSeen ?? '1970-01-01'),
+        ]);
+        const total = (personal.count ?? 0) + (broadcast.count ?? 0);
+        setHasUnread(total > 0);
+      } catch {
+        setHasUnread(false);
+      }
+    }
+
+    checkNotifications();
+    const interval = setInterval(checkNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // FIX: ensure a safe minimum floor on Android devices that report
+  // insets.bottom = 0 (gesture-nav phones still have a system bar).
+  const ANDROID_NAV_FLOOR = 16;
+  const bottomPad = Platform.OS === "ios"
+    ? Math.max(insets.bottom, 16)
+    : Math.max(insets.bottom + 4, ANDROID_NAV_FLOOR);
+  const tabBarHeight = 56 + bottomPad;
 
   return (
     <Tabs
+      // FIX: lazy=true — only the active tab mounts on startup.
+      // Other tabs mount only when first visited → much faster cold start
+      // and sign-in → home transition.
       screenOptions={{
+        lazy: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
@@ -19,17 +72,17 @@ function TabLayout() {
           position: "absolute",
           backgroundColor: colors.card,
           borderTopWidth: 0,
-          borderTopLeftRadius: 30,
-          borderTopRightRadius: 30,
-          overflow: Platform.OS === "ios" ? "visible" : "visible", // Ensure FAB is visible when overflow is set
-          height: isWeb ? 84 : 76,
-          paddingBottom: Platform.OS === "ios" ? 24 : 14,
-          paddingTop: 10,
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          overflow: "visible",
+          height: isWeb ? 84 : tabBarHeight,
+          paddingBottom: bottomPad,
+          paddingTop: 8,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.08,
           shadowRadius: 12,
-          elevation: 8,
+          elevation: 12,
           zIndex: 999,
         },
         tabBarLabelStyle: {
@@ -103,7 +156,24 @@ function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <Ionicons name="person" size={22} color={color} />,
+          tabBarIcon: ({ color }) => (
+            <View style={{ position: "relative" }}>
+              <Ionicons name="person" size={22} color={color} />
+              {hasUnread && (
+                <View style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: "#EF4444",
+                  borderWidth: 1.5,
+                  borderColor: colors.card,
+                }} />
+              )}
+            </View>
+          ),
           tabBarAccessibilityLabel: "Profile tab",
         }}
       />

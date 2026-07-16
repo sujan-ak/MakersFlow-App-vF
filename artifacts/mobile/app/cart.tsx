@@ -59,7 +59,7 @@ export default function CartScreen() {
         renderItem={({ item }) => {
           const discount = Math.round(((item.product.originalPrice - item.product.price) / item.product.originalPrice) * 100);
           return (
-            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Image source={item.product.thumbnail} style={styles.thumbnail} />
               
               <View style={styles.cardInfo}>

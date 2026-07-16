@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Dimensions, Image, Pressable, StyleSheet, Text, View, ToastAndroid, Platform, Alert, FlatList } from "react-native";
+import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View, ToastAndroid, Platform, Alert } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Course } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
@@ -155,27 +155,33 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
       <View style={styles.thumbnailContainer} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
         {courseImages ? (
           <View style={{ flex: 1 }}>
-            <FlatList
-              data={courseImages}
-              keyExtractor={(item, index) => `${item}_${index}`}
+            <ScrollView
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
               onMomentumScrollEnd={(e) => {
                 const index = Math.round(e.nativeEvent.contentOffset.x / (containerWidth || (compact ? 170 : CARD_WIDTH)));
                 setActiveIndex(index);
               }}
-              renderItem={({ item }) => (
-                <Image
-                  source={{ uri: item }}
-                  style={{
-                    width: containerWidth,
-                    height: compact ? 85 : 110,
-                    resizeMode: "cover"
-                  }}
-                />
-              )}
-            />
+              style={{ width: containerWidth || (compact ? 170 : CARD_WIDTH), height: compact ? 85 : 110 }}
+              contentContainerStyle={{ height: compact ? 85 : 110 }}
+            >
+              {courseImages.map((item: any, index: number) => {
+                const src = typeof item === "string" ? { uri: item } : item;
+                return (
+                  <Image
+                    key={`img_${index}`}
+                    source={src}
+                    style={{
+                      width: containerWidth || (compact ? 170 : CARD_WIDTH),
+                      height: compact ? 85 : 110,
+                      resizeMode: "cover"
+                    }}
+                  />
+                );
+              })}
+            </ScrollView>
             {courseImages.length > 1 && (
               <View style={styles.paginationDots}>
                 {courseImages.map((_: any, i: number) => (

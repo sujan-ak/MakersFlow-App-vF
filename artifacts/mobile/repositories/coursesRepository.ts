@@ -123,7 +123,7 @@ async function fetchCatalog(): Promise<CourseCatalogItem[]> {
       isFree: c.is_free,
       thumbnail: firstThumbnailUrl(c.thumbnail_url)
         ? { uri: firstThumbnailUrl(c.thumbnail_url)! }
-        : require('@/assets/images/course_robotics.png'),
+        : require('@/assets/images/courses/course_robotics.png'),
       instructor: c.profiles?.full_name || '',
       rating,
       reviews,
@@ -147,7 +147,7 @@ async function fetchEnrollments(userId: string): Promise<EnrolledCourseDetail[]>
           instructor:       c.profiles?.full_name || '',
           thumbnail:        firstThumbnailUrl(c.thumbnail_url)
                               ? { uri: firstThumbnailUrl(c.thumbnail_url)! }
-                              : require('@/assets/images/course_robotics.png'),
+                              : require('@/assets/images/courses/course_robotics.png'),
           progress:         prog.percentage,
           totalModules:     prog.total,
           completedModules: prog.completed,

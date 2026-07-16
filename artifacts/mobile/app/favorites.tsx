@@ -143,7 +143,7 @@ export default function FavoritesScreen() {
               {favoriteCourses.map((fav) => (
                 <Pressable
                   key={fav.courseId}
-                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
+                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() =>
                     router.push({
                       pathname: "/course/[id]",
@@ -243,7 +243,7 @@ export default function FavoritesScreen() {
               {watchLaterLessons.map((lesson) => (
                 <Pressable
                   key={lesson.lessonId}
-                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
+                  style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: colors.border }]}
                   onPress={() =>
                     router.push({
                       pathname: "/course/learn",
@@ -304,7 +304,7 @@ export default function FavoritesScreen() {
             {downloadedLessons.map((lesson) => (
               <Pressable
                 key={lesson.lessonId}
-                style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
+                style={[styles.lessonItem, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() =>
                   router.push({
                     pathname: "/course/learn",

@@ -129,13 +129,19 @@ function RootLayoutNav() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.background },
+          // Smooth and fast transitions
+          animation: "slide_from_right",
+          animationDuration: 150,  // FIX: 150ms feels snappy without being jarring
+          gestureEnabled: true,
+          gestureDirection: "horizontal",
+          fullScreenGestureEnabled: true,
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding/index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false, animation: "fade", animationDuration: 120 }} />
         <Stack.Screen name="(auth)/reset-password" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: "none" }} />
         <Stack.Screen name="course/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="course/learn" options={{ headerShown: false }} />
         <Stack.Screen name="quiz/[id]" options={{ headerShown: false }} />
@@ -144,7 +150,7 @@ function RootLayoutNav() {
         <Stack.Screen name="store/checkout" options={{ headerShown: false }} />
         <Stack.Screen name="store/orders" options={{ headerShown: false }} />
         <Stack.Screen name="news/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="profile/edit" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="profile/edit" options={{ headerShown: false, presentation: "modal", animationDuration: 200 }} />
         <Stack.Screen name="favorites" options={{ headerShown: false }} />
         <Stack.Screen name="settings/index" options={{ headerShown: false }} />
         <Stack.Screen name="settings/security" options={{ headerShown: false }} />

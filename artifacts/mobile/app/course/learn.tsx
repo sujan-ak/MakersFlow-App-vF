@@ -141,7 +141,7 @@ export default function LearnScreen() {
             level: courseData.level ? (courseData.level.charAt(0).toUpperCase() + courseData.level.slice(1)) : "Beginner",
             price: courseData.price || 0,
             isFree: courseData.is_free,
-            thumbnail: courseData.thumbnail_url ? { uri: courseData.thumbnail_url } : require('@/assets/images/course_robotics.png'),
+            thumbnail: courseData.thumbnail_url ? { uri: courseData.thumbnail_url } : require('@/assets/images/courses/course_robotics.png'),
             instructor: "MakersFlow Instructor",
             rating: 4.8,
             reviews: 120,

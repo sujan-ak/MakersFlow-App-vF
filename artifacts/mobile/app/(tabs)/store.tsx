@@ -33,6 +33,7 @@ export default function StoreScreen() {
 
   // Debounce ref — prevents rapid reconnect events from triggering repeated refreshes
   const reconnectDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasLoadedOnce = useRef(false);
 
   const handleShare = async () => {
     const link = "https://edodwaja.com/store";
@@ -64,7 +65,7 @@ export default function StoreScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadProducts = useCallback(async (isRefreshing = false) => {
-    if (!isRefreshing) setIsLoading(true);
+    if (!isRefreshing && !hasLoadedOnce.current) setIsLoading(true);
     try {
       const result = await storeRepository.get(isOffline);
       setProducts(result.data.products);
@@ -91,7 +92,11 @@ export default function StoreScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadProducts(false);
+      if (!hasLoadedOnce.current) {
+        loadProducts(false);
+      } else {
+        loadProducts(true); // silent background refresh
+      }
     }, [loadProducts])
   );
 
@@ -138,13 +143,13 @@ export default function StoreScreen() {
           <Text style={[styles.pageTitle, { color: colors.foreground }]}>Store</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
-              style={styles.whiteSquareBtn}
+              style={[styles.whiteSquareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={handleShare}
             >
               <Ionicons name="share-social" size={20} color="#0B6FAD" />
             </Pressable>
             <Pressable
-              style={styles.whiteSquareBtn}
+              style={[styles.whiteSquareBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={handleCartPress}
             >
               <Ionicons name="cart" size={20} color="#0B6FAD" />
@@ -166,13 +171,13 @@ export default function StoreScreen() {
               style={[
                 styles.chip,
                 {
-                  backgroundColor: activeCategory === cat ? "#0B6FAD" : "#FFFFFF",
-                  borderColor: activeCategory === cat ? "transparent" : "#D6E9F2",
+                  backgroundColor: activeCategory === cat ? colors.primary : colors.card,
+                  borderColor: activeCategory === cat ? "transparent" : colors.border,
                 },
               ]}
               onPress={() => setActiveCategory(cat)}
             >
-              <Text style={[styles.chipText, { color: activeCategory === cat ? "#FFF" : "#5A7A8C" }]}>{cat}</Text>
+              <Text style={[styles.chipText, { color: activeCategory === cat ? "#FFF" : colors.mutedForeground }]}>{cat}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -194,8 +199,8 @@ export default function StoreScreen() {
           </View>
         ) : products.length === 0 ? (
           <View style={styles.emptyState}>
-            <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
-              <Ionicons name="cart" size={40} color="#17E5D3" />
+            <View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}>
+              <Ionicons name="cart" size={40} color={colors.accentForeground} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No products available</Text>
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
@@ -205,8 +210,8 @@ export default function StoreScreen() {
         ) : search || activeCategory !== "All" ? (
           filtered.length === 0 ? (
             <View style={styles.emptyState}>
-              <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
-                <Ionicons name="search" size={40} color="#17E5D3" />
+              <View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}>
+                <Ionicons name="search" size={40} color={colors.accentForeground} />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No products found</Text>
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
@@ -227,7 +232,7 @@ export default function StoreScreen() {
               <View style={styles.gridContainer}>
                 {filtered.map((p) => (
                   <View key={p.id} style={styles.gridItem}>
-                    <ProductCard product={p} onAddedToCart={handleAddedToCart} gridMode />
+                    <ProductCard product={p} onAddedToCart={handleAddedToCart} gridMode variant="flat" />
                   </View>
                 ))}
               </View>
@@ -243,7 +248,7 @@ export default function StoreScreen() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.carouselContent}
                 >
-                  {physicalProducts.map((p) => <ProductCard key={p.id} product={p} onAddedToCart={handleAddedToCart} />)}
+                  {physicalProducts.map((p) => <ProductCard key={p.id} product={p} onAddedToCart={handleAddedToCart} variant="flat" />)}
                 </ScrollView>
               </View>
             )}
@@ -255,7 +260,7 @@ export default function StoreScreen() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.carouselContent}
                 >
-                  {digitalProducts.map((p) => <ProductCard key={p.id} product={p} onAddedToCart={handleAddedToCart} />)}
+                  {digitalProducts.map((p) => <ProductCard key={p.id} product={p} onAddedToCart={handleAddedToCart} variant="flat" />)}
                 </ScrollView>
               </View>
             )}
@@ -294,7 +299,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -303,7 +307,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
   },
   cartBadge: {
     position: "absolute",

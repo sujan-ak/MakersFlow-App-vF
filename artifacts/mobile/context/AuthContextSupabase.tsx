@@ -54,7 +54,8 @@ interface AuthContextType {
     email: string,
     password: string,
     grade?: string,
-    school?: string
+    school?: string,
+    phone?: string
   ) => Promise<{ success: boolean; needsEmailVerification?: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -150,6 +151,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  async function uploadAvatarFile(userId: string, uri: string): Promise<string | null> {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const filename = `${userId}_avatar.jpg`;
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(filename, blob, { contentType: 'image/jpeg', upsert: true });
+
+      if (error) {
+        devError('[Auth] Error uploading avatar:', error.message);
+        return null;
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filename);
+      // Update database profile
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
+      return publicUrl;
+    } catch (e: any) {
+      devError('[Auth] Exception uploading avatar:', e.message);
+      return null;
+    }
+  }
+
   // ── Startup helper: fetch live profile, save to cache, update state ─────────
   async function fetchProfile(supabaseUser: SupabaseUser, cached: Profile | null): Promise<void> {
     try {
@@ -173,10 +198,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const saved = await profileCache.saveProfile(profile);
+      // Sync user metadata details back to profile database if missing
+      const meta = supabaseUser.user_metadata || {};
+      const updates: any = {};
+      if (!profile.full_name && meta.name) updates.full_name = meta.name;
+      if (!profile.grade && meta.grade) updates.grade = meta.grade;
+      if (!profile.school && meta.school) updates.school = meta.school;
+      if (!profile.phone && meta.phone) updates.phone = meta.phone;
+
+      let finalProfile = profile;
+      if (Object.keys(updates).length > 0) {
+        const { data: updatedProfile, error: updateErr } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', supabaseUser.id)
+          .select()
+          .maybeSingle();
+        if (!updateErr && updatedProfile) {
+          finalProfile = updatedProfile;
+        }
+      }
+
+      // Check if there is a pending avatar in AsyncStorage for this user email
+      if (supabaseUser.email) {
+        const emailKey = `pending_avatar_${supabaseUser.email.toLowerCase().trim()}`;
+        try {
+          const pendingAvatarUri = await AsyncStorage.getItem(emailKey);
+          if (pendingAvatarUri) {
+            const uploadedUrl = await uploadAvatarFile(supabaseUser.id, pendingAvatarUri);
+            if (uploadedUrl) {
+              finalProfile = { ...finalProfile, avatar_url: uploadedUrl };
+              await AsyncStorage.removeItem(emailKey);
+            }
+          }
+        } catch (avatarErr: any) {
+          devError('[Auth] Failed to process pending avatar:', avatarErr.message);
+        }
+      }
+
+      const saved = await profileCache.saveProfile(finalProfile);
       if (!saved) devError('[Auth] Cache write failed for profile:', supabaseUser.id);
 
-      setUser(buildUser(profile, supabaseUser));
+      setUser(buildUser(finalProfile, supabaseUser));
     } catch (err: any) {
       devError('[Auth] fetchProfile exception:', err.message);
       if (isNetworkError(err)) setIsOffline(true);
@@ -429,12 +492,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     grade?: string,
-    school?: string
+    school?: string,
+    phone?: string
   ): Promise<{ success: boolean; needsEmailVerification?: boolean; error?: string }> {
     try {
       setIsLoading(true);
 
-      const { data, error } = await authService.signUp(email, password, { name, grade, school });
+      const { data, error } = await authService.signUp(email, password, { name, grade, school, phone });
 
       if (error) {
         devError('[Auth] Registration error:', error);
@@ -442,13 +506,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user) {
-        // Profile is created server-side by the on_auth_user_created trigger.
-        // No client-side INSERT here — the anon role has no active JWT at this
-        // point and would be denied by RLS.
-        //
-        // When Supabase Confirm Email is ON, signUp returns a user but no
-        // session. Signal this to the caller so it can show a verification
-        // prompt instead of navigating into the authenticated app.
+        // Also perform an explicit insert/update to profiles table just to be absolutely sure, 
+        // if session is active (meaning auto-confirm is ON and session exists).
+        if (data.session) {
+          const { error: profileErr } = await supabase
+            .from('profiles')
+            .update({
+              full_name: name,
+              grade,
+              school,
+              phone
+            })
+            .eq('id', data.user.id);
+          if (profileErr) {
+            devError('[Auth] Client profile update error:', profileErr.message);
+          }
+        }
+
         const needsEmailVerification = !data.session;
         return { success: true, needsEmailVerification };
       }

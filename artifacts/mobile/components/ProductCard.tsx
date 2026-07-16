@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View, Alert, Platform, Dimensions, FlatList } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, Alert, Platform, Dimensions } from "react-native";
 import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
@@ -16,9 +16,10 @@ interface ProductCardProps {
   product: Product & { images?: string[] };
   onAddedToCart?: () => void;
   gridMode?: boolean;
+  variant?: "flat" | "boxed";
 }
 
-export function ProductCard({ product, onAddedToCart, gridMode = false }: ProductCardProps) {
+export function ProductCard({ product, onAddedToCart, gridMode = false, variant = "boxed" }: ProductCardProps) {
   const colors = useColors();
   const { addToCart } = useCart();
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
@@ -28,6 +29,7 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
   const [containerWidth, setContainerWidth] = useState(CARD_WIDTH);
   const discount = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
   const isWishlisted = isProductInWishlist(product.id);
+  const isFlat = variant === "flat";
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -50,7 +52,17 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
     e.stopPropagation();
     requireAuth(async () => {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const wasWishlisted = isWishlisted;
       await toggleWishlistProduct(product.id);
+      const message = wasWishlisted
+        ? `${product.title} removed from wishlist`
+        : `${product.title} added to wishlist`;
+      if (Platform.OS === 'android') {
+        const { ToastAndroid } = require('react-native');
+        ToastAndroid.show(message, ToastAndroid.SHORT);
+      } else {
+        Alert.alert('', message);
+      }
     });
   };
 
@@ -81,32 +93,43 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
     ? product.images
     : null;
 
+
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
         gridMode && styles.gridCard,
-        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.8 : 1 },
+        isFlat ? styles.flatCard : { backgroundColor: colors.card, borderColor: colors.border },
+        { opacity: pressed ? 0.8 : 1 },
       ]}
       onPress={() => router.push({ pathname: "/store/[id]", params: { id: product.id } })}
     >
-      <View style={styles.imageContainer} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+      <View style={[styles.imageContainer, isFlat && { borderRadius: 8 }]} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
         {productImages ? (
           <View style={{ flex: 1 }}>
-            <FlatList
-              data={productImages}
-              keyExtractor={(item, index) => `${item}_${index}`}
+            <ScrollView
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
               onMomentumScrollEnd={(e) => {
                 const index = Math.round(e.nativeEvent.contentOffset.x / (containerWidth || CARD_WIDTH));
                 setActiveIndex(index);
               }}
-              renderItem={({ item }) => (
-                <Image source={{ uri: item }} style={{ width: containerWidth, height: 120, resizeMode: "cover" }} />
-              )}
-            />
+              style={{ width: containerWidth || CARD_WIDTH, height: 120 }}
+              contentContainerStyle={{ height: 120 }}
+            >
+              {productImages.map((item: any, index: number) => {
+                const src = typeof item === "string" ? { uri: item } : item;
+                return (
+                  <Image
+                    key={`img_${index}`}
+                    source={src}
+                    style={{ width: containerWidth || CARD_WIDTH, height: 120, resizeMode: "cover" }}
+                  />
+                );
+              })}
+            </ScrollView>
             {productImages.length > 1 && (
               <View style={styles.paginationDots}>
                 {productImages.map((_, i) => (
@@ -151,22 +174,42 @@ export function ProductCard({ product, onAddedToCart, gridMode = false }: Produc
           </View>
         )}
       </View>
-      <View style={styles.content}>
-        <Text style={[styles.subcategory, { color: colors.mutedForeground }]}>{product.subcategory}</Text>
-        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={2}>
+      <View style={isFlat ? styles.flatContent : styles.content}>
+        {isFlat ? (
+          <View style={[styles.categoryPill, { backgroundColor: colors.accent }]}>
+            <Text style={[styles.categoryText, { color: colors.primary }]}>{product.subcategory}</Text>
+          </View>
+        ) : (
+          <Text style={[styles.subcategory, { color: colors.mutedForeground }]}>{product.subcategory}</Text>
+        )}
+        
+        <Text style={[
+          isFlat ? styles.flatTitle : styles.title,
+          { color: colors.foreground }
+        ]} numberOfLines={2}>
           {product.title}
         </Text>
+
         <View style={styles.ratingRow}>
           <View style={styles.starsContainer}>
             {renderStars(product.rating || 0)}
           </View>
+          {isFlat && (
+            <Text style={[styles.ratingNumber, { color: colors.mutedForeground }]}>
+              {product.rating || 4.5}
+            </Text>
+          )}
           <Text style={[styles.reviews, { color: colors.mutedForeground }]}>
             {product.reviews > 0 ? `(${product.reviews})` : "(0)"}
           </Text>
         </View>
+
         <View style={styles.priceRow}>
           <View style={styles.priceGroup}>
-            <Text style={[styles.price, { color: "#0B6FAD" }]} numberOfLines={1}>
+            <Text style={[
+              isFlat ? styles.flatPrice : styles.price,
+              { color: isFlat ? colors.foreground : "#0B6FAD" }
+            ]} numberOfLines={1}>
               ₹{product.price}
             </Text>
             {discount > 0 && (
@@ -197,12 +240,18 @@ const styles = StyleSheet.create({
     marginRight: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
+    borderColor: "#E5E7EB",
     overflow: "hidden",
   },
   gridCard: {
     marginRight: 0,
     width: "100%",
+  },
+  flatCard: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 0,
+    borderColor: "transparent",
   },
   imageContainer: {
     position: "relative",
@@ -344,5 +393,36 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  flatContent: {
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    gap: 4,
+  },
+  flatTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  flatPrice: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 4,
+    flex: 1,
+  },
+  categoryPill: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  ratingNumber: {
+    fontSize: 11,
+    fontWeight: "700",
   },
 });

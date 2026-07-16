@@ -1,6 +1,6 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,6 +22,7 @@ export default function TransactionsScreen() {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadTransactions = useCallback(async (isRefreshing = false) => {
@@ -29,9 +30,7 @@ export default function TransactionsScreen() {
       setIsLoading(false);
       return;
     }
-    if (!isRefreshing) {
-      setIsLoading(true);
-    }
+    if (!isRefreshing && !hasLoadedOnce.current) setIsLoading(true);
     try {
       // Fetch completed, paid or refunded orders
       const { data, error } = await supabase
@@ -40,7 +39,6 @@ export default function TransactionsScreen() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      console.log("[TransactionsScreen] Query results for user:", user.id, "data:", data, "error:", error);
 
       if (error) {
         console.error("[Transactions] Error fetching transactions:", error);
@@ -61,6 +59,10 @@ export default function TransactionsScreen() {
             day: "numeric",
             month: "short",
             year: "numeric",
+          }) + ", " + dateObj.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "numeric",
+            hour12: true,
           });
 
           return {
@@ -85,7 +87,11 @@ export default function TransactionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadTransactions(false);
+      if (!hasLoadedOnce.current) {
+        loadTransactions(false);
+      } else {
+        loadTransactions(true);
+      }
     }, [loadTransactions])
   );
 

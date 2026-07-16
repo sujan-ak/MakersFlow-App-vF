@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
 export function HomeSkeleton() {
   const colors = useColors();
   return (
-    <View style={{ flex: 1, padding: 20, paddingTop: 60, gap: 24, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, padding: 20, paddingTop: 60, gap: 24, backgroundColor: "#F8FAFC" }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <View style={{ gap: 8 }}>
@@ -114,7 +114,7 @@ export function HomeSkeleton() {
 export function ListSkeleton() {
   const colors = useColors();
   return (
-    <View style={{ flex: 1, padding: 20, gap: 16, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, padding: 20, gap: 16, backgroundColor: "#F8FAFC" }}>
       <Skeleton width="100%" height={100} borderRadius={12} />
       <Skeleton width="100%" height={100} borderRadius={12} />
       <Skeleton width="100%" height={100} borderRadius={12} />
@@ -126,7 +126,7 @@ export function ListSkeleton() {
 export function DetailSkeleton() {
   const colors = useColors();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
       <Skeleton width="100%" height={250} borderRadius={0} />
       <View style={{ padding: 20, gap: 16 }}>
         <Skeleton width="80%" height={28} />

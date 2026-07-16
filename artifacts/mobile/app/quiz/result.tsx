@@ -85,7 +85,7 @@ export default function QuizResultScreen() {
 
         {/* Tips */}
         {pct < 70 && (
-          <View style={[styles.tip, { backgroundColor: "#FEF3C7" }]}>
+          <View style={[styles.tip, { backgroundColor: colors.muted }]}>
             <Feather name="alert-circle" size={16} color="#D97706" />
             <Text style={[styles.tipText, TEXT_STYLES.description, { color: "#92400E", fontSize: 13 }]}>
               Review the course material and try again. You can retake this quiz anytime.
@@ -104,7 +104,7 @@ export default function QuizResultScreen() {
           <Text style={[styles.btnText, TEXT_STYLES.button, { color: "#FFF" }]}>Retake Quiz</Text>
         </Pressable>
         <Pressable
-          style={[styles.outlineBtn, { borderColor: colors.primary, backgroundColor: "#FFFFFF" }]}
+          style={[styles.outlineBtn, { borderColor: colors.primary, backgroundColor: colors.card }]}
           onPress={() => router.push("/(tabs)/courses")}
         >
           <Text style={[styles.outlineBtnText, TEXT_STYLES.button, { color: colors.primary }]}>Back to Courses</Text>

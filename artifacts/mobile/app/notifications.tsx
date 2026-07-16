@@ -223,7 +223,7 @@ export default function NotificationsScreen() {
       >
         <Pressable
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
-          style={[styles.iconBtn, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}
+          style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
           <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
         </Pressable>
@@ -272,7 +272,7 @@ export default function NotificationsScreen() {
                 styles.card,
                 {
                   backgroundColor: item.is_read ? colors.card : "#DCF7F4",
-                  borderColor: "#D6E9F2",
+                  borderColor: colors.border,
                 },
               ]}
             >

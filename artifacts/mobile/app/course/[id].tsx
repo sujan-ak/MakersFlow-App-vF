@@ -110,7 +110,18 @@ export default function CourseDetailScreen() {
     try {
       const courseData = await getCourseById(id);
       if (courseData) {
-        const images = parseThumbnailUrls(courseData.thumbnail_url);
+        // Collect images from thumbnail_url AND the images[] column the admin writes to
+        const fromThumb = parseThumbnailUrls(courseData.thumbnail_url);
+        let fromImages: string[] = [];
+        if (courseData.images) {
+          let raw: any = courseData.images;
+          if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = []; } }
+          if (Array.isArray(raw)) fromImages = raw.map(String).filter((u: string) => u.startsWith('http'));
+        }
+        const seen = new Set<string>();
+        const images: string[] = [];
+        [...fromThumb, ...fromImages].forEach((u) => { if (u && !seen.has(u)) { seen.add(u); images.push(u); } });
+
         const mappedCourse = {
           id: String(courseData.id),
           title: courseData.title,
@@ -121,7 +132,7 @@ export default function CourseDetailScreen() {
           images: images.length > 0 ? images : null,
           thumbnail: images.length > 0
             ? { uri: images[0] }
-            : require('@/assets/images/course_robotics.png'),
+            : require('@/assets/images/courses/course_robotics.png'),
           instructor: "MakersFlow Instructor",
           rating: 4.8,
           reviews: 120,
@@ -266,10 +277,28 @@ export default function CourseDetailScreen() {
             .maybeSingle();
 
           if (!linkedProduct) {
-            Alert.alert(
-              "Purchase unavailable",
-              "This course can't be purchased right now. Please try again later or contact support.",
-            );
+            // No linked product row — create a virtual product from the course itself
+            // so the user can still proceed to checkout.
+            const virtualProduct: any = {
+              id: `course_${course.id}`,
+              title: course.title,
+              category: "digital",
+              subcategory: "Courses",
+              price: course.price,
+              originalPrice: course.price,
+              thumbnail: course.thumbnail,
+              description: course.description,
+              rating: 4.8,
+              reviews: 0,
+              inStock: true,
+              features: [],
+              is_course: true,
+              course_id: String(course.id),
+            };
+            if (!cartItems.some((i) => i.product.id === virtualProduct.id)) {
+              addToCart(virtualProduct);
+            }
+            router.push("/store/checkout");
             return;
           }
 
@@ -473,7 +502,7 @@ export default function CourseDetailScreen() {
               <View key={s.label} style={[styles.statChip, { backgroundColor: "#DCF7F4" }]}>
                 <Ionicons name={s.icon as any} size={18} color="#0B6FAD" />
                 <Text style={[styles.statValue, { color: "#0B6FAD" }]}>{s.value}</Text>
-                <Text style={[styles.statLabel, { color: "#5A7A8C" }]}>{s.label}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
               </View>
             ))}
           </View>
@@ -589,7 +618,7 @@ export default function CourseDetailScreen() {
                       {isCompleted ? (
                         <Ionicons name="checkmark" size={14} color="#17E5D3" />
                       ) : (
-                        <Text style={[styles.moduleNumText, { color: "#5A7A8C" }]}>{idx + 1}</Text>
+                        <Text style={[styles.moduleNumText, { color: colors.mutedForeground }]}>{idx + 1}</Text>
                       )}
                     </View>
                     <View style={styles.moduleInfo}>

@@ -55,9 +55,9 @@ function firstThumbnailUrl(raw: string | null | undefined): string | null {
 // ── Product mapper (lifted from screen — single source of truth) ─────────────
 const productFallbacks: Record<string, any[]> = {
   physical: [
-    require('@/assets/images/product_kit_1.png'),
-    require('@/assets/images/product_kit_2.png'),
-    require('@/assets/images/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.png'),
+    require('@/assets/images/products/product_kit_2.png'),
+    require('@/assets/images/products/product_kit_3.png'),
   ],
   digital: [
     require('@/assets/images/product_notes_1.png'),
@@ -99,6 +99,28 @@ function mapRow(row: any, index: number): Product {
     ? { uri: firstUrl }
     : (productFallbacks[category] || productFallbacks.physical)[index % 3];
 
+  // Build images array from the images column (saved by admin as array of URLs)
+  let images: { uri: string }[] = [];
+  if (row.images) {
+    let raw = row.images;
+    // Handle string (JSON), array of strings, or array of objects
+    if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = []; } }
+    if (Array.isArray(raw)) {
+      const urls: string[] = raw.map((item: any) => {
+        // If item is already a plain URL string
+        if (typeof item === 'string') return item;
+        // If item is an object {uri: "..."} or {url: "..."}
+        if (item && typeof item === 'object') return item.uri || item.url || item.src || '';
+        return '';
+      }).filter((u: string) => u.startsWith('http'));
+      const thumbUrl = firstUrl || '';
+      const ordered = thumbUrl ? [thumbUrl, ...urls.filter((u: string) => u !== thumbUrl)] : urls;
+      images = Array.from(new Set(ordered)).map((u: string) => ({ uri: u }));
+    }
+  }
+  // Always ensure thumbnail is in images
+  if (images.length === 0 && firstUrl) images = [{ uri: firstUrl }];
+
   return {
     id: String(row.id),
     title: row.title || 'Untitled Product',
@@ -107,6 +129,7 @@ function mapRow(row: any, index: number): Product {
     price: Number(row.price) || 0,
     originalPrice: Number(row.original_price) || Number(row.price) || 0,
     thumbnail,
+    images: images.length > 0 ? images : undefined,
     description: row.description || 'No description available.',
     rating: Number(row.rating) || 0,
     reviews: Number(row.total_reviews) || 0,
@@ -121,7 +144,7 @@ async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
     .select(
-      'id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, in_stock, status, is_course, course_id'
+      'id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, images, videos, in_stock, status, is_course, course_id'
     )
     .or('status.eq.available,status.eq.active');
 

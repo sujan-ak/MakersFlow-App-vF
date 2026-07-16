@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -16,6 +16,7 @@ export default function NewsScreen() {
   const [search, setSearch] = useState("");
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadNews = useCallback(async () => {
@@ -28,6 +29,7 @@ export default function NewsScreen() {
     } finally {
       setIsLoading(false);
       setRefreshing(false);
+      hasLoadedOnce.current = true;
     }
   }, []);
 

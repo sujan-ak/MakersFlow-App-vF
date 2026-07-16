@@ -53,33 +53,6 @@ export default function ProfileScreen() {
   const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
-  const [viewedCerts, setViewedCerts] = useState<string[]>([]);
-
-  useEffect(() => {
-    async function loadViewedCerts() {
-      try {
-        const stored = await AsyncStorage.getItem("viewed_certificates");
-        if (stored) {
-          setViewedCerts(JSON.parse(stored));
-        }
-      } catch (err) {
-        console.error("Error loading viewed certificates:", err);
-      }
-    }
-    loadViewedCerts();
-  }, []);
-
-  const handleMarkAsViewed = async (courseId: string) => {
-    if (viewedCerts.includes(courseId)) return;
-    const updated = [...viewedCerts, courseId];
-    setViewedCerts(updated);
-    try {
-      await AsyncStorage.setItem("viewed_certificates", JSON.stringify(updated));
-    } catch (err) {
-      console.error("Error saving viewed certificates:", err);
-    }
-  };
-
   const loadWishlistProducts = useCallback(async () => {
     if (wishlistProductIds.length === 0) {
       setWishlistProducts([]);
@@ -93,9 +66,9 @@ export default function ProfileScreen() {
         .in('id', wishlistProductIds.map(Number));
       if (!error && data) {
         const kitFallbacks = [
-          require('@/assets/images/product_kit_1.png'),
-          require('@/assets/images/product_kit_2.png'),
-          require('@/assets/images/product_kit_3.png'),
+          require('@/assets/images/products/product_kit_1.png'),
+          require('@/assets/images/products/product_kit_2.png'),
+          require('@/assets/images/products/product_kit_3.png'),
         ];
         const mapped: Product[] = data.map((row: any, idx: number) => ({
           id: String(row.id),
@@ -125,6 +98,18 @@ export default function ProfileScreen() {
   }, [loadWishlistProducts]);
 
   const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
+  const [viewedCerts, setViewedCerts] = useState<string[]>([]);
+
+  const handleMarkAsViewed = async (courseId: string) => {
+    if (viewedCerts.includes(courseId)) return;
+    const updated = [...viewedCerts, courseId];
+    setViewedCerts(updated);
+    try {
+      await AsyncStorage.setItem("viewed_certificates", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error saving viewed certificates:", err);
+    }
+  };
   const [certsLoading, setCertsLoading] = useState(true);
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [validCourseIds, setValidCourseIds] = useState<string[]>([]);
@@ -143,18 +128,37 @@ export default function ProfileScreen() {
       ? Math.round(enrolledCourses.reduce((s, c) => s + c.progress, 0) / enrolledCourses.length)
       : 0;
 
-  const unviewedCertsCount = completedCourses.filter(
-    (c) => !viewedCerts.includes(c.courseId)
-  ).length;
-
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteStep, setDeleteStep] = useState<"password" | "confirm">("password");
   const [deleteError, setDeleteError] = useState("");
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
+      async function loadUnreadNotifCount() {
+        if (!user?.id) return;
+        try {
+          const lastSeen = await AsyncStorage.getItem('announcements_last_seen');
+          const [personal, broadcast] = await Promise.all([
+            supabase
+              .from('notifications')
+              .select('id', { count: 'exact', head: true })
+              .eq('user_id', user.id)
+              .eq('is_read', false),
+            supabase
+              .from('announcements')
+              .select('id', { count: 'exact', head: true })
+              .eq('status', 'published')
+              .gt('created_at', lastSeen ?? '1970-01-01'),
+          ]);
+          setUnreadNotifCount((personal.count ?? 0) + (broadcast.count ?? 0));
+        } catch {
+          setUnreadNotifCount(0);
+        }
+      }
       async function loadCompletedCourses() {
         if (!user?.id) {
           setCertsLoading(false);
@@ -236,8 +240,20 @@ export default function ProfileScreen() {
           setCertsLoading(false);
         }
       }
+      async function loadViewedCerts() {
+        try {
+          const stored = await AsyncStorage.getItem("viewed_certificates");
+          if (stored) {
+            setViewedCerts(JSON.parse(stored));
+          }
+        } catch (err) {
+          console.error("Error loading viewed certificates:", err);
+        }
+      }
       loadCompletedCourses();
+      loadViewedCerts();
       loadWishlistProducts();
+      loadUnreadNotifCount();
     }, [user?.id, loadWishlistProducts])
   );
 
@@ -339,6 +355,7 @@ export default function ProfileScreen() {
     {
       title: "Account",
       items: [
+        { icon: "create", label: "Edit Profile", onPress: () => router.push("/profile/edit") },
         { icon: "settings", label: "Settings", onPress: () => router.push("/settings") },
         { icon: "shield-checkmark", label: "Privacy Policy", onPress: () => router.push("/settings/privacy-policy") },
         { icon: "document", label: "Terms of Service", onPress: () => router.push("/settings/terms-of-service") },
@@ -410,13 +427,13 @@ export default function ProfileScreen() {
           ].map((item) => (
             <Pressable
               key={item.label}
-              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: '#D6E9F2', paddingVertical: 14, paddingHorizontal: 16, gap: 14, opacity: 0.55 }}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 16, gap: 14, opacity: 0.55 }}
               onPress={() => router.push('/(auth)/login')}
             >
-              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#DCF7F4', alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name={item.icon as any} size={17} color="#0B6FAD" />
               </View>
-              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: "#0F2A3D", flex: 1 }}>{item.label}</Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.foreground, flex: 1 }}>{item.label}</Text>
               <Ionicons name="lock-closed-outline" size={15} color={colors.mutedForeground} />
             </Pressable>
           ))}
@@ -425,13 +442,26 @@ export default function ProfileScreen() {
     );
   }
 
+  const unviewedCount = completedCourses.filter((c) => !viewedCerts.includes(c.courseId)).length;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.pageTitle, { color: colors.foreground }]}>Profile</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingRight: 20, marginBottom: 16 }}>
+        <Text style={[styles.pageTitle, { color: colors.foreground, marginBottom: 0 }]}>Profile</Text>
+        <Pressable
+          style={styles.circleHeaderBtn}
+          onPress={() => router.push("/notifications")}
+        >
+          <Ionicons name="notifications-outline" size={20} color={colors.foreground} />
+          {unreadNotifCount > 0 && (
+            <View style={styles.redDotBadge} />
+          )}
+        </Pressable>
+      </View>
 
       {/* User Banner */}
       <View style={[styles.profileCard, { backgroundColor: "#0B6FAD" }]}>
@@ -463,15 +493,15 @@ export default function ProfileScreen() {
           ) : null}
         </View>
         <Pressable
-          style={styles.editProfileGhostBtn}
+          style={[styles.editProfileGhostBtn, { backgroundColor: colors.card, borderColor: colors.primary }]}
           onPress={() => router.push("/profile/edit")}
         >
-          <Text style={styles.editProfileGhostBtnText}>Edit Profile</Text>
+          <Text style={[styles.editProfileGhostBtnText, { color: colors.primary }]}>Edit Profile</Text>
         </Pressable>
       </View>
 
       {/* Stats Strip */}
-      <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+      <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.stat}>
           <Text style={styles.statNum}>{enrolledCount}</Text>
           <Text style={styles.statLabel}>Enrolled</Text>
@@ -507,14 +537,14 @@ export default function ProfileScreen() {
                 style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.75 : 1 }]}
                 onPress={item.onPress}
               >
-                <View style={[styles.menuIconBox, { backgroundColor: "#DCF7F4" }]}>
+                <View style={[styles.menuIconBox, { backgroundColor: "rgba(11, 111, 173, 0.08)" }]}>
                   <Ionicons name={item.icon as any} size={16} color="#0B6FAD" />
                 </View>
                 <Text style={[styles.menuLabel, { color: colors.foreground }]}>{item.label}</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} style={{ opacity: 0.45 }} />
               </Pressable>
               {idx < learningMenuItems.length - 1 && (
-                <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                <View style={[styles.menuDivider, { backgroundColor: colors.border, opacity: 0.2 }]} />
               )}
             </React.Fragment>
           ))}
@@ -525,14 +555,14 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <View style={styles.achievementsHeader}>
           <View style={styles.achievementsTitleRow}>
-            <Ionicons name="ribbon" size={16} color="#0B6FAD" />
+            <Ionicons name="ribbon" size={16} color={colors.primary} />
             <Text style={[styles.sectionTitle, { marginBottom: 0, color: colors.foreground }]}>
               Achievements & Certificates
             </Text>
           </View>
-          {unviewedCertsCount > 0 && (
+          {unviewedCount > 0 && (
             <View style={[styles.certCountBadge, { backgroundColor: "#10B981" }]}>
-              <Text style={styles.certCountText}>{unviewedCertsCount}</Text>
+              <Text style={styles.certCountText}>{unviewedCount}</Text>
             </View>
           )}
         </View>
@@ -616,7 +646,7 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 {idx < completedCourses.length - 1 && (
-                  <View style={[styles.menuDivider, { backgroundColor: colors.border, marginLeft: 68 }]} />
+                  <View style={[styles.menuDivider, { backgroundColor: colors.border, marginLeft: 68, opacity: 0.2 }]} />
                 )}
               </React.Fragment>
             ))}
@@ -671,16 +701,16 @@ export default function ProfileScreen() {
                   style={({ pressed }) => [styles.menuItem, { opacity: pressed ? 0.75 : 1 }]}
                   onPress={item.onPress}
                 >
-                  <View style={[styles.menuIconBox, { backgroundColor: item.danger ? "#FEE2E2" : "#DCF7F4" }]}>
+                  <View style={[styles.menuIconBox, { backgroundColor: item.danger ? "rgba(220, 38, 38, 0.08)" : "rgba(11, 111, 173, 0.08)" }]}>
                     <Ionicons name={item.icon as any} size={16} color={item.danger ? "#DC2626" : "#0B6FAD"} />
                   </View>
                   <Text style={[styles.menuLabel, { color: item.danger ? "#DC2626" : colors.foreground }]}>
                     {item.label}
                   </Text>
-                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} style={{ opacity: 0.45 }} />
                 </Pressable>
                 {idx < section.items.length - 1 && (
-                  <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+                  <View style={[styles.menuDivider, { backgroundColor: colors.border, opacity: 0.2 }]} />
                 )}
               </React.Fragment>
             ))}
@@ -713,16 +743,32 @@ export default function ProfileScreen() {
                   Please re-enter your password to continue with account deletion.
                 </Text>
                 
-                <TextInput
-                  style={[styles.modalInput, { color: "#0F2A3D", borderColor: "#D6E9F2", backgroundColor: colors.card }]}
-                  placeholder="Password"
-                  placeholderTextColor={colors.mutedForeground}
-                  secureTextEntry
-                  value={deletePassword}
-                  onChangeText={setDeletePassword}
-                  autoCapitalize="none"
-                  editable={!isDeleting}
-                />
+                <View style={[
+                  styles.modalInput,
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    paddingHorizontal: 16,
+                    paddingVertical: 0,
+                    height: 52,
+                  }
+                ]}>
+                  <TextInput
+                    style={[{ color: colors.foreground, flex: 1, fontSize: 16, fontFamily: "Inter_400Regular" }]}
+                    placeholder="Password"
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry={!showDeletePassword}
+                    value={deletePassword}
+                    onChangeText={setDeletePassword}
+                    autoCapitalize="none"
+                    editable={!isDeleting}
+                  />
+                  <Pressable onPress={() => setShowDeletePassword(!showDeletePassword)} style={{ paddingLeft: 10 }}>
+                    <Ionicons name={showDeletePassword ? "eye-off" : "eye"} size={20} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
                 
                 {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
                 
@@ -779,13 +825,13 @@ const styles = StyleSheet.create({
   profileCard: {
     marginHorizontal: 20,
     borderRadius: 20,
-    padding: 24,
+    padding: 20,
     alignItems: "center",
     marginBottom: 16,
   },
   avatarContainer: {
     position: "relative",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   avatarEditPen: {
     position: "absolute",
@@ -814,7 +860,7 @@ const styles = StyleSheet.create({
   avatarImage: { width: 72, height: 72, borderRadius: 36 },
   initials: { fontSize: 28, fontFamily: "Fredoka_700Bold", color: "#FFF" },
   name: { fontSize: 20, fontFamily: "Fredoka_700Bold", color: "#FFF", marginBottom: 2 },
-  email: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginBottom: 12 },
+  email: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginBottom: 8 },
   badges: { flexDirection: "row", gap: 8 },
   badge: {
     paddingHorizontal: 12,
@@ -833,7 +879,7 @@ const styles = StyleSheet.create({
   },
   stat: { flex: 1, alignItems: "center" },
   statNum: { fontSize: 20, fontFamily: "Fredoka_700Bold", color: "#0B6FAD" },
-  statLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#5A7A8C", marginTop: 2 },
+  statLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#6B7280", marginTop: 2 },
   statDivider: { width: 1 },
   section: { paddingHorizontal: 20, marginBottom: 20 },
   sectionTitle: {
@@ -844,23 +890,23 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  menuCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  menuCard: { borderRadius: 20, borderWidth: 1, overflow: "hidden", paddingVertical: 6 },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 14,
   },
   menuIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  menuLabel: { flex: 1, fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  menuDivider: { height: 1, marginLeft: 62 },
+  menuLabel: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  menuDivider: { height: 0.5, marginLeft: 68, opacity: 0.4 },
   version: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular", paddingBottom: 8 },
 
   achievementsHeader: {
@@ -888,9 +934,10 @@ const styles = StyleSheet.create({
     color: "#FFF",
   },
   certsCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: "hidden",
+    paddingVertical: 6,
   },
   emptyCertsCard: {
     padding: 28,
@@ -922,9 +969,9 @@ const styles = StyleSheet.create({
   certRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 14,
   },
   medalBox: {
     width: 40,
@@ -935,8 +982,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   certInfo: { flex: 1, gap: 3 },
-  certCourseTitle: { fontSize: 14, fontFamily: "Fredoka_600SemiBold", lineHeight: 18 },
-  certDate: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  certCourseTitle: { fontSize: 15, fontFamily: "Fredoka_600SemiBold", lineHeight: 19 },
+  certDate: { fontSize: 11, fontFamily: "Inter_400Regular", opacity: 0.5 },
   downloadBtn: {
     width: 36,
     height: 36,
@@ -994,8 +1041,7 @@ const styles = StyleSheet.create({
   },
   modalBtnHalfText: { fontSize: 16, fontFamily: "Fredoka_600SemiBold" },
   editProfileGhostBtn: {
-    marginTop: 16,
-    backgroundColor: "#FFFFFF",
+    marginTop: 12,
     borderWidth: 1.5,
     borderColor: "#0B6FAD",
     borderRadius: 20,
@@ -1008,5 +1054,22 @@ const styles = StyleSheet.create({
     color: "#0B6FAD",
     fontSize: 14,
     fontFamily: "Fredoka_600SemiBold",
+  },
+  circleHeaderBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(15, 42, 61, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  redDotBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
   },
 });

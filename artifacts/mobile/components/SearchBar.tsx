@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 24, // rounded-full
     borderWidth: 1.5,
-    borderColor: "#D6E9F2",
+    borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF", // white
     minHeight: 48,
   },

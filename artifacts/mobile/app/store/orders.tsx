@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
@@ -9,12 +9,110 @@ import { supabase } from "@/lib/supabase";
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 
+
+// ── Order Tracking Timeline ───────────────────────────────────────────────────
+const TRACKING_STEPS = [
+  { key: "pending",   label: "Order Placed",      icon: "receipt-outline" },
+  { key: "paid",      label: "Payment Confirmed", icon: "card-outline" },
+  { key: "packed",    label: "Packed",            icon: "cube-outline" },
+  { key: "shipped",   label: "Shipped",           icon: "airplane-outline" },
+  { key: "delivered", label: "Delivered",         icon: "checkmark-circle-outline" },
+];
+
+// Map various status strings to our step keys
+function normalizeStatus(raw: string | undefined): string {
+  const s = (raw ?? "").toLowerCase().replace(/ /g, "_");
+  // Match exact admin statuses: pending, paid, packed, shipped, delivered, completed, cancelled, refund_requested
+  if (s === "delivered" || s === "completed") return "delivered";
+  if (s === "shipped") return "shipped";
+  if (s === "packed") return "packed";
+  if (s === "paid") return "paid";
+  if (s.includes("refund") || s === "cancelled" || s === "failed") return "cancelled";
+  return "pending";
+}
+
+function OrderTrackingTimeline({ status, trackingNumber }: { status?: string; trackingNumber?: string | null }) {
+  const colors = useColors();
+  const normalized = normalizeStatus(status);
+
+  // Don't show timeline for cancelled/refund orders
+  if (normalized === "cancelled") return null;
+
+  const currentIdx = TRACKING_STEPS.findIndex((s) => s.key === normalized);
+  const activeIdx = currentIdx === -1 ? 0 : currentIdx;
+
+  return (
+    <View style={{ marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border }}>
+      <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: colors.foreground, marginBottom: 12 }}>
+        📦 Order Tracking
+      </Text>
+      {TRACKING_STEPS.map((step, idx) => {
+        const isDone = idx <= activeIdx;
+        const isCurrent = idx === activeIdx;
+        const isLast = idx === TRACKING_STEPS.length - 1;
+        return (
+          <View key={step.key} style={{ flexDirection: "row", alignItems: "flex-start" }}>
+            {/* Left column: icon + line */}
+            <View style={{ alignItems: "center", width: 32 }}>
+              <View style={{
+                width: 28, height: 28, borderRadius: 14,
+                backgroundColor: isDone ? "#0B6FAD" : colors.muted,
+                alignItems: "center", justifyContent: "center",
+                borderWidth: isCurrent ? 2.5 : 0,
+                borderColor: isCurrent ? "#17E5D3" : "transparent",
+              }}>
+                <Ionicons
+                  name={step.icon as any}
+                  size={14}
+                  color={isDone ? "#FFF" : "#9CA3AF"}
+                />
+              </View>
+              {!isLast && (
+                <View style={{
+                  width: 2, flex: 1, minHeight: 20,
+                  backgroundColor: idx < activeIdx ? "#0B6FAD" : colors.border,
+                  marginVertical: 2,
+                }} />
+              )}
+            </View>
+            {/* Right column: label */}
+            <View style={{ flex: 1, paddingLeft: 10, paddingBottom: isLast ? 0 : 16, paddingTop: 4 }}>
+              <Text style={{
+                fontSize: 13,
+                fontFamily: isCurrent ? "Inter_700Bold" : "Inter_400Regular",
+                color: isDone ? colors.foreground : colors.mutedForeground,
+              }}>
+                {step.label}
+              </Text>
+              {isCurrent && (
+                <Text style={{ fontSize: 11, color: "#0B6FAD", fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                  Current status
+                </Text>
+              )}
+              {isCurrent && step.key === "shipped" && trackingNumber && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4,
+                  backgroundColor: "#EEF7FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" }}>
+                  <Ionicons name="locate-outline" size={12} color="#0B6FAD" />
+                  <Text style={{ fontSize: 11, color: "#0B6FAD", fontFamily: "Inter_600SemiBold" }}>
+                    Tracking: {trackingNumber}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function OrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
 
   // Refund Modal States
@@ -30,9 +128,7 @@ export default function OrdersScreen() {
       setIsLoading(false);
       return;
     }
-    if (!isRefreshing) {
-      setIsLoading(true);
-    }
+    if (!isRefreshing && !hasLoadedOnce.current) setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -40,7 +136,6 @@ export default function OrdersScreen() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      console.log("[OrdersScreen] Query results for user:", user.id, "data:", data, "error:", error);
 
       if (error) {
         console.error('[Orders] Error fetching orders:', error);
@@ -56,13 +151,22 @@ export default function OrdersScreen() {
             itemsList = Array.isArray(order.items) ? order.items : [];
           }
           const dateObj = new Date(order.created_at);
-          const dateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          const dateStr = dateObj.toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }) + ", " + dateObj.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "numeric",
+            hour12: true,
+          });
           return {
             id: String(order.id),
             date: dateStr,
             status: order.status === 'refund_requested' ? 'Refund Requested' :
                     order.status ? (order.status.charAt(0).toUpperCase() + order.status.slice(1)) : 'Processing',
             rawStatus: order.status,
+            tracking_number: order.tracking_number ?? null,
             items: itemsList.map((i: any) => i.title || "Untitled Product"),
             total: Number(order.total_amount) || 0,
             tax: Number(order.tax_amount) || 0,
@@ -83,7 +187,11 @@ export default function OrdersScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadOrders(false);
+      if (!hasLoadedOnce.current) {
+        loadOrders(false);
+      } else {
+        loadOrders(true);
+      }
     }, [loadOrders])
   );
 
@@ -211,7 +319,7 @@ export default function OrdersScreen() {
           orders.map((order) => {
             const statusStyle = getStatusStyle(order.status);
             return (
-              <View key={order.id} style={[styles.orderCard, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+              <View key={order.id} style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View
                     style={[
@@ -258,12 +366,14 @@ export default function OrdersScreen() {
                         {order.shipping.phone}
                       </Text>
                     )}
+                    {/* Order Tracking Timeline */}
+                    <OrderTrackingTimeline status={order.rawStatus} trackingNumber={order.tracking_number} />
                   </View>
                 )}
                 
                 <View style={styles.actionRow}>
                   <Pressable
-                    style={[styles.invoiceBtn, { borderColor: "#D6E9F2", backgroundColor: "#FFFFFF" }]}
+                    style={[styles.invoiceBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
                     onPress={() => generateInvoice(order)}
                     disabled={sharingId === order.id}
                   >
@@ -313,7 +423,7 @@ export default function OrdersScreen() {
               Please describe your reason for requesting a refund (max 200 characters).
             </Text>
             <TextInput
-              style={[styles.textArea, { color: colors.foreground, borderColor: "#D6E9F2", backgroundColor: "#FFFFFF" }]}
+              style={[styles.textArea, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]}
               multiline
               numberOfLines={4}
               value={refundReason}

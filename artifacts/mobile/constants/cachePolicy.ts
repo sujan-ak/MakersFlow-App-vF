@@ -28,4 +28,5 @@ export const CACHE_POLICY = {
 } as const;
 
 /** Shared cache version. Bump this when any CachePayload schema changes. */
-export const CACHE_VERSION = 1;
+/** Bumped to 2: product queries now include images column **/
+export const CACHE_VERSION = 2;

@@ -1,7 +1,8 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -33,6 +34,34 @@ export default function AchievementsScreen() {
 
   const [completedCourses, setCompletedCourses] = useState<CompletedCourse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
+
+  const [viewedCerts, setViewedCerts] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadViewedCerts() {
+      try {
+        const stored = await AsyncStorage.getItem("viewed_certificates");
+        if (stored) {
+          setViewedCerts(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.error("Error loading viewed certificates:", err);
+      }
+    }
+    loadViewedCerts();
+  }, []);
+
+  const handleMarkAsViewed = async (courseId: string) => {
+    if (viewedCerts.includes(courseId)) return;
+    const updated = [...viewedCerts, courseId];
+    setViewedCerts(updated);
+    try {
+      await AsyncStorage.setItem("viewed_certificates", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error saving viewed certificates:", err);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -41,7 +70,7 @@ export default function AchievementsScreen() {
           setIsLoading(false);
           return;
         }
-        setIsLoading(true);
+        if (!hasLoadedOnce.current) setIsLoading(true);
         try {
           // Get all enrollments
           const { data: enrollments } = await supabase
@@ -217,7 +246,7 @@ export default function AchievementsScreen() {
               } else {
                 return (
                   <View key={badge.id} style={[styles.badgeItem, { opacity: 0.4 }]}>
-                    <View style={[styles.badgeIconCircle, { backgroundColor: "#E6EDF0" }]}>
+                    <View style={[styles.badgeIconCircle, { backgroundColor: colors.muted }]}>
                       <Ionicons name={badge.icon as any} size={28} color="#8A9CA6" />
                       <View style={[styles.lockOverlay, { backgroundColor: "rgba(0,0,0,0.1)" }]}>
                         <Ionicons name="lock-closed" size={14} color="#FFF" />
@@ -273,22 +302,46 @@ export default function AchievementsScreen() {
                       Completed · {formatDate(course.completedAt)}
                     </Text>
 
-                    <Pressable
-                      style={[styles.viewCertBtn, { backgroundColor: colors.primary }]}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/certificate",
-                          params: {
-                            courseName: course.courseTitle,
-                            studentName: user?.name ?? "",
-                            completionDate: course.completedAt,
-                          },
-                        })
-                      }
-                    >
-                      <Feather name="download" size={12} color="#FFF" style={{ marginRight: 4 }} />
-                      <Text style={[styles.viewCertText, TEXT_STYLES.label, { color: "#FFF", fontSize: 12 }]}>View & Download</Text>
-                    </Pressable>
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                      {/* View Button */}
+                      <Pressable
+                        style={[styles.viewCertBtn, { backgroundColor: "#10B981", marginTop: 0 }]}
+                        onPress={() => {
+                          handleMarkAsViewed(course.courseId);
+                          router.push({
+                            pathname: "/certificate",
+                            params: {
+                              courseName: course.courseTitle,
+                              studentName: user?.name ?? "",
+                              completionDate: course.completedAt,
+                            },
+                          });
+                        }}
+                      >
+                        <Feather name="eye" size={12} color="#FFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.viewCertText, TEXT_STYLES.label, { color: "#FFF", fontSize: 12 }]}>View</Text>
+                      </Pressable>
+
+                      {/* Download Button */}
+                      <Pressable
+                        style={[styles.viewCertBtn, { backgroundColor: colors.primary, marginTop: 0 }]}
+                        onPress={() => {
+                          handleMarkAsViewed(course.courseId);
+                          router.push({
+                            pathname: "/certificate",
+                            params: {
+                              courseName: course.courseTitle,
+                              studentName: user?.name ?? "",
+                              completionDate: course.completedAt,
+                              autoDownload: "true",
+                            },
+                          });
+                        }}
+                      >
+                        <Feather name="download" size={12} color="#FFF" style={{ marginRight: 4 }} />
+                        <Text style={[styles.viewCertText, TEXT_STYLES.label, { color: "#FFF", fontSize: 12 }]}>Download</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
               ))}

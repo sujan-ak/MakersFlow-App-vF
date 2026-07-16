@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -64,6 +65,9 @@ export default function RegisterScreen() {
   const [confirmFocused, setConfirmFocused] = useState(false);
   const [gradeFocused, setGradeFocused] = useState(false);
   const [schoolFocused, setSchoolFocused] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
   const strength = getPasswordStrength(password);
   const getStrengthColor = () => {
@@ -166,14 +170,255 @@ export default function RegisterScreen() {
     setSchoolError("");
     setError("");
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // ── Maximum Strict Email Validation ─────────────────────────────────────
+    // RFC 5321 / RFC 5322 compliant + pattern detection + disposable blocklist
+
+    const BLOCKED_DOMAINS = new Set([
+      // Disposable / temp email services
+      "mailinator.com", "guerrillamail.com", "tempmail.com", "throwam.com",
+      "yopmail.com", "sharklasers.com", "spam4.me", "trashmail.com", "maildrop.cc",
+      "10minutemail.com", "temp-mail.org", "fakeinbox.com", "dispostable.com",
+      "mailnull.com", "spamgourmet.com", "trashmail.net", "throwaway.email",
+      "getairmail.com", "mailnesia.com", "spamhereplease.com", "tempinbox.com",
+      "discard.email", "filzmail.com", "tempr.email", "spambox.us",
+      "spamfree24.org", "spamgob.com", "mytrashmail.com", "mt2015.com",
+      "spamtrap.ro", "objectmail.com", "spam.la", "binkmail.com", "bobmail.info",
+      "chammy.info", "devnullmail.com", "letthemeatspam.com", "smellfear.com",
+      "uggsrock.com", "yapped.net", "garbagemail.org", "junk1.com", "spamcorpse.com",
+      "deadaddress.com", "despam.it", "dontreg.com", "dump-email.info",
+      "e4ward.com", "fakedemail.com", "fakemailz.com", "filthymail.org",
+      "girlsindetention.com", "greensloth.com", "haltospam.com", "hatespam.org",
+      "ieatspam.eu", "ieatspam.info", "inoutmail.de", "ipoo.org", "iwi.net",
+      "jetable.fr.nf", "jnxjn.com", "junk.burner.at", "killmail.com", "klzlk.com",
+      "kurzepost.de", "lhsdv.com", "lifebyfood.com", "link2mail.net", "lol.ovpn.to",
+      "lookugly.com", "lortemail.dk", "lr78.com", "m21.cc", "mail.mezimages.net",
+      "mail2rss.org", "mailblocks.com", "mailbucket.org", "mailcat.biz",
+      "mailchop.com", "mailcker.com", "mailde.org", "maileater.com",
+      "mailexpire.com", "mailfreeonline.com", "mailguard.me", "mailimate.com",
+      "mailme.lv", "mailme24.com", "mailmetrash.com", "mailmoat.com",
+      "mailnew.com", "mailnull.com", "mailrobot.com", "mailscrap.com",
+      "mailshell.com", "mailsiphon.com", "mailslapping.com", "mailslite.com",
+      "mailtemp.info", "mailtome.de", "mailtothis.com", "mailtrash.net",
+      "mailtv.net", "mailtv.tv", "mailzilla.com", "mailzilla.org",
+      "makemetheking.com", "mbx.cc", "mega.zik.dj", "meinspamschutz.de",
+      "meltmail.com", "messagebeamer.de", "mezimages.net", "mfsa.ru",
+      "mierdamail.com", "mintemail.com", "misterpinball.de", "moncourrier.fr.nf",
+      "monemail.fr.nf", "monmail.fr.nf", "msa.minsmail.com", "mt2009.com",
+      "mucincanon.com", "muehlacker.org", "myfastmail.com", "mymacmail.com",
+      "neverbox.com", "no-spam.ws", "nobulk.com", "noclickemail.com",
+      "nogmailspam.info", "nomail.pw", "nomail.xl.cx", "nomail2me.com",
+      "nomorespamemails.com", "nonspam.eu", "nonspammer.de", "noref.in",
+      "norseforce.com", "nospam.ze.tc", "nospam4.us", "nospamfor.us",
+      "nospammail.net", "nospamthanks.info", "notmailinator.com", "nowhere.org",
+      "nowmymail.com", "nwldx.com", "obobbo.com", "odaymail.com",
+      "odnorazovoe.ru", "one-time.email", "oneoffemail.com", "oneoffmail.com",
+      "onewaymail.com", "online.ms", "oopi.org", "opayq.com",
+      "ordinaryamerican.net", "otherinbox.com", "ourklips.com", "outboxed.email",
+      "ovpn.to", "owlpic.com", "pancakemail.com", "pcusers.otherinbox.com",
+      "pimpedupmyspace.com", "pjjkp.com", "plexolan.de", "poczta.onet.pl",
+      "politikerclub.de", "poofy.org", "pookmail.com", "pop3.xyz",
+      "postacin.com", "powered.name", "privacy.net", "proxymail.eu",
+      "prtnx.com", "prtz.eu", "punkass.com", "putthisinyourspamdatabase.com",
+      "qq.com", "quickinbox.com", "rcpt.at", "re-gister.com",
+      "recode.me", "redo.cd", "regbypass.comsafe-mail.net", "regspaces.tk",
+      "rejectmail.com", "rented.at", "rhyta.com", "rmqkr.net",
+      "royal.net", "rppkn.com", "rtrtr.com", "s0ny.net", "safe-mail.net",
+      "safersignup.de", "safetymail.info", "safetypost.de", "sandelf.de",
+      "sast.ro", "schafmail.de", "schrott-email.de", "secretemail.de",
+      "secure-mail.biz", "senseless-entertainment.com", "services391.com",
+      "sharedmailbox.org", "shieldedmail.com", "shiftmail.com", "shitmail.me",
+      "shitmail.org", "shitware.nl", "shmeriously.com", "shortmail.net",
+      "sibmail.com", "sinnlos-mail.de", "skeefmail.com", "slo.net",
+      "slopsbox.com", "slushmail.com", "smashmail.de", "smellfear.com",
+      "snakemail.com", "sneakemail.com", "sneakmail.de", "snkmail.com",
+      "sofimail.com", "sofort-mail.de", "sogetthis.com", "solopilotos.com",
+      "soodonims.com", "spam.la", "spam4.me", "spamavert.com",
+      "spambob.com", "spambob.net", "spambob.org", "spamcannon.com",
+      "spamcannon.net", "spamcero.com", "spamcon.org", "spamcorpse.com",
+      "spamdam.com", "spamex.com", "spamfree.eu", "spamgoes.in",
+      "spamgourmet.com", "spamgourmet.net", "spamgourmet.org", "spamherelots.com",
+      "spamhole.com", "spamify.com", "spaminmotion.com", "spamkill.info",
+      "spaml.com", "spaml.de", "spammotel.com", "spamoff.de",
+      "spamslicer.com", "spamspot.com", "spamthis.co.uk", "spamthisplease.com",
+      "spamtrail.com", "speakeasy.org", "speed.1s.fr", "spikio.com",
+      "spoofmail.de", "stuffmail.de", "suburbanthug.com", "supergreatmail.com",
+      "supermailer.jp", "superrito.com", "superstachel.de", "suremail.info",
+      "svk.jp", "sweetxxx.de", "tafmail.com", "tagyourself.com",
+      "techemail.com", "tempalias.com", "tempe-mail.com", "tempemail.biz",
+      "tempemail.com", "tempemail.net", "tempemail.org", "tempinbox.co.uk",
+      "tempinbox.com", "tempmail.eu", "tempmail.it", "tempmail2.com",
+      "tempomail.fr", "temporarily.de", "temporarioemail.com.br",
+      "temporaryemail.net", "temporaryemail.us", "temporaryforwarding.com",
+      "temporaryinbox.com", "temporarymailaddress.com", "tempsky.com",
+      "tempthe.net", "tempymail.com", "thanksnospam.info", "thecloudindex.com",
+      "thisisnotmyrealemail.com", "throam.com", "throwaways.net",
+      "throwam.com", "throwaway.email", "throweymail.com", "throwit.net",
+      "throwit.us", "thunk.email", "tilien.com", "tittbit.in",
+      "tizi.com", "tm2mail.com", "tmail.com", "tmail.io",
+      "tmailinator.com", "toiea.com", "tokenmail.de", "toomail.biz",
+      "topranklist.de", "tradermail.info", "trash-mail.at", "trash-mail.com",
+      "trash-mail.de", "trash-mail.ga", "trash-mail.io", "trash-mail.ml",
+      "trash2009.com", "trashdevil.com", "trashdevil.de", "trashmail.app",
+      "trashmail.at", "trashmail.com", "trashmail.de", "trashmail.es",
+      "trashmail.io", "trashmail.me", "trashmail.net", "trashmail.org",
+      "trashmail.xyz", "trashmailer.com", "trashmailer.de", "trbvm.com",
+      "trillianpro.com", "tryalert.com", "turual.com", "twinmail.de",
+      "tyldd.com", "uggsrock.com", "umail.net", "uroid.com",
+      "us.af", "uyhip.com", "venompen.com", "veryrealemail.com",
+      "vidchart.com", "viditag.com", "viewcastmedia.com", "viewcastmedia.net",
+      "viewcastmedia.org", "viralplays.com", "vkcode.ru", "vomoto.com",
+      "vomoto.net", "vpn.st", "vsimcard.com", "vubby.com",
+      "walala.org", "walkmail.net", "webemail.me", "webm4il.info",
+      "wegwerfadresse.de", "wegwerfemail.com", "wegwerfemail.de", "wegwerfmail.de",
+      "wegwerfmail.info", "wegwerfmail.net", "wegwerfmail.org", "wetrainbayarea.com",
+      "wetrainbayarea.org", "wh4f.org", "whyspam.me", "wickmail.net",
+      "wilemail.com", "willhackforfood.biz", "willselfdestruct.com", "winemaven.info",
+      "wronghead.com", "wuzupmail.net", "www.e4ward.com", "xagloo.com",
+      "xemaps.com", "xents.com", "xmail.net", "xmaily.com",
+      "xoxy.net", "xup.in", "xww.ro", "xyz.am",
+      "yapped.net", "yepmail.net", "yyy.com", "z1p.biz",
+      "za.com", "zehnminuten.de", "zehnminutenmail.de", "zippymail.info",
+      "zoaxe.com", "zoemail.com", "zoemail.net", "zoemail.org",
+      "zomg.info", "zxcv.com", "zxcvbnm.com", "zzz.com",
+    ]);
+
+    // Known good domains — skip extra checks
+    const TRUSTED_DOMAINS = new Set([
+      "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com",
+      "live.com", "msn.com", "protonmail.com", "rediffmail.com", "ymail.com",
+      "me.com", "mac.com", "googlemail.com", "yahoo.in", "yahoo.co.in",
+      "aol.com", "zoho.com", "fastmail.com", "tutanota.com", "pm.me",
+    ]);
+
+    // Keyboard pattern strings (lazy/fake emails)
+    const KEYBOARD_PATTERNS = [
+      "qwerty", "asdfgh", "zxcvbn", "qazwsx", "1234567", "abcdef",
+      "aaaaaa", "bbbbbb", "test123", "noemail", "noreply", "example",
+      "fakeemail", "temp", "dummy", "delete", "trash", "spam",
+    ];
+
+    function validateEmailStrict(rawEmail: string): string | null {
+      const email = rawEmail.trim().toLowerCase();
+
+      // 1. Must not be empty
+      if (!email) return "Email is required";
+
+      // 2. Max total length (RFC 5321)
+      if (email.length > 254) return "Email address is too long";
+
+      // 3. Must contain exactly one @
+      const atCount = (email.match(/@/g) || []).length;
+      if (atCount === 0) return "Email must contain @";
+      if (atCount > 1) return "Email cannot contain more than one @";
+
+      const [localPart, domain] = email.split("@");
+
+      // 4. Local part checks (RFC 5321: max 64 chars)
+      if (!localPart || localPart.length === 0) return "Email is missing the part before @";
+      if (localPart.length > 64) return "Email username is too long (max 64 characters)";
+
+      // 5. Local part cannot start or end with dot
+      if (localPart.startsWith(".") || localPart.endsWith(".")) {
+        return "Email username cannot start or end with a dot";
+      }
+
+      // 6. No consecutive dots in local part
+      if (localPart.includes("..")) return "Email username cannot contain consecutive dots";
+
+      // 7. Local part valid characters only (RFC 5321)
+      if (!/^[a-zA-Z0-9._%+\-]+$/.test(localPart)) {
+        return "Email username contains invalid characters";
+      }
+
+      // 8. Domain must exist
+      if (!domain || domain.length === 0) return "Email is missing the domain (e.g. gmail.com)";
+
+      // 9. Domain max length
+      if (domain.length > 255) return "Email domain is too long";
+
+      // 10. Domain must contain at least one dot
+      if (!domain.includes(".")) return "Email domain must contain a dot (e.g. gmail.com)";
+
+      // 11. No consecutive dots in domain
+      if (domain.includes("..")) return "Email domain cannot contain consecutive dots";
+
+      // 12. Domain parts check
+      const domainParts = domain.split(".");
+      for (const part of domainParts) {
+        if (part.length === 0) return "Email domain has an empty section";
+        if (part.length > 63) return "Email domain section is too long";
+        if (part.startsWith("-") || part.endsWith("-")) {
+          return "Email domain cannot start or end with a hyphen";
+        }
+        if (!/^[a-zA-Z0-9\-]+$/.test(part)) {
+          return "Email domain contains invalid characters";
+        }
+      }
+
+      // 13. TLD must be 2-10 alpha characters only (no numbers)
+      const tld = domainParts[domainParts.length - 1];
+      if (!/^[a-zA-Z]{2,10}$/.test(tld)) {
+        return "Email has an invalid domain extension (e.g. .com, .in, .org)";
+      }
+
+      // 14. Domain cannot be all numbers
+      if (domainParts.slice(0, -1).every((p) => /^[0-9]+$/.test(p))) {
+        return "Email domain cannot be all numbers";
+      }
+
+      // 15. Blocked disposable/temp email domains
+      if (BLOCKED_DOMAINS.has(domain)) {
+        return "Disposable/temporary email addresses are not allowed";
+      }
+
+      // 16. Trusted domain fast-pass (skip remaining checks)
+      if (TRUSTED_DOMAINS.has(domain)) return null;
+
+      // 17. Domain must have at least 2 parts
+      if (domainParts.length < 2) return "Email domain is invalid";
+
+      // 18. Domain name (before TLD) must be at least 2 chars
+      const domainName = domainParts[domainParts.length - 2];
+      if (domainName.length < 2) return "Email domain name is too short";
+
+      // 19. Keyboard pattern / lazy email detection
+      const fullEmail = email.replace("@", "").replace(".", "");
+      for (const pattern of KEYBOARD_PATTERNS) {
+        if (fullEmail.includes(pattern)) {
+          return "Please enter your real email address";
+        }
+      }
+
+      // 20. Local part must have at least 2 characters
+      if (localPart.length < 2) return "Email username is too short";
+
+      // 21. Cannot be all same character (e.g. aaa@aaa.com)
+      if (/^(.)\1+$/.test(localPart)) {
+        return "Please enter a valid email address";
+      }
+
+      // 22. Local part cannot be only numbers
+      if (/^[0-9]+$/.test(localPart)) {
+        return "Email username cannot be only numbers";
+      }
+
+      return null; // all checks passed
+    }
+
     let hasError = false;
 
     if (!name) { setNameError("Name is required"); hasError = true; }
+    const phoneDigits = phone.replace(/[^0-9]/g, "");
+    if (phoneDigits.length !== 10) {
+      setPhoneError("Enter a valid 10-digit Indian mobile number"); hasError = true;
+    }
     if (!email) {
       setEmailError("Email is required"); hasError = true;
-    } else if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email address"); hasError = true;
+    } else {
+      const emailValidationError = validateEmailStrict(email);
+      if (emailValidationError) {
+        setEmailError(emailValidationError); hasError = true;
+      }
     }
     if (!password) {
       setPasswordError("Password is required"); hasError = true;
@@ -192,7 +437,7 @@ export default function RegisterScreen() {
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const result = await register(name, email, password, grade, school);
+    const result = await register(name, email, password, grade, school, ("+91" + phone.trim()));
     setLoading(false);
 
     if (result.success) {
@@ -201,6 +446,16 @@ export default function RegisterScreen() {
         // Do NOT upload the avatar (no authenticated session → storage RLS would
         // reject it) and do NOT navigate into the app. Show the verification
         // prompt instead; the user must verify then sign in normally.
+        if (avatarUri) {
+          try {
+            await AsyncStorage.setItem(
+              `pending_avatar_${email.toLowerCase().trim()}`,
+              avatarUri
+            );
+          } catch (err) {
+            console.error("Failed to save pending avatar:", err);
+          }
+        }
         setRegisteredEmail(email);
         setEmailVerificationSent(true);
         return;
@@ -281,6 +536,14 @@ export default function RegisterScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.foreground }]}>Create account</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Join thousands of students on MAKERSFLOW</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 4, marginBottom: 8 }}>
+          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Already have an account? </Text>
+          <Pressable onPress={() => router.push("/(auth)/login")}>
+            <Text style={{ color: "#0B6FAD", fontFamily: "Inter_700Bold", fontSize: 14 }}>Sign In →</Text>
+          </Pressable>
+        </View>
+        <View>
         </View>
 
         <View style={styles.form}>
@@ -444,6 +707,43 @@ export default function RegisterScreen() {
               />
             </View>
             {confirmError ? <Text style={styles.fieldError}>{confirmError}</Text> : null}
+          </View>
+
+          {/* Phone Number field - Indian +91 only */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: colors.foreground }]}>
+              Phone Number <Text style={{ color: "#EF4444" }}>*</Text>
+            </Text>
+            <View style={[styles.inputWrapper, {
+              borderColor: phoneError ? "#DC2626" : (phoneFocused ? "#0B6FAD" : colors.border),
+              backgroundColor: colors.card, paddingLeft: 0, gap: 0,
+            }]}>
+              <View style={{
+                flexDirection: "row", alignItems: "center", gap: 6,
+                backgroundColor: "#EEF7FF", borderRadius: 8,
+                paddingHorizontal: 10, paddingVertical: 8, marginRight: 8,
+                borderRightWidth: 1, borderRightColor: "#D6E9F2",
+              }}>
+                <Text style={{ fontSize: 16 }}>🇮🇳</Text>
+                <Text style={{ color: "#0B6FAD", fontSize: 14, fontFamily: "Inter_600SemiBold" }}>+91</Text>
+              </View>
+              <TextInput
+                style={[styles.input, { color: colors.foreground, flex: 1 }]}
+                value={phone}
+                onChangeText={(text) => {
+                  const digits = text.replace(/[^0-9]/g, "").slice(0, 10);
+                  setPhone(digits);
+                  setPhoneError("");
+                }}
+                onFocus={() => setPhoneFocused(true)}
+                onBlur={() => setPhoneFocused(false)}
+                placeholder="98765 43210"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+            </View>
+            {phoneError ? <Text style={styles.fieldError}>{phoneError}</Text> : null}
           </View>
 
           {/* Grade field */}
@@ -627,7 +927,7 @@ const styles = StyleSheet.create({
     height: 90,
     borderRadius: 45,
     borderWidth: 1.5,
-    borderColor: "#D6E9F2",
+    borderColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",

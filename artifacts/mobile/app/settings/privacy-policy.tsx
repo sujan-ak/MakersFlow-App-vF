@@ -31,10 +31,10 @@ export default function PrivacyPolicyScreen() {
         </Text>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>1. Information We Collect</Text>
-        
+
         <Text style={[styles.subheading, { color: colors.foreground }]}>Account Information</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
-          When you register for an MakersFlow account, we collect:
+          When you register for a MakersFlow account, we collect:
         </Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Full name</Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Email address</Text>
@@ -111,7 +111,17 @@ export default function PrivacyPolicyScreen() {
           • <Text style={{ fontFamily: "Inter_600SemiBold" }}>Razorpay</Text>: Payment processing for course purchases and store transactions. See Razorpay's privacy policy at razorpay.com/privacy
         </Text>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>6. Data Retention and Deletion</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>6. Refund & Replacement Policy</Text>
+        <Text style={[styles.body, { color: colors.foreground }]}>
+          All sales are final. We do not offer refunds or replacements after a purchase has been completed.
+        </Text>
+        <Text style={[styles.body, { color: colors.foreground }]}>
+          If you receive a damaged, defective, or incorrect product, please contact our Support Team within{" "}
+          <Text style={{ fontFamily: "Inter_600SemiBold" }}>48 hours of delivery</Text> with your order details, clear photos, and an{" "}
+          <Text style={{ fontFamily: "Inter_600SemiBold" }}>unboxing video (mandatory)</Text>. After verification, we will review your request and provide an appropriate resolution if eligible.
+        </Text>
+
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>7. Data Retention and Deletion</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
           We retain your personal information for as long as your account is active or as needed to provide you services. If you wish to delete your account and all associated data, you may request deletion by contacting our support team via Settings → Help & Support or by emailing team.makersflow@gmail.com.
         </Text>
@@ -119,29 +129,31 @@ export default function PrivacyPolicyScreen() {
           Upon receiving a deletion request, we will delete your personal information within 30 days, except where we are required to retain certain information for legal or regulatory purposes.
         </Text>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>7. Your Rights</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>8. Your Rights</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>You have the right to:</Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Access your personal information</Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Correct inaccurate or incomplete data</Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Request deletion of your account and personal data</Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Withdraw consent for optional data collection</Text>
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Export your learning data</Text>
-
         <Text style={[styles.body, { color: colors.foreground }]}>
           To exercise any of these rights, please contact us at team.makersflow@gmail.com.
         </Text>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>8. Changes to This Privacy Policy</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>9. Changes to This Privacy Policy</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
           We may update this Privacy Policy from time to time. When we make significant changes, we will notify you through the app or via email. Your continued use of MakersFlow after such changes constitutes your acceptance of the updated policy.
         </Text>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>9. Contact Us</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>10. Contact Us</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
           If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us at:
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Email: team.makersflow@gmail.com
+        </Text>
+        <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          Phone: +91 83095 89858
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Support: Settings → Help & Support

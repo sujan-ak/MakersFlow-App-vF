@@ -24,12 +24,6 @@ const SETTINGS = [
     sub: "Manage your alerts",
     route: "/settings/notifications",
   },
-  {
-    icon: "help-circle",
-    label: "Help & Support",
-    sub: "FAQs, contact & feedback",
-    route: "/settings/help",
-  },
 ];
 
 export default function SettingsScreen() {

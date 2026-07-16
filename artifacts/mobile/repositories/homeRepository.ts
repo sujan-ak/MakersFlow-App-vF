@@ -139,7 +139,7 @@ async function fetchCourses(): Promise<{ courses: any[]; popularCourses: any[] }
       isFree: c.is_free,
       thumbnail: firstThumbnailUrl(c.thumbnail_url)
         ? { uri: firstThumbnailUrl(c.thumbnail_url)! }
-        : require('@/assets/images/course_robotics.png'),
+        : require('@/assets/images/courses/course_robotics.png'),
       instructor: c.profiles?.full_name || '',
       rating,
       reviews,
@@ -153,33 +153,54 @@ async function fetchCourses(): Promise<{ courses: any[]; popularCourses: any[] }
 async function fetchProducts(): Promise<any[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, in_stock')
+    .select('id, title, description, price, original_price, category, subcategory, thumbnail_url, images, videos, in_stock')
     .or('status.eq.available,status.eq.active')
     .neq('category', 'digital')
     .order('created_at', { ascending: false })
     .limit(8);
   if (error) throw error;
   const fallbacks = [
-    require('@/assets/images/product_kit_1.png'),
-    require('@/assets/images/product_kit_2.png'),
-    require('@/assets/images/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.png'),
+    require('@/assets/images/products/product_kit_2.png'),
+    require('@/assets/images/products/product_kit_3.png'),
   ];
-  return (data ?? []).map((row: any, idx: number) => ({
-    id: String(row.id),
-    title: row.title || 'Untitled Product',
-    category: 'physical',
-    subcategory: row.subcategory || 'Physical Kits',
-    price: Number(row.price) || 0,
-    originalPrice: Number(row.original_price) || Number(row.price) || 0,
-    thumbnail: firstThumbnailUrl(row.thumbnail_url)
-      ? { uri: firstThumbnailUrl(row.thumbnail_url)! }
-      : fallbacks[idx % 3],
-    description: row.description || 'No description available.',
-    rating: 0,
-    reviews: 0,
-    inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
-    features: [],
-  }));
+  return (data ?? []).map((row: any, idx: number) => {
+    const thumbUrl = firstThumbnailUrl(row.thumbnail_url);
+    const thumbnail = thumbUrl ? { uri: thumbUrl } : fallbacks[idx % 3];
+
+    // Build images array from admin-saved images column
+    let images: { uri: string }[] | undefined;
+    if (row.images) {
+      let raw = row.images;
+      if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = []; } }
+      if (Array.isArray(raw)) {
+        const urls: string[] = raw.map((item: any) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object') return item.uri || item.url || item.src || '';
+          return '';
+        }).filter((u: string) => u.startsWith('http'));
+        const ordered = thumbUrl ? [thumbUrl, ...urls.filter((u: string) => u !== thumbUrl)] : urls;
+        const unique = Array.from(new Set(ordered)).map((u: string) => ({ uri: u }));
+        if (unique.length > 0) images = unique;
+      }
+    }
+
+    return {
+      id: String(row.id),
+      title: row.title || 'Untitled Product',
+      category: 'physical',
+      subcategory: row.subcategory || 'Physical Kits',
+      price: Number(row.price) || 0,
+      originalPrice: Number(row.original_price) || Number(row.price) || 0,
+      thumbnail,
+      images,
+      description: row.description || 'No description available.',
+      rating: 0,
+      reviews: 0,
+      inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+      features: [],
+    };
+  });
 }
 
 async function fetchProgress(userId: string): Promise<HomeProgress> {
@@ -206,9 +227,29 @@ async function fetchProgress(userId: string): Promise<HomeProgress> {
   const learningStreak        = streakResult.current;
   const longestStreak         = streakResult.longest;
   const totalLessonsCompleted = lpData ? lpData.filter((p) => p.is_completed).length : 0;
-  const totalHoursLearned     = lpData
-    ? Number((lpData.reduce((s, p) => s + (p.time_spent_secs || 0), 0) / 3600).toFixed(1))
-    : 0;
+
+  // Learning time reflects real lesson durations: a completed lesson credits
+  // its full published duration; in-progress lessons credit actual watch time.
+  let totalHoursLearned = 0;
+  if (lpData && lpData.length > 0) {
+    const touchedIds = Array.from(new Set(lpData.map((p) => p.lesson_id).filter(Boolean)));
+    const durationById = new Map<number, number>();
+    if (touchedIds.length > 0) {
+      const { data: lessonRows } = await supabase
+        .from('lessons')
+        .select('id, duration_secs')
+        .in('id', touchedIds);
+      (lessonRows ?? []).forEach((l: any) => {
+        durationById.set(Number(l.id), Number(l.duration_secs) || 0);
+      });
+    }
+    const creditedTotalSecs = lpData.reduce((s, p) => {
+      const watched = p.time_spent_secs || 0;
+      const duration = durationById.get(Number(p.lesson_id)) || 0;
+      return s + (p.is_completed ? Math.max(watched, duration) : watched);
+    }, 0);
+    totalHoursLearned = Number((creditedTotalSecs / 3600).toFixed(1));
+  }
 
   return { enrolledCourses, learningStreak, longestStreak, totalLessonsCompleted, totalHoursLearned };
 }

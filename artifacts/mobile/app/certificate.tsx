@@ -18,7 +18,7 @@ function getMediaLibrary(): typeof import('expo-media-library') | null {
     return null;
   }
 }
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -210,12 +210,11 @@ function getCertificateHtml(
 export default function CertificateScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { courseName, studentName, completionDate, daysCompleted, autoDownload } = useLocalSearchParams<{
+  const { courseName, studentName, completionDate, daysCompleted } = useLocalSearchParams<{
     courseName: string;
     studentName: string;
     completionDate: string;
     daysCompleted?: string;
-    autoDownload?: string;
   }>();
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -376,15 +375,6 @@ export default function CertificateScreen() {
       setIsGenerating(false);
     }
   };
-
-  useEffect(() => {
-    if (autoDownload === "true") {
-      const timer = setTimeout(() => {
-        handleDownload();
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [autoDownload]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

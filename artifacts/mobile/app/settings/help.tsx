@@ -9,7 +9,10 @@ const FAQS = [
   { q: "How do I enroll in a course?", a: "Tap on any course, then tap 'Enroll Now' or 'Enroll for Free'. Free courses are instantly accessible." },
   { q: "Can I download course resources?", a: "Yes! Once enrolled, go to the learning screen and tap on the Resources tab to download PDFs and study material." },
   { q: "How do I track my progress?", a: "Your progress is tracked automatically as you complete modules. View it on the course detail page or your Profile." },
-  { q: "What is the refund & replacement policy for physical kits?", a: "All sales are final. We do not offer refunds or replacements after a purchase has been completed.\n\nIf you receive a damaged, defective, or incorrect product, please contact our Support Team within 48 hours of delivery with your order details and clear photos and an unboxing video (mandatory). After verification, we will review your request and provide an appropriate resolution if eligible." },
+  {
+    q: "What is the refund & replacement policy?",
+    a: "All sales are final. We do not offer refunds or replacements after a purchase has been completed.\n\nIf you receive a damaged, defective, or incorrect product, please contact our Support Team within 48 hours of delivery with your order details, clear photos, and an unboxing video (mandatory). After verification, we will review your request and provide an appropriate resolution if eligible.",
+  },
   { q: "How do I access digital products after purchase?", a: "Digital products are available immediately in your Profile under 'My Orders'. You'll also receive an email with download links." },
 ];
 
@@ -33,7 +36,7 @@ export default function HelpScreen() {
         contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Contact options */}
+        {/* Contact card */}
         <View style={[styles.contactCard, { backgroundColor: "#0B6FAD" }]}>
           <View style={styles.contactRow}>
             <Ionicons name="mail" size={20} color="#FFF" />
@@ -52,12 +55,28 @@ export default function HelpScreen() {
           </View>
         </View>
 
+        {/* Refund policy highlight card */}
+        <View style={[styles.policyCard, { backgroundColor: "#FFF7ED", borderColor: "#FED7AA" }]}>
+          <View style={styles.policyCardHeader}>
+            <Ionicons name="information-circle" size={18} color="#C2410C" />
+            <Text style={[styles.policyCardTitle, { color: "#C2410C" }]}>Refund & Replacement Policy</Text>
+          </View>
+          <Text style={[styles.policyCardBody, { color: "#7C2D12" }]}>
+            All sales are final. We do not offer refunds or replacements after a purchase has been completed.
+          </Text>
+          <Text style={[styles.policyCardBody, { color: "#7C2D12", marginTop: 6 }]}>
+            If you receive a damaged, defective, or incorrect product, contact us within{" "}
+            <Text style={{ fontFamily: "Inter_600SemiBold" }}>48 hours of delivery</Text> with order details, clear photos, and an{" "}
+            <Text style={{ fontFamily: "Inter_600SemiBold" }}>unboxing video (mandatory)</Text>. After verification, we will review and resolve if eligible.
+          </Text>
+        </View>
+
         <Text style={[styles.faqTitle, { color: colors.foreground }]}>Frequently Asked Questions</Text>
 
         {FAQS.map((faq, idx) => (
           <Pressable
             key={idx}
-            style={[styles.faqItem, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}
+            style={[styles.faqItem, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => setExpanded(expanded === idx ? null : idx)}
           >
             <View style={styles.faqHeader}>
@@ -94,6 +113,10 @@ const styles = StyleSheet.create({
   contactLabel: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular" },
   contactValue: { fontSize: 15, fontFamily: "Fredoka_700Bold", color: "#FFF" },
   contactDivider: { height: 1 },
+  policyCard: { borderRadius: 14, borderWidth: 1.5, padding: 16, gap: 4 },
+  policyCardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  policyCardTitle: { fontSize: 14, fontFamily: "Fredoka_700Bold" },
+  policyCardBody: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
   faqTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
   faqItem: { borderRadius: 14, borderWidth: 1.5, padding: 16, gap: 8 },
   faqHeader: { flexDirection: "row", alignItems: "center", gap: 10 },

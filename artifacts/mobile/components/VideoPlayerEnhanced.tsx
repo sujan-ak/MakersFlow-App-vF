@@ -16,7 +16,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Slider from "@react-native-community/slider";
-const SliderComponent = Slider as any;
 import { useColors } from "@/hooks/useColors";
 import { PlaybackSpeedSelector } from "./PlaybackSpeedSelector";
 import { router } from "expo-router";
@@ -772,7 +771,7 @@ export function VideoPlayerEnhanced({
           {/* Controls Bar */}
           <View style={styles.bottomControlBar}>
             {/* Progress Slider (Matching volume bar slider style) */}
-            <SliderComponent
+            <Slider
               style={styles.progressSlider}
               value={currentTime}
               minimumValue={0}
@@ -797,7 +796,7 @@ export function VideoPlayerEnhanced({
                 </Pressable>
 
                 {showVolumeBar && (
-                  <SliderComponent
+                  <Slider
                     style={styles.volumeSlider}
                     value={isMuted ? 0 : volume}
                     minimumValue={0}
@@ -1118,7 +1117,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     zIndex: 100,
   },
   controlsRow: {

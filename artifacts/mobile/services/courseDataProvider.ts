@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 export async function getCourseById(courseId: string | number) {
   const { data, error } = await supabase
     .from('courses')
-    .select('id, title, slug, category, level, price, is_free, thumbnail_url, description')
+    .select('id, title, slug, category, level, price, is_free, thumbnail_url, description, images')
     .eq('id', Number(courseId))
     .eq('is_published', true)
     .single();

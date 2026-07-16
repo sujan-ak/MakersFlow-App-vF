@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 32,
     borderWidth: 1.5,
-    borderColor: "#D6E9F2",
+    borderColor: "#E5E7EB",
   },
 
   // Icon area — pale aqua rounded square
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     lineHeight: 22,
-    color: "#5A7A8C",
+    color: "#6B7280",
     marginBottom: 32,
   },
 
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   resendLabel: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
-    color: "#5A7A8C",
+    color: "#6B7280",
   },
   resendLink: {
     fontSize: 14,

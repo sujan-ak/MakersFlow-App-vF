@@ -57,14 +57,14 @@ function CategoryGrid({ onCategoryPress }: { onCategoryPress: (category: string)
         {CATEGORY_DETAILS.map((cat) => (
           <Pressable
             key={cat.name}
-            style={styles.catActionCard}
+            style={[styles.catActionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => onCategoryPress(cat.name)}
           >
-            <View style={styles.catIconCircle}>
-              <Ionicons name={cat.icon as any} size={28} color="#0B6FAD" />
+            <View style={[styles.catIconCircle, { backgroundColor: colors.accent }]}>
+              <Ionicons name={cat.icon as any} size={28} color={colors.accentForeground} />
             </View>
-            <Text style={styles.catCardName}>{cat.name}</Text>
-            <Text style={styles.catCardDesc} numberOfLines={2}>{cat.desc}</Text>
+            <Text style={[styles.catCardName, { color: colors.foreground }]}>{cat.name}</Text>
+            <Text style={[styles.catCardDesc, { color: colors.mutedForeground }]} numberOfLines={2}>{cat.desc}</Text>
             <View style={[styles.catCardBtn, { backgroundColor: cat.btnColor }]}>
               <Text style={[styles.catCardBtnText, { color: cat.textColor }]}>{cat.btnText}</Text>
             </View>
@@ -76,6 +76,7 @@ function CategoryGrid({ onCategoryPress }: { onCategoryPress: (category: string)
 }
 
 function FeatureActionCards() {
+  const colors = useColors();
   const actions = [
     {
       title: "Start a New Project",
@@ -114,15 +115,15 @@ function FeatureActionCards() {
       {actions.map((act, idx) => (
         <Pressable
           key={idx}
-          style={styles.featureActionCard}
+          style={[styles.featureActionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => router.push(act.target as any)}
         >
           <View style={[styles.featureCardIconWrapper, { backgroundColor: act.iconBg }]}>
             <Ionicons name={act.icon as any} size={22} color={act.iconColor} />
           </View>
           <View style={styles.featureCardContent}>
-            <Text style={styles.featureCardTitle}>{act.title}</Text>
-            <Text style={styles.featureCardSub} numberOfLines={1}>{act.sub}</Text>
+            <Text style={[styles.featureCardTitle, { color: colors.foreground }]}>{act.title}</Text>
+            <Text style={[styles.featureCardSub, { color: colors.mutedForeground }]} numberOfLines={1}>{act.sub}</Text>
           </View>
           <View style={[styles.featureCardArrowBtn, { backgroundColor: act.btnBg }]}>
             <Ionicons name="chevron-forward" size={14} color={act.btnIconColor} />
@@ -141,9 +142,9 @@ interface GuestWelcomeCardProps {
 
 function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCardProps) {
   return (
-    <View style={[styles.guestCard, { backgroundColor: "#FFFFFF", borderColor: "#D6E9F2" }]}>
-      <View style={[styles.guestIconContainer, { backgroundColor: "#DCF7F4" }]}>
-        <Ionicons name="sparkles" size={32} color="#0B6FAD" />
+    <View style={[styles.guestCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.guestIconContainer, { backgroundColor: colors.accent }]}>
+        <Ionicons name="sparkles" size={32} color={colors.accentForeground} />
       </View>
       <Text style={[styles.guestTitle, { color: colors.foreground }]}>Welcome to MakersFlow</Text>
       <Text style={[styles.guestSubtitleText, { color: colors.mutedForeground }]}>
@@ -157,7 +158,7 @@ function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCar
           <Text style={styles.guestPrimaryBtnText}>Sign In</Text>
         </Pressable>
         <Pressable
-          style={[styles.guestSecondaryBtn, { borderColor: "#D6E9F2" }]}
+          style={[styles.guestSecondaryBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={onBrowseCourses}
         >
           <Text style={[styles.guestSecondaryBtnText, { color: colors.foreground }]}>Browse Courses</Text>
@@ -322,29 +323,16 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerButtons}>
             <Pressable
-              style={styles.whiteSquareBtn}
-              onPress={() => router.push("/notifications")}
-            >
-              <Ionicons name="notifications" size={20} color="#0B6FAD" />
-              {unreadNotifCount > 0 && (
-                <View style={[styles.notifBadge, { backgroundColor: "#FF6B00" }]}>
-                  <Text style={styles.notifBadgeText}>
-                    {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-            <Pressable
-              style={styles.whiteSquareBtn}
+              style={styles.circleHeaderBtn}
               onPress={() => router.push("/(tabs)/news")}
             >
-              <Ionicons name="document-text" size={20} color="#0B6FAD" />
+              <Ionicons name="document-text-outline" size={20} color={colors.foreground} />
             </Pressable>
             <Pressable
-              style={styles.whiteSquareBtn}
+              style={styles.circleHeaderBtn}
               onPress={() => router.push("/(tabs)/store")}
             >
-              <Ionicons name="cart" size={20} color="#0B6FAD" />
+              <Ionicons name="cart-outline" size={20} color={colors.foreground} />
             </Pressable>
           </View>
         </View>
@@ -540,7 +528,7 @@ export default function HomeScreen() {
             decelerationRate="fast"
           >
             {popularKits.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard key={product.id} product={product} variant="flat" />
             ))}
           </ScrollView>
         </View>
@@ -603,7 +591,7 @@ function StreakCarousel({
       title: "Learning Streak",
       value: `${learningStreak} days`,
       icon: "flash",
-      bgColor: "#DCF7F4",
+      bgColor: colors.accent,
       iconBg: "#FF6B00",
       label: "Active Days",
     },
@@ -612,7 +600,7 @@ function StreakCarousel({
       title: "Longest Streak",
       value: `${longestStreak} days`,
       icon: "trophy",
-      bgColor: "#DCF7F4",
+      bgColor: colors.accent,
       iconBg: "#17E5D3",
       label: "Personal Best",
     },
@@ -621,7 +609,7 @@ function StreakCarousel({
       title: "Lessons Completed",
       value: `${totalLessonsCompleted} lessons`,
       icon: "book",
-      bgColor: "#DCF7F4",
+      bgColor: colors.accent,
       iconBg: "#17E5D3",
       label: "Lessons Done",
     },
@@ -630,7 +618,7 @@ function StreakCarousel({
       title: "Learning Time",
       value: `${totalHoursLearned} hrs`,
       icon: "time",
-      bgColor: "#DCF7F4",
+      bgColor: colors.accent,
       iconBg: "#17E5D3",
       label: "Hours Learned",
     }
@@ -664,8 +652,8 @@ function StreakCarousel({
                     </View>
                   )}
                 </View>
-                <Text style={styles.streakValue}>{item.value}</Text>
-                <Text style={styles.streakLabel}>{item.label}</Text>
+                <Text style={[styles.streakValue, { color: colors.foreground }]}>{item.value}</Text>
+                <Text style={[styles.streakLabel, { color: colors.mutedForeground }]}>{item.label}</Text>
               </View>
               
               {/* Mini bar chart visual on the right in Aqua */}
@@ -717,11 +705,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
+  circleHeaderBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(15, 42, 61, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  redDotBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+  },
   whiteSquareBtn: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -730,7 +734,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
   },
   notifBadge: {
     position: "absolute",
@@ -838,9 +841,7 @@ const styles = StyleSheet.create({
   },
   catActionCard: {
     width: 170,
-    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#D6E9F2",
     borderRadius: 16,
     padding: 16,
     alignItems: "center",
@@ -854,7 +855,6 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#DCF7F4",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -862,14 +862,12 @@ const styles = StyleSheet.create({
   catCardName: {
     fontSize: 15,
     fontFamily: "Fredoka_600SemiBold",
-    color: "#0F2A3D",
     marginBottom: 6,
     textAlign: "center",
   },
   catCardDesc: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: "#5A7A8C",
     textAlign: "center",
     marginBottom: 12,
     height: 32,
@@ -975,12 +973,10 @@ const styles = StyleSheet.create({
   streakValue: {
     fontSize: 24,
     fontFamily: "Fredoka_700Bold",
-    color: "#0F2A3D",
   },
   streakLabel: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: "#5A7A8C",
   },
   miniBarChart: {
     flexDirection: "row",
@@ -1068,7 +1064,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
   },
   guestSecondaryBtnText: {
     fontSize: 15,
@@ -1084,10 +1079,8 @@ const styles = StyleSheet.create({
   featureActionCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#D6E9F2",
     padding: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -1109,13 +1102,11 @@ const styles = StyleSheet.create({
   featureCardTitle: {
     fontSize: 15,
     fontFamily: "Fredoka_600SemiBold",
-    color: "#0F2A3D",
     marginBottom: 2,
   },
   featureCardSub: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: "#5A7A8C",
   },
   featureCardArrowBtn: {
     width: 28,

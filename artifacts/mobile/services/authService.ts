@@ -17,7 +17,7 @@ export async function signInWithPassword(email: string, password: string) {
 export async function signUp(
   email: string,
   password: string,
-  metadata?: { name?: string; grade?: string; school?: string },
+  metadata?: { name?: string; grade?: string; school?: string; phone?: string },
 ) {
   return await supabase.auth.signUp({
     email,

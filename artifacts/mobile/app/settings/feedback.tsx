@@ -111,7 +111,7 @@ export default function FeedbackScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: "#D6E9F2" }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionLabel, { color: colors.foreground }]}>How would you rate your experience?</Text>
 
             <View style={styles.starsRow}>

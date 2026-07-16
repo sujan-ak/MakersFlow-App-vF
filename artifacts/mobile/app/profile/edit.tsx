@@ -1,6 +1,7 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -39,15 +40,15 @@ export default function EditProfileScreen() {
   async function handleSave() {
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const result = await updateUser({ 
-      name, 
+    const result = await updateUser({
+      name,
       phone: phone.trim() || undefined,
-      grade, 
+      grade,
       school,
-      avatar: avatarUri || undefined,
+      avatar: avatarUri, // empty string = photo removed
     });
     setLoading(false);
-    
+
     if (result.success) {
       if (router.canGoBack()) {
         router.back();
@@ -61,7 +62,7 @@ export default function EditProfileScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (status !== "granted") {
       Alert.alert(
         "Permission Required",
@@ -126,7 +127,31 @@ export default function EditProfileScreen() {
                 <Ionicons name="camera" size={16} color="#FFF" />
               </View>
             </Pressable>
-            <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: colors.primary }]}>Change Photo</Text>
+            <View style={{ flexDirection: "row", gap: 20 }}>
+              <Pressable onPress={pickImage}>
+                <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: colors.primary }]}>Change Photo</Text>
+              </Pressable>
+              {avatarUri ? (
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      // Remove the stored avatar file from Supabase storage
+                      if (avatarUri.includes("supabase.co") && avatarUri.includes("avatars")) {
+                        const filename = avatarUri.split("/").pop();
+                        if (filename) {
+                          await supabase.storage.from("avatars").remove([filename]);
+                        }
+                      }
+                    } catch {
+                      // Storage cleanup failure shouldn't block removing the photo
+                    }
+                    setAvatarUri("");
+                  }}
+                >
+                  <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: "#DC2626" }]}>Remove Photo</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
           {/* Email (Read-only) */}
@@ -273,10 +298,10 @@ const styles = StyleSheet.create({
   email: { fontSize: 14 },
   fieldGroup: { gap: 6 },
   label: { fontSize: 14, fontWeight: "600" },
-  inputWrapper: { 
-    borderRadius: 16, 
-    borderWidth: 1, 
-    paddingHorizontal: 14, 
+  inputWrapper: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
     paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",

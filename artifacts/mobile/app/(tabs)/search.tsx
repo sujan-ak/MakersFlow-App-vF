@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView,
+  RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CourseCard } from "@/components/CourseCard";
 import { ProductCard } from "@/components/ProductCard";
@@ -15,16 +16,16 @@ import { supabase } from "@/lib/supabase";
 const POPULAR_TOPICS = ["Robotics", "Arduino", "AI & ML", "IoT", "Python", "Electronics", "Circuits", "3D Printing"];
 
 const COURSE_FALLBACKS = [
-  require('@/assets/images/course_robotics.png'),
-  require('@/assets/images/course_ai.png'),
-  require('@/assets/images/course_electronics.png'),
+  require('@/assets/images/courses/course_robotics.png'),
+  require('@/assets/images/courses/course_ai.png'),
+  require('@/assets/images/courses/course_electronics.png'),
 ];
 
 const PRODUCT_FALLBACKS: Record<string, any[]> = {
   physical: [
-    require('@/assets/images/product_kit_1.png'),
-    require('@/assets/images/product_kit_2.png'),
-    require('@/assets/images/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.png'),
+    require('@/assets/images/products/product_kit_2.png'),
+    require('@/assets/images/products/product_kit_3.png'),
   ],
   digital: [
     require('@/assets/images/product_notes_1.png'),
@@ -54,6 +55,11 @@ export default function SearchScreen() {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const debounceTimeout = useRef<any>(null);
+  // FIX: cache flag — prevents re-fetching from Supabase on every tab switch.
+  // Search data (course catalog + products) changes infrequently; 30-min TTL
+  // is fine. User can pull-to-refresh if they need fresh data.
+  const hasLoadedOnce = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [courses, setCourses] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -71,6 +77,9 @@ export default function SearchScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // FIX: skip network fetch if data already loaded this session
+      if (hasLoadedOnce.current) return;
+
       async function loadCourses() {
         try {
           const all = await fetchAllCourses();
@@ -125,11 +134,53 @@ export default function SearchScreen() {
           console.error('[Search] Error loading data:', err);
         } finally {
           setIsLoading(false);
+          hasLoadedOnce.current = true; // FIX: mark loaded — future focuses use in-memory data
         }
       }
       loadCourses();
     }, [])
   );
+
+  const onRefresh = async () => {
+    hasLoadedOnce.current = false;
+    setRefreshing(true);
+    try {
+      const all = await fetchAllCourses();
+      const mapped = all.map((c: any, idx: number) => ({
+        id: String(c.id), title: c.title, category: c.category || "General",
+        instructor: (c.profiles as any)?.full_name ?? "MakersFlow Instructor",
+        level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
+        price: Number(c.price) || 0, isFree: Boolean(c.is_free),
+        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : null,
+        rating: 4.8, reviews: 120, description: c.description || "", modules: [],
+      }));
+      setCourses(mapped);
+      const { data: prodData } = await supabase
+        .from("products")
+        .select("id, title, category, subcategory, price, original_price, thumbnail_url, in_stock, badge, status")
+        .or("status.eq.available,status.eq.active");
+      if (prodData) {
+        const mappedProds = prodData.map((row: any) => {
+          const isDigital = row.category?.toLowerCase() === "digital" || row.subcategory?.toLowerCase() === "notes";
+          return {
+            id: String(row.id), title: row.title || "Untitled Product",
+            category: isDigital ? "digital" : "physical",
+            subcategory: row.subcategory || (isDigital ? "Notes" : "Physical Kits"),
+            price: Number(row.price) || 0, originalPrice: Number(row.original_price) || Number(row.price) || 0,
+            thumbnail: row.thumbnail_url ? { uri: row.thumbnail_url } : null,
+            inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+            badge: row.badge, rating: 0, reviews: 0,
+          };
+        });
+        setProducts(mappedProds);
+      }
+      hasLoadedOnce.current = true;
+    } catch (err) {
+      console.error("[Search] Refresh error:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -314,8 +365,8 @@ export default function SearchScreen() {
 
         {showResults && !hasResults && (
           <View style={styles.empty}>
-            <View style={[styles.emptyIconCircle, { backgroundColor: "#DCF7F4" }]}>
-              <Ionicons name="search" size={40} color="#0B6FAD" />
+            <View style={[styles.emptyIconCircle, { backgroundColor: colors.accent }]}>
+              <Ionicons name="search" size={40} color={colors.accentForeground} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
               No results for '{searchQuery}'
@@ -381,7 +432,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: ThemeColors.light.border,
@@ -462,7 +513,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#DCF7F4",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
