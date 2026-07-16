@@ -1,106 +1,245 @@
-# MakersFlow (Edodwaja) Workspace
+# MakersFlow
 
-Welcome to the MakersFlow (Edodwaja) monorepo. This repository contains the unified codebase for the Edodwaja universal mobile learning platform, its API server, shared database packages, and a component development sandbox.
+A mobile-first EdTech platform developed by **Edodwaja Pvt. Ltd.**
 
-## Repository Overview
+MakersFlow brings learning, assessments, engineering kits, learner progress, and student engagement into a single platform. The project is built as a monorepo containing the mobile application, backend services, shared libraries, and supporting documentation.
 
-This project is organized as a monorepo managed using `pnpm` workspaces. It includes the following components:
+---
 
-```
-c:/dev/MF/
+## Overview
+
+MakersFlow is designed to provide a complete learning experience through a modern mobile application.
+
+The platform enables users to:
+
+- Discover and enroll in courses
+- Learn through video-based content
+- Track learning progress
+- Complete quizzes and assessments
+- Earn certificates and achievements
+- Purchase engineering kits and learning resources
+- Receive announcements and notifications
+- Manage their profile and account settings
+
+---
+
+## Repository Structure
+
+```text
+.
 ├── artifacts/
-│   ├── mobile/             # Expo React Native mobile application
-│   ├── api-server/         # Express REST API backend server
-│   └── mockup-sandbox/     # Vite-based UI component sandbox
-├── lib/
-│   ├── db/                 # Drizzle ORM schema mappings & DB migrations
-│   ├── api-zod/            # Shared Zod validation schemas
-│   ├── api-spec/           # Shared API endpoint specifications
-│   └── api-client-react/   # Shared React query hooks and client stubs
-└── docs/
-    └── migrations/         # SQL migration scripts for database tables
+│   ├── mobile/              # Expo React Native application
+│   ├── api-server/          # Express backend services
+│   └── mockup-sandbox/      # UI development sandbox
+│
+├── docs/                    # Project documentation
+├── lib/                     # Shared packages and libraries
+├── scripts/                 # Development utilities
+├── supabase/                # Database resources
+│
+├── package.json
+├── pnpm-workspace.yaml
+└── PRODUCT.md
 ```
+
+---
+
+## Architecture
+
+The project follows a layered architecture that separates presentation, business logic, and data access.
+
+```text
+Screens
+    │
+    ▼
+Repositories
+    │
+    ▼
+Services
+    │
+    ▼
+Backend API / Supabase
+```
+
+This structure keeps the application modular, maintainable, and scalable as new features are introduced.
 
 ---
 
 ## Features
 
-### 1. Universal Mobile Learning App (`artifacts/mobile`)
-- **LMS Course Catalog**: Browse courses, track lesson progress, and play educational video content in-app using native player bindings.
-- **Interactive Quizzes**: Multiple-choice testing per module with custom timers and haptic feedback.
-- **Storefront**: Purchase physical kit components (Robotics, Electronics, IoT) and digital learning resources.
-- **Notifications & Broadcasts**: Unread-count badges, broadcast announcements, and notification history.
-- **User Dashboard**: Progress stats, certificates of completion, and user security/session logs.
+### Mobile Application (`artifacts/mobile`)
 
-### 2. Express API Backend (`artifacts/api-server`)
-- Express-based REST API handling payments reconciliation, refunds, and rate limiting.
-- Structured pino logs for production observability.
-- Idempotent webhooks for payment processing.
+- Course discovery and enrollment
+- Video-based learning experience
+- Learning progress tracking
+- Interactive quizzes
+- Certificates and achievements
+- User authentication
+- Notifications and announcements
+- Engineering kit storefront
+- Shopping cart and checkout
+- User profile management
 
-### 3. Mockup Sandbox (`artifacts/mockup-sandbox`)
-- A lightweight, Vite-powered workspace to preview, prototype, and refine design elements in isolation.
+### Backend API (`artifacts/api-server`)
+
+- Express-based REST API
+- Secure payment processing
+- Rate limiting
+- Request validation
+- Payment reconciliation
+- Webhook handling
+- Production logging
+
+### UI Sandbox (`artifacts/mockup-sandbox`)
+
+- Component development
+- UI prototyping
+- Design experimentation
+- Rapid interface validation
 
 ---
 
-## Technical Stack
+## Technology Stack
 
-- **Package Manager**: `pnpm` workspaces
-- **Frontend Framework**: Expo SDK 54 / React Native
-- **Router**: Expo Router (file-based navigation)
-- **Backend Framework**: Express.js
-- **Database Mapping**: Drizzle ORM & PostgreSQL
-- **State Management**: TanStack Query & React Context
-- **Validation**: Zod schema validation
-- **Styling**: Tailwind CSS (mockup environment) & React Native StyleSheet with custom color tokens (mobile environment)
+### Mobile
+
+- React Native
+- Expo SDK 54
+- Expo Router
+- TypeScript
+- NativeWind
+
+### Backend
+
+- Node.js
+- Express.js
+- Supabase
+- PostgreSQL
+
+### State Management
+
+- TanStack Query
+- React Context
+
+### Validation
+
+- Zod
+
+### Development
+
+- pnpm Workspaces
+- Drizzle ORM
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-Ensure you have the following installed locally:
-- Node.js (version 24 or newer recommended)
-- `pnpm` package manager
+
+- Node.js 20+
+- pnpm
+
+---
 
 ### Installation
 
-1. Install workspace dependencies:
-   ```bash
-   pnpm install
-   ```
+Clone the repository.
 
-2. Build shared libraries (required before starting services):
-   ```bash
-   pnpm run build
-   ```
+```bash
+git clone <repository-url>
+```
 
-### Running Services
+Install dependencies.
 
-- **Mobile App**:
-  To start the Expo development server:
-  ```bash
-  pnpm --filter @workspace/mobile run start
-  ```
-  Or to open the mobile application directly in the web browser:
-  ```bash
-  pnpm --filter @workspace/mobile run web
-  ```
+```bash
+pnpm install
+```
 
-- **API Server**:
-  To start the backend in development mode:
-  ```bash
-  pnpm --filter @workspace/api-server run dev
-  ```
+---
 
-- **Mockup Sandbox**:
-  To start the Vite UI component preview environment:
-  ```bash
-  pnpm --filter @workspace/mockup-sandbox run dev
-  ```
+## Running the Project
 
-### Code Validation
+### Mobile Application
 
-To run TypeScript compiler checks across all workspaces:
+```bash
+pnpm --filter @workspace/mobile run start
+```
+
+Run on the web.
+
+```bash
+pnpm --filter @workspace/mobile run web
+```
+
+---
+
+### Backend API
+
+```bash
+pnpm --filter @workspace/api-server run dev
+```
+
+---
+
+### UI Sandbox
+
+```bash
+pnpm --filter @workspace/mockup-sandbox run dev
+```
+
+---
+
+## Development
+
+Run TypeScript checks across the workspace.
+
 ```bash
 pnpm run typecheck
 ```
+
+Build all packages.
+
+```bash
+pnpm run build
+```
+
+---
+
+## Documentation
+
+Additional project documentation is available inside the `docs` directory.
+
+| Document | Description |
+|----------|-------------|
+| `ARCHITECTURE.md` | System architecture and engineering handbook |
+| `CONTRIBUTING.md` | Development workflow and contribution guidelines |
+| `PRODUCT.md` | Product overview and vision |
+
+---
+
+## Engineering Principles
+
+The project is built around a few core principles:
+
+- Feature-oriented architecture
+- Separation of concerns
+- Repository pattern
+- Service layer abstraction
+- Centralized authentication
+- Reusable components
+- Predictable data flow
+- Scalable project structure
+
+---
+
+## Contributing
+
+Please read `docs/CONTRIBUTING.md` before contributing to the project.
+
+---
+
+## License
+
+This project is developed for **Edodwaja Pvt. Ltd.**
+
+Unless otherwise stated, all rights are reserved.
