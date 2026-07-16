@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#4F46E5"
+      "backgroundColor": "#0B6FAD"
     },
     "ios": {
       "supportsTablet": false,
@@ -20,7 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#4F46E5"
+        "backgroundColor": "#0B6FAD"
       },
       "package": "com.makersflow.mobile",
       "intentFilters": [
@@ -53,7 +53,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#4F46E5"
+          "color": "#0B6FAD"
         }
       ],
       "expo-font",
