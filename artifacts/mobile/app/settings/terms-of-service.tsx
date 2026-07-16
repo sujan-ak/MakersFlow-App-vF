@@ -75,7 +75,7 @@ export default function TermsOfServiceScreen() {
 
         <Text style={[styles.subheading, { color: colors.foreground }]}>Refund Policy</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
-          Refund requests for digital courses may be considered within 7 days of purchase if you have not completed more than 10% of the course content. Physical kits may be returned within 7 days of delivery if unused and in original packaging.
+          Refund requests for digital courses may be considered within 7 days of purchase if you have not completed more than 10% of the course content. For physical kits, all sales are final and we do not offer refunds or replacements after a purchase has been completed (except in case of damaged, defective, or incorrect products reported with proof within 48 hours of delivery).
         </Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
           To request a refund, contact our support team via Settings → Help & Support. Refunds are processed at our discretion and in accordance with applicable consumer protection laws.
@@ -147,7 +147,7 @@ export default function TermsOfServiceScreen() {
           If you have any questions about these Terms of Service, please contact us at:
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          Email: support@makersflow.com
+          Email: team.makersflow@gmail.com
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Support: Settings → Help & Support

@@ -9,7 +9,7 @@ const FAQS = [
   { q: "How do I enroll in a course?", a: "Tap on any course, then tap 'Enroll Now' or 'Enroll for Free'. Free courses are instantly accessible." },
   { q: "Can I download course resources?", a: "Yes! Once enrolled, go to the learning screen and tap on the Resources tab to download PDFs and study material." },
   { q: "How do I track my progress?", a: "Your progress is tracked automatically as you complete modules. View it on the course detail page or your Profile." },
-  { q: "What is the return policy for physical kits?", a: "Physical kits can be returned within 7 days of delivery if they are unused and in original packaging." },
+  { q: "What is the refund & replacement policy for physical kits?", a: "All sales are final. We do not offer refunds or replacements after a purchase has been completed.\n\nIf you receive a damaged, defective, or incorrect product, please contact our Support Team within 48 hours of delivery with your order details and clear photos and an unboxing video (mandatory). After verification, we will review your request and provide an appropriate resolution if eligible." },
   { q: "How do I access digital products after purchase?", a: "Digital products are available immediately in your Profile under 'My Orders'. You'll also receive an email with download links." },
 ];
 
@@ -39,7 +39,7 @@ export default function HelpScreen() {
             <Ionicons name="mail" size={20} color="#FFF" />
             <View>
               <Text style={styles.contactLabel}>Email Support</Text>
-              <Text style={styles.contactValue}>support@makersflow.com</Text>
+              <Text style={styles.contactValue}>team.makersflow@gmail.com</Text>
             </View>
           </View>
           <View style={[styles.contactDivider, { backgroundColor: "rgba(255,255,255,0.2)" }]} />
@@ -47,7 +47,7 @@ export default function HelpScreen() {
             <Ionicons name="call" size={20} color="#FFF" />
             <View>
               <Text style={styles.contactLabel}>Phone Support</Text>
-              <Text style={styles.contactValue}>+91 98765 43210</Text>
+              <Text style={styles.contactValue}>+91 83095 89858</Text>
             </View>
           </View>
         </View>

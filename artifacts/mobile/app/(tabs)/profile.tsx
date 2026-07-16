@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useState, useEffect } from "react";
 import {
   ActivityIndicator,
@@ -51,6 +52,33 @@ export default function ProfileScreen() {
 
   const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  const [viewedCerts, setViewedCerts] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadViewedCerts() {
+      try {
+        const stored = await AsyncStorage.getItem("viewed_certificates");
+        if (stored) {
+          setViewedCerts(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.error("Error loading viewed certificates:", err);
+      }
+    }
+    loadViewedCerts();
+  }, []);
+
+  const handleMarkAsViewed = async (courseId: string) => {
+    if (viewedCerts.includes(courseId)) return;
+    const updated = [...viewedCerts, courseId];
+    setViewedCerts(updated);
+    try {
+      await AsyncStorage.setItem("viewed_certificates", JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error saving viewed certificates:", err);
+    }
+  };
 
   const loadWishlistProducts = useCallback(async () => {
     if (wishlistProductIds.length === 0) {
@@ -114,6 +142,10 @@ export default function ProfileScreen() {
     enrolledCourses.length > 0
       ? Math.round(enrolledCourses.reduce((s, c) => s + c.progress, 0) / enrolledCourses.length)
       : 0;
+
+  const unviewedCertsCount = completedCourses.filter(
+    (c) => !viewedCerts.includes(c.courseId)
+  ).length;
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
@@ -307,7 +339,6 @@ export default function ProfileScreen() {
     {
       title: "Account",
       items: [
-        { icon: "create", label: "Edit Profile", onPress: () => router.push("/profile/edit") },
         { icon: "settings", label: "Settings", onPress: () => router.push("/settings") },
         { icon: "shield-checkmark", label: "Privacy Policy", onPress: () => router.push("/settings/privacy-policy") },
         { icon: "document", label: "Terms of Service", onPress: () => router.push("/settings/terms-of-service") },
@@ -499,9 +530,9 @@ export default function ProfileScreen() {
               Achievements & Certificates
             </Text>
           </View>
-          {completedCourses.length > 0 && (
+          {unviewedCertsCount > 0 && (
             <View style={[styles.certCountBadge, { backgroundColor: "#10B981" }]}>
-              <Text style={styles.certCountText}>{completedCourses.length}</Text>
+              <Text style={styles.certCountText}>{unviewedCertsCount}</Text>
             </View>
           )}
         </View>
@@ -545,21 +576,44 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
 
-                  <Pressable
-                    style={styles.downloadBtn}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/certificate",
-                        params: {
-                          courseName: course.courseTitle,
-                          studentName: user?.name ?? "",
-                          completionDate: course.completedAt,
-                        },
-                      })
-                    }
-                  >
-                    <Ionicons name="download" size={14} color="#FFF" />
-                  </Pressable>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {/* View Button */}
+                    <Pressable
+                      style={[styles.downloadBtn, { backgroundColor: "#10B981" }]}
+                      onPress={() => {
+                        handleMarkAsViewed(course.courseId);
+                        router.push({
+                          pathname: "/certificate",
+                          params: {
+                            courseName: course.courseTitle,
+                            studentName: user?.name ?? "",
+                            completionDate: course.completedAt,
+                          },
+                        });
+                      }}
+                    >
+                      <Ionicons name="eye" size={14} color="#FFF" />
+                    </Pressable>
+
+                    {/* Download Button */}
+                    <Pressable
+                      style={styles.downloadBtn}
+                      onPress={() => {
+                        handleMarkAsViewed(course.courseId);
+                        router.push({
+                          pathname: "/certificate",
+                          params: {
+                            courseName: course.courseTitle,
+                            studentName: user?.name ?? "",
+                            completionDate: course.completedAt,
+                            autoDownload: "true",
+                          },
+                        });
+                      }}
+                    >
+                      <Ionicons name="download" size={14} color="#FFF" />
+                    </Pressable>
+                  </View>
                 </View>
                 {idx < completedCourses.length - 1 && (
                   <View style={[styles.menuDivider, { backgroundColor: colors.border, marginLeft: 68 }]} />

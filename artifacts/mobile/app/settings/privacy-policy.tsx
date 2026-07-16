@@ -94,7 +94,7 @@ export default function PrivacyPolicyScreen() {
           Many of our users are students under the age of 18. We are committed to protecting the privacy of minors and comply with applicable data protection laws, including India's Digital Personal Data Protection Act (DPDP Act).
         </Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
-          We do not knowingly collect more information than necessary for educational purposes from users under 18. Parents or legal guardians may contact us at privacy@makersflow.com to review, correct, or request deletion of their child's personal information.
+          We do not knowingly collect more information than necessary for educational purposes from users under 18. Parents or legal guardians may contact us at team.makersflow@gmail.com to review, correct, or request deletion of their child's personal information.
         </Text>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>5. Third-Party Services</Text>
@@ -113,7 +113,7 @@ export default function PrivacyPolicyScreen() {
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>6. Data Retention and Deletion</Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
-          We retain your personal information for as long as your account is active or as needed to provide you services. If you wish to delete your account and all associated data, you may request deletion by contacting our support team via Settings → Help & Support or by emailing privacy@makersflow.com.
+          We retain your personal information for as long as your account is active or as needed to provide you services. If you wish to delete your account and all associated data, you may request deletion by contacting our support team via Settings → Help & Support or by emailing team.makersflow@gmail.com.
         </Text>
         <Text style={[styles.body, { color: colors.foreground }]}>
           Upon receiving a deletion request, we will delete your personal information within 30 days, except where we are required to retain certain information for legal or regulatory purposes.
@@ -128,7 +128,7 @@ export default function PrivacyPolicyScreen() {
         <Text style={[styles.bulletItem, { color: colors.foreground }]}>• Export your learning data</Text>
 
         <Text style={[styles.body, { color: colors.foreground }]}>
-          To exercise any of these rights, please contact us at privacy@makersflow.com.
+          To exercise any of these rights, please contact us at team.makersflow@gmail.com.
         </Text>
 
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>8. Changes to This Privacy Policy</Text>
@@ -141,7 +141,7 @@ export default function PrivacyPolicyScreen() {
           If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us at:
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          Email: privacy@makersflow.com
+          Email: team.makersflow@gmail.com
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Support: Settings → Help & Support
