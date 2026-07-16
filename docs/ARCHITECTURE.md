@@ -1,56 +1,555 @@
-# Architecture Documentation
+# MakersFlow Architecture
 
-This document describes the design, monorepo architecture, data flow, and components of the MakersFlow (Edodwaja) platform.
+This document provides a high-level overview of the MakersFlow architecture, workspace organization, authentication flow, and application data flow.
 
----
-
-## Workspace Layout
-
-The repository is structured as a monorepo containing multiple workspace packages under `artifacts/` and `lib/`:
-
-### 1. Applications (`artifacts/`)
-- **`mobile/`**: A universal cross-platform React Native app built with Expo SDK 54. It handles course listings, learning modules, store checkouts, and student profiles.
-- **`api-server/`**: Express.js REST API server serving backend logic, processing payment confirmations, and managing rate limiting.
-- **`mockup-sandbox/`**: A Vite-based web environment used by developers to build and test visual components in isolation.
-
-### 2. Core Libraries (`lib/`)
-- **`db/`**: Handles database connectivity, migrations, and schema mappings using Drizzle ORM.
-- **`api-zod/`**: Contains Zod validation structures, which are auto-generated into typescript models and shared between frontend and backend.
-- **`api-spec/`**: Houses OpenAPI-compliant specifications defining all REST endpoints.
-- **`api-client-react/`**: React client libraries supplying fetch queries and mutation hooks.
+The goal is to help developers quickly understand how the platform is built and how new features integrate into the existing architecture.
 
 ---
 
-## Authentication Flow
-
-Authentication on the mobile application is managed by `AuthProvider` (`artifacts/mobile/context/AuthContextSupabase.tsx`):
-
-1. **Supabase Client**: Initialized in `lib/supabase.ts` using public environment variables.
-2. **Secure Persistence**: Implements an `ExpoSecureStoreAdapter` which persists user tokens securely via `expo-secure-store` on iOS/Android, falling back to `AsyncStorage` on web/older environments.
-3. **Session Verification**: The root layout listens to auth state changes, directing unauthenticated traffic to the `(auth)/login` screen and checking for onboarding completion upon success.
-4. **Single-Device Session Guard**: Writes a session identifier to the database on login. Other devices check this identifier periodically and prompt a sign-out if a newer session is active.
-
----
-
-## Data Flow & Integration
+# System Overview
 
 ```
-┌─────────────────────────────────┐
-│     mobile (Expo App Client)     │
-└───────────────┬─────────────────┘
-                │
-                │ Webhook Confirm / RPC Checkout
-                ▼
-┌─────────────────────────────────┐       Database Writes       ┌────────────────────────┐
-│    api-server (Express API)     ├────────────────────────────>│  Supabase (Postgres)   │
-└─────────────────────────────────┘                             └────────────────────────┘
+                           MakersFlow
+
+                  React Native Mobile App
+                            │
+                            ▼
+                      Expo Router
+                            │
+                            ▼
+                    Screens & Components
+                            │
+            ┌───────────────┴───────────────┐
+            │                               │
+            ▼                               ▼
+      React Context                  TanStack Query
+ (Application State)                (Server State)
+            │                               │
+            └───────────────┬───────────────┘
+                            ▼
+                    Repository Layer
+                            ▼
+                     Service Layer
+                            ▼
+          ┌─────────────────┴─────────────────┐
+          │                                   │
+          ▼                                   ▼
+    Express Backend                     Supabase
+          │                                   │
+          └─────────────────┬─────────────────┘
+                            ▼
+                       PostgreSQL
 ```
 
-### 1. Client-Side State
-- **Context Wrappers**: State is managed via local context providers (`CartContext`, `FavoritesContext`, `ProgressContext`, `NetworkContext`).
-- **Progress Tracking**: Lesson progression is checked locally and saved periodically (every 5 seconds) to the database. If offline, the progress is cached in local storage and synced when the connection is restored.
+Every layer owns a single responsibility, making the application predictable, maintainable, and scalable.
 
-### 2. Backend Orchestration
-- **Payment Verification**: razorpay signatures are verified securely in the Express backend using raw request buffers.
-- **Checkout Transactions**: Order creation, coupon verification, and student enrollment are combined inside single PostgreSQL atomic transactions (`complete_paid_order`) to ensure consistency.
-- **Reconciliation**: A background cron-based reconciler checks for payment mismatches and automatically resolves stuck transactions.
+---
+
+# Workspace Layout
+
+The repository is organized as a pnpm monorepo.
+
+```
+MakersFlow
+│
+├── artifacts
+│   ├── mobile
+│   │     Expo React Native application
+│   │
+│   ├── api-server
+│   │     Express backend services
+│   │
+│   └── mockup-sandbox
+│         UI development sandbox
+│
+├── lib
+│   ├── db
+│   ├── api-zod
+│   ├── api-spec
+│   └── api-client-react
+│
+├── docs
+│
+└── supabase
+```
+
+---
+
+# Workspace Responsibilities
+
+| Workspace | Responsibility |
+|------------|----------------|
+| `artifacts/mobile` | Mobile application |
+| `artifacts/api-server` | Backend APIs and payment processing |
+| `artifacts/mockup-sandbox` | UI prototyping |
+| `lib/db` | Database schemas and migrations |
+| `lib/api-zod` | Shared validation schemas |
+| `lib/api-spec` | Shared API specifications |
+| `lib/api-client-react` | Shared API client and query hooks |
+| `docs` | Project documentation |
+| `supabase` | Database resources |
+
+---
+
+# Mobile Application
+
+The mobile application is built using:
+
+- React Native
+- Expo SDK 54
+- Expo Router
+- TypeScript
+
+Primary responsibilities:
+
+- Course browsing
+- Video learning
+- Student progress
+- Store
+- Orders
+- Notifications
+- User profile
+- Authentication
+- Certificates
+- Quizzes
+
+The mobile application never communicates directly with database tables.
+
+All feature requests pass through repositories and services.
+
+---
+
+# Authentication Architecture
+
+Authentication is managed by `AuthProvider`.
+
+```
+                 Application Launch
+                         │
+                         ▼
+              Initialize Supabase Client
+                         │
+                         ▼
+               Restore Previous Session
+                         │
+                         ▼
+      SecureStore / AsyncStorage (Web Fallback)
+                         │
+                         ▼
+                 Session Validation
+                         │
+            ┌────────────┴────────────┐
+            │                         │
+            ▼                         ▼
+     Authenticated             Unauthenticated
+            │                         │
+            ▼                         ▼
+     Load Application          Login / Onboarding
+```
+
+---
+
+# Authentication Components
+
+| Component | Responsibility |
+|-----------|----------------|
+| AuthProvider | Global authentication state |
+| Supabase Client | Login, logout, registration |
+| SecureStore | Secure token persistence |
+| AsyncStorage | Web fallback storage |
+| Root Layout | Route protection |
+| Session Guard | Single-device session validation |
+
+---
+
+# Session Lifecycle
+
+```
+Login
+
+↓
+
+Generate Session
+
+↓
+
+Store Secure Token
+
+↓
+
+Update Database Session ID
+
+↓
+
+Restore Session On Next Launch
+
+↓
+
+Validate Session
+
+↓
+
+Continue
+```
+
+If another device creates a newer session, the current device is automatically signed out.
+
+---
+
+# Request Lifecycle
+
+Every feature follows the same architecture.
+
+```
+User Action
+
+↓
+
+Screen
+
+↓
+
+Repository
+
+↓
+
+Service
+
+↓
+
+Backend API / Supabase
+
+↓
+
+Repository Result
+
+↓
+
+UI Update
+```
+
+This predictable request flow simplifies development.
+
+---
+
+# Repository Pattern
+
+Repositories coordinate feature data.
+
+```
+Home Screen
+
+↓
+
+homeRepository
+
+↓
+
+CacheManager
+
+↓
+
+HomeService
+
+↓
+
+Supabase
+
+↓
+
+HomeData
+
+↓
+
+Home Screen
+```
+
+Repositories are responsible for:
+
+- Cache coordination
+- Combining multiple data sources
+- Mapping backend models
+- Returning feature-ready objects
+
+Repositories never render UI.
+
+---
+
+# Client State
+
+Application state is managed using React Context.
+
+```
+Application
+
+↓
+
+React Context
+
+├── AuthContext
+├── CartContext
+├── FavoritesContext
+├── ProgressContext
+└── NetworkContext
+```
+
+Context manages only application state.
+
+---
+
+# Server State
+
+Server state is managed with TanStack Query.
+
+Examples include:
+
+- Courses
+- Products
+- Orders
+- Reviews
+- News
+
+React Query provides:
+
+- Request caching
+- Background refresh
+- Retry handling
+- Loading states
+
+---
+
+# Data Flow
+
+```
+                 User Interaction
+                        │
+                        ▼
+                React Native Screen
+                        │
+                        ▼
+                 Repository Layer
+                        │
+                        ▼
+                  Service Layer
+                        │
+          ┌─────────────┴─────────────┐
+          │                           │
+          ▼                           ▼
+     Express Backend            Direct Supabase
+          │                           │
+          └─────────────┬─────────────┘
+                        ▼
+                 PostgreSQL Database
+                        │
+                        ▼
+                Repository Result
+                        │
+                        ▼
+                   Screen Update
+```
+
+---
+
+# Payment Flow
+
+```
+User Checkout
+
+↓
+
+Mobile App
+
+↓
+
+Express Backend
+
+↓
+
+Razorpay
+
+↓
+
+Payment Verification
+
+↓
+
+PostgreSQL Transaction
+
+↓
+
+Order Created
+
+↓
+
+Enrollment / Purchase Complete
+```
+
+Payment verification is performed only on the backend.
+
+---
+
+# Progress Synchronization
+
+```
+Watch Lesson
+
+↓
+
+Update Local Progress
+
+↓
+
+Every Few Seconds
+
+↓
+
+Sync Progress
+
+↓
+
+Supabase
+
+↓
+
+Continue Learning
+```
+
+If the user is offline, progress is cached locally and synchronized once connectivity is restored.
+
+---
+
+# Monorepo Communication
+
+```
+React Native App
+
+↓
+
+Shared API Client
+
+↓
+
+Express API
+
+↓
+
+Supabase
+
+↓
+
+Database
+```
+
+Shared packages ensure consistency between frontend and backend.
+
+---
+
+# Core Technologies
+
+| Layer | Technology |
+|--------|------------|
+| Mobile | React Native + Expo |
+| Routing | Expo Router |
+| Language | TypeScript |
+| Backend | Express.js |
+| Database | Supabase PostgreSQL |
+| ORM | Drizzle ORM |
+| Validation | Zod |
+| State | React Context + TanStack Query |
+| Package Manager | pnpm Workspaces |
+
+---
+
+# Engineering Principles
+
+The project follows several architectural principles.
+
+- Separation of concerns
+- Repository pattern
+- Service layer abstraction
+- Feature-oriented development
+- Centralized authentication
+- Shared validation models
+- Reusable components
+- Predictable data flow
+- Offline-first learning experience
+- Modular monorepo organization
+
+---
+
+# Adding a New Feature
+
+Every feature should follow the same development flow.
+
+```
+Create Route
+
+↓
+
+Create Components
+
+↓
+
+Create Repository
+
+↓
+
+Create Service
+
+↓
+
+Integrate Backend
+
+↓
+
+Test
+
+↓
+
+Ship
+```
+
+Maintaining this workflow keeps the codebase consistent and easy to extend.
+
+---
+
+# Documentation
+
+| File | Description |
+|------|-------------|
+| README.md | Project overview |
+| PRODUCT.md | Product vision |
+| docs/ARCHITECTURE.md | System architecture |
+| docs/CONTRIBUTING.md | Development guide |
+
+---
+
+# Summary
+
+MakersFlow is built around a layered architecture where every layer has a clearly defined responsibility.
+
+```
+User
+
+↓
+
+UI
+
+↓
+
+Repository
+
+↓
+
+Service
+
+↓
+
+Backend API / Supabase
+
+↓
+
+PostgreSQL
+```
+
+This architecture provides a scalable foundation for building new features while keeping the codebase maintainable, predictable, and easy to understand for new contributors.
