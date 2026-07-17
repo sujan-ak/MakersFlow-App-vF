@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useTabSwipe } from "@/hooks/useTabSwipe";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useFocusEffect } from "expo-router";
@@ -386,6 +387,8 @@ export default function ProfileScreen() {
       year: "numeric",
     });
 
+  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/profile");
+
   // ── Guest / signed-out state ─────────────────────────────────────────────────
   if (!user) {
     return (
@@ -446,6 +449,8 @@ export default function ProfileScreen() {
   const unviewedCount = completedCourses.filter((c) => !viewedCerts.includes(c.courseId)).length;
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }} {...panHandlers}>
+    <SwipeIndicator />
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
@@ -815,6 +820,7 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
+    </View>
   );
 }
 

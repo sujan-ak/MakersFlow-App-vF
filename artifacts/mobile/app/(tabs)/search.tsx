@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useTabSwipe } from "@/hooks/useTabSwipe";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Platform, Pressable, ScrollView,
@@ -258,6 +259,8 @@ export default function SearchScreen() {
   const showTyping = isFocused && !query;
   const showResults = query;
 
+  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/search");
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -267,7 +270,8 @@ export default function SearchScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <SwipeIndicator />
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.background }]}>
         {showResults ? (
           <Pressable onPress={handleClear} hitSlop={8}>

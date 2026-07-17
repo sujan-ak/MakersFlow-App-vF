@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContextSupabase";
 import { supabase } from "@/lib/supabase";
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+import { buildInvoiceHtml, generateInvoiceNumber, type InvoiceLineItem } from "@/lib/invoiceUtils";
 
 
 // ── Order Tracking Timeline ───────────────────────────────────────────────────
@@ -250,15 +251,67 @@ export default function OrdersScreen() {
   const generateInvoice = async (order: any) => {
     setSharingId(order.id);
     try {
-      const html = `
-        <h1>MakersFlow Invoice</h1>
-        <p>Order ID: ${order.id}</p>
-        <p>Date: ${new Date(order.created_at).toLocaleDateString()}</p>
-        <p>Amount: ₹${order.total_amount}</p>
-        <p>Status: ${order.status}</p>
-      `;
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri);
+      let buyerName = 'Valued Customer';
+      let buyerPhone = '';
+      let buyerGstin: string | undefined;
+
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, phone')
+          .eq('id', user.id)
+          .single();
+        if (profile) {
+          buyerName = profile.full_name || buyerName;
+          buyerPhone = profile.phone || '';
+        }
+      }
+
+      // Resolve shipping address — stored as JSON object in order.shipping
+      const addr = order.shipping;
+      const billingAddress = {
+        name: addr?.name || buyerName,
+        line1: addr?.address || '',
+        city: addr?.city || '',
+        state: addr?.state || 'Andhra Pradesh',
+        pincode: addr?.pincode || '',
+        phone: addr?.phone || buyerPhone || undefined,
+        gstin: buyerGstin,
+      };
+
+      // Rebuild line items from order.items (array of title strings)
+      // orders table only stores titles, so we reconstruct best-effort items
+      const rawItems: string[] = order.items && order.items.length > 0
+        ? order.items
+        : ['Course/Product Purchase'];
+
+      const perItemTotal = order.total / rawItems.length;
+      const invoiceItems: InvoiceLineItem[] = rawItems.map((title: string) => ({
+        description: title,
+        // Heuristic: titles containing 'kit' or 'board' are physical
+        hsnSac: /kit|board|module|sensor|component/i.test(title) ? '84733099' : '999294',
+        isService: !/kit|board|module|sensor|component/i.test(title),
+        quantity: 1,
+        unitPrice: parseFloat(perItemTotal.toFixed(2)),
+        discountAmount: 0,
+        gstRate: 18,
+      }));
+
+      const invoiceNumber = await generateInvoiceNumber();
+
+      const html = buildInvoiceHtml({
+        invoiceNumber,
+        invoiceDate: new Date(order.created_at),
+        paymentId: order.id,
+        items: invoiceItems,
+        billingAddress,
+        shippingAddress: addr ? billingAddress : undefined,
+        shippingFee: 0,
+        totalDiscount: 0,
+      });
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
     } catch (e) {
       console.error('[Invoice] Error generating invoice:', e);
       Alert.alert('Error', 'Failed to generate or share invoice.');
@@ -600,3 +653,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+

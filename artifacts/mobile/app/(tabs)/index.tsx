@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTabSwipe } from "@/hooks/useTabSwipe";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
@@ -308,6 +309,8 @@ export default function HomeScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
+  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)");
+
   if (isLoading) {
     return <HomeSkeleton />;
   }
@@ -327,7 +330,8 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <SwipeIndicator />
       {/* Fixed Header */}
       <View style={[styles.fixedHeader, { backgroundColor: colors.background, paddingTop: topPad + 16, borderBottomColor: colors.border }]}>
         <View style={styles.header}>

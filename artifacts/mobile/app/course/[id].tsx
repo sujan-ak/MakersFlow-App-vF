@@ -21,6 +21,7 @@ import {
   View,
   ToastAndroid,
   Share,
+  PanResponder,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge } from "@/components/Badge";
@@ -254,6 +255,35 @@ export default function CourseDetailScreen() {
 
   const totalDurationMin = useMemo(() => modules.reduce((sum, m) => sum + (m.duration_minutes || 0), 0), [modules]);
   const displayDuration = totalDurationMin > 0 ? `${totalDurationMin} mins` : "Self-paced";
+
+  // Mirror activeTab into a ref so the PanResponder closure always reads the live value
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        return Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 15;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const { dx } = gestureState;
+        const SWIPE_THRESHOLD = 50;
+        const current = activeTabRef.current;
+
+        if (dx < -SWIPE_THRESHOLD) {
+          // swipe left → advance forward
+          if (current === "overview") setActiveTab("lessons");
+          else if (current === "lessons") setActiveTab("reviews");
+        } else if (dx > SWIPE_THRESHOLD) {
+          // swipe right → go backward
+          if (current === "reviews") setActiveTab("lessons");
+          else if (current === "lessons") setActiveTab("overview");
+        }
+      },
+    })
+  ).current;
 
   if (isLoading) {
     return <DetailSkeleton />;
@@ -559,8 +589,9 @@ export default function CourseDetailScreen() {
             ))}
           </View>
 
-          {/* Tab contents */}
-          {activeTab === "overview" && (
+          {/* Tab contents — horizontal swipe to navigate tabs */}
+          <View {...panResponder.panHandlers}>
+            {activeTab === "overview" && (
             <View style={{ gap: 12 }}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About this course</Text>
               <Text style={[styles.description, { color: colors.mutedForeground }]}>{course.description}</Text>
@@ -840,6 +871,7 @@ export default function CourseDetailScreen() {
               )}
             </View>
           )}
+          </View>
         </View>
       </ScrollView>
 

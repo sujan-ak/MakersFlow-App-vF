@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import GoogleLogo from "@/components/GoogleLogo";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -563,7 +564,7 @@ export default function RegisterScreen() {
               <ActivityIndicator size="small" color={colors.foreground} />
             ) : (
               <>
-                <Ionicons name="logo-google" size={18} color={colors.foreground} />
+                <GoogleLogo size={18} />
                 <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
               </>
             )}

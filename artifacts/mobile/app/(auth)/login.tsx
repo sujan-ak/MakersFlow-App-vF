@@ -1,4 +1,5 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
+import GoogleLogo from "@/components/GoogleLogo";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -41,23 +42,18 @@ function getFriendlyErrorMessage(err: string): string {
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login, loginWithGoogle, sendOtp, sendWhatsappOtp } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [phoneLoading, setPhoneLoading] = useState(false);
   const [error, setError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [phoneError, setPhoneError] = useState("");
-  const [otpProvider, setOtpProvider] = useState<'sms' | 'whatsapp'>('sms');
 
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [phoneFocused, setPhoneFocused] = useState(false);
 
   async function handleGoogleLogin() {
     if (googleLoading) return;
@@ -121,46 +117,6 @@ export default function LoginScreen() {
       }
     } else {
       setError(getFriendlyErrorMessage(result.error || "Invalid credentials. Please try again."));
-    }
-  }
-
-  async function handlePhoneLogin() {
-    setPhoneError("");
-    setError("");
-
-    const digitsOnly = phone.replace(/\D/g, "");
-
-    if (!phone) {
-      setPhoneError("Enter a valid phone number");
-      return;
-    }
-
-    if (digitsOnly.length < 10) {
-      setPhoneError("Enter a valid phone number");
-      return;
-    }
-
-    let formattedPhone = phone.trim();
-    if (!formattedPhone.startsWith("+")) {
-      formattedPhone = "+91" + digitsOnly;
-    }
-
-    setPhoneLoading(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const result =
-      otpProvider === "whatsapp"
-        ? await sendWhatsappOtp(formattedPhone)
-        : await sendOtp(formattedPhone);
-    setPhoneLoading(false);
-
-    if (result.success) {
-      router.push({
-        pathname: "/(auth)/verify-otp",
-        params: { phone: formattedPhone, provider: otpProvider },
-      });
-    } else {
-      setError(result.error || "Failed to send OTP. Please try again.");
     }
   }
 
@@ -306,110 +262,22 @@ export default function LoginScreen() {
               <ActivityIndicator size="small" color={colors.foreground} />
             ) : (
               <>
-                <Ionicons name="logo-google" size={18} color={colors.foreground} />
+                <GoogleLogo size={18} />
                 <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Continue with Google</Text>
               </>
             )}
           </Pressable>
 
-          <View style={styles.dividerRow}>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>or continue with phone</Text>
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          </View>
-
-          {/* Phone Provider Toggle */}
-          <View style={styles.providerToggle}>
-            {(['sms', 'whatsapp'] as const).map((p) => {
-              const isActive = otpProvider === p;
-              return (
-                <Pressable
-                  key={p}
-                  style={[
-                    styles.providerBtn,
-                    {
-                      backgroundColor: isActive ? "#0B6FAD" : colors.card,
-                      borderColor: isActive ? "transparent" : colors.border,
-                    }
-                  ]}
-                  onPress={() => setOtpProvider(p)}
-                >
-                  <Ionicons
-                    name={p === 'sms' ? 'chatbubble-ellipses' : 'chatbubbles'}
-                    size={14}
-                    color={isActive ? '#fff' : '#5A7A8C'}
-                  />
-                  <Text style={[styles.providerBtnText, { color: isActive ? '#fff' : '#5A7A8C' }]}>
-                    {p === 'sms' ? 'SMS' : 'WhatsApp'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Phone number field */}
-          <View style={styles.fieldGroup}>
-            <View style={[
-              styles.inputWrapper,
-              {
-                borderColor: phoneError ? "#DC2626" : (phoneFocused ? "#0B6FAD" : colors.border),
-                backgroundColor: colors.card,
-              }
-            ]}>
-              <Ionicons name="call" size={16} color="#0B6FAD" />
-              <TextInput
-                style={[styles.input, { color: colors.foreground }]}
-                value={phone}
-                onChangeText={(text) => {
-                  setPhone(text);
-                  setPhoneError("");
-                }}
-                onFocus={() => setPhoneFocused(true)}
-                onBlur={() => setPhoneFocused(false)}
-                placeholder="+91 98765 43210"
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-              />
-            </View>
-            {phoneError ? <Text style={styles.fieldError}>{phoneError}</Text> : null}
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [styles.phoneBtn, { backgroundColor: "#0B6FAD", opacity: pressed ? 0.85 : 1 }]}
-            onPress={handlePhoneLogin}
-            disabled={phoneLoading}
-          >
-            {phoneLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={styles.primaryButtonContent}>
-                <Ionicons name="mail" size={18} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.loginBtnText}>Send OTP</Text>
-                <Ionicons name="chevron-forward" size={18} color="#fff" style={{ marginLeft: "auto" }} />
-              </View>
-            )}
-          </Pressable>
         </View>
 
-        {/* Highlighted Sign Up section */}
-        <View style={{
-          marginTop: 24,
-          marginHorizontal: 0,
-          borderRadius: 20,
-          overflow: "hidden",
-          borderWidth: 1.5,
-          borderColor: "#17E5D3",
-          backgroundColor: "#F0FFFE",
-          paddingVertical: 18,
-          paddingHorizontal: 20,
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 24,
-        }}>
+        {/* Sign Up section */}
+        <View style={[
+          styles.signUpCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#17E5D3", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="person-add" size={16} color="#063B4F" />
+            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="person-add" size={16} color={colors.accentForeground} />
             </View>
             <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>
               New to MakersFlow?
@@ -420,14 +288,9 @@ export default function LoginScreen() {
           </Text>
           <Pressable
             onPress={() => router.push("/(auth)/register")}
-            style={({ pressed }) => ({
-              width: "100%",
-              borderRadius: 14,
-              overflow: "hidden",
-              opacity: pressed ? 0.85 : 1,
-            })}
+            style={({ pressed }) => ({ width: "100%", opacity: pressed ? 0.85 : 1 })}
           >
-            <View style={{ paddingVertical: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#17E5D3", borderRadius: 14, flexDirection: "row", gap: 8 }}>
+            <View style={{ paddingVertical: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#0B6FAD", borderRadius: 14, flexDirection: "row", gap: 8 }}>
               <Text style={{ color: "#FFF", fontSize: 15, fontFamily: "Inter_700Bold" }}>
                 Create Free Account
               </Text>
@@ -500,12 +363,15 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   googleBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  phoneBtn: {
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
+  signUpCard: {
+    marginTop: 24,
+    marginBottom: 24,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    paddingVertical: 18,
     paddingHorizontal: 20,
+    alignItems: "center",
+    gap: 12,
   },
   primaryButtonContent: {
     flexDirection: "row",
@@ -518,19 +384,4 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   registerLink: { fontSize: 14, fontFamily: "Inter_700Bold" },
   fieldError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#DC2626", marginTop: 4 },
-  providerToggle: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  providerBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-  providerBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });
