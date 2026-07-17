@@ -62,10 +62,9 @@ export default function CoursesScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!hasLoadedOnce.current) {
-        loadData(false);
-      } else {
-        loadData(true); // silent background refresh
+        loadData(false); // first load only — cached after that
       }
+      // No refetch on tab switch — use pull-to-refresh for fresh data
     }, [loadData])
   );
 

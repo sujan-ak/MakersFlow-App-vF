@@ -93,10 +93,9 @@ export default function StoreScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!hasLoadedOnce.current) {
-        loadProducts(false);
-      } else {
-        loadProducts(true); // silent background refresh
+        loadProducts(false); // first load only — cached after that
       }
+      // No refetch on tab switch — use pull-to-refresh for fresh data
     }, [loadProducts])
   );
 

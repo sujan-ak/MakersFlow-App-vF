@@ -198,8 +198,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   quantityText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    minWidth: 24,
+    textAlign: "center",
   },
   removeBtn: {
     padding: 6,

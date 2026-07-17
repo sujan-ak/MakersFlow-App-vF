@@ -15,8 +15,9 @@ const TRACKING_STEPS = [
   { key: "pending",   label: "Order Placed",      icon: "receipt-outline" },
   { key: "paid",      label: "Payment Confirmed", icon: "card-outline" },
   { key: "packed",    label: "Packed",            icon: "cube-outline" },
-  { key: "shipped",   label: "Shipped",           icon: "airplane-outline" },
-  { key: "delivered", label: "Delivered",         icon: "checkmark-circle-outline" },
+  { key: "shipped",         label: "Shipped",            icon: "airplane-outline" },
+  { key: "out_for_delivery",  label: "Out for Delivery",   icon: "bicycle-outline" },
+  { key: "delivered",         label: "Delivered",          icon: "checkmark-circle-outline" },
 ];
 
 // Map various status strings to our step keys
@@ -24,6 +25,7 @@ function normalizeStatus(raw: string | undefined): string {
   const s = (raw ?? "").toLowerCase().replace(/ /g, "_");
   // Match exact admin statuses: pending, paid, packed, shipped, delivered, completed, cancelled, refund_requested
   if (s === "delivered" || s === "completed") return "delivered";
+  if (s === "out_for_delivery" || s === "out for delivery") return "out_for_delivery";
   if (s === "shipped") return "shipped";
   if (s === "packed") return "packed";
   if (s === "paid") return "paid";
@@ -89,7 +91,7 @@ function OrderTrackingTimeline({ status, trackingNumber }: { status?: string; tr
                   Current status
                 </Text>
               )}
-              {isCurrent && step.key === "shipped" && trackingNumber && (
+              {isCurrent && (step.key === "shipped" || step.key === "out_for_delivery") && trackingNumber && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4,
                   backgroundColor: "#EEF7FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" }}>
                   <Ionicons name="locate-outline" size={12} color="#0B6FAD" />

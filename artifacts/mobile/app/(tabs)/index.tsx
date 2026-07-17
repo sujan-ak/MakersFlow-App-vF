@@ -184,6 +184,7 @@ export default function HomeScreen() {
   const [popularKits, setPopularKits] = useState<Product[]>([]);
   const [learningStreak, setLearningStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
   const [promotions, setPromotions] = useState<any[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
@@ -240,7 +241,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadData(false);
+      if (!hasLoadedOnce.current) {
+        loadData(false); // first load — show skeleton
+      }
+      // No background refresh on focus — data stays cached in memory
+      // User can pull-to-refresh manually if they want fresh data
     }, [loadData])
   );
 

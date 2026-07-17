@@ -62,6 +62,7 @@ export interface Product {
   inStock: boolean;
   badge?: string;
   features: string[];
+  weight_kg?: number; // product weight in kg for Shiprocket shipping calculation
 }
 
 export interface NewsItem {

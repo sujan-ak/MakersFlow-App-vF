@@ -6,14 +6,19 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 
 const FAQS = [
-  { q: "How do I enroll in a course?", a: "Tap on any course, then tap 'Enroll Now' or 'Enroll for Free'. Free courses are instantly accessible." },
-  { q: "Can I download course resources?", a: "Yes! Once enrolled, go to the learning screen and tap on the Resources tab to download PDFs and study material." },
-  { q: "How do I track my progress?", a: "Your progress is tracked automatically as you complete modules. View it on the course detail page or your Profile." },
+  { q: "How do I create an account on MakersFlow?", a: "Download the MakersFlow app and tap Sign Up. Enter your name, email, phone number, grade, and school. You can also sign up using your Google account for faster registration." },
+  { q: "How do I reset my password?", a: "On the login screen, tap Forgot Password and enter your registered email. You will receive a password reset link within a few minutes. Check your spam folder if you do not see it." },
+  { q: "How do I enroll in a course?", a: "Tap on any course and then tap Enroll Now or Enroll for Free. Free courses are instantly accessible. Paid courses require a one-time payment via Razorpay." },
+  { q: "Can I download course resources and study materials?", a: "Yes. Once enrolled, open the course and go to the Resources tab to download PDFs, notes, and study material for offline use." },
+  { q: "How do I get my course completion certificate?", a: "Complete all modules and pass the final quiz of a course. Your certificate will be generated automatically and available to download from Profile → My Certificates." },
+  { q: "How do I track my order?", a: "Go to Profile → My Orders and tap on your order. You will see a live tracking timeline showing Order Placed, Payment Confirmed, Packed, Shipped, Out for Delivery, and Delivered stages." },
+  { q: "How long does delivery take?", a: "Standard delivery takes 3–7 business days depending on your location. Remote areas may take 7–14 business days. You will receive a tracking number once your order is shipped." },
+  { q: "What payment methods are accepted?", a: "We accept UPI, Debit Cards, Credit Cards, Net Banking, and popular wallets via Razorpay. All transactions are encrypted and 100% secure." },
   {
-    q: "What is the refund & replacement policy?",
-    a: "All sales are final. We do not offer refunds or replacements after a purchase has been completed.\n\nIf you receive a damaged, defective, or incorrect product, please contact our Support Team within 48 hours of delivery with your order details, clear photos, and an unboxing video (mandatory). After verification, we will review your request and provide an appropriate resolution if eligible.",
+    q: "What is the refund and replacement policy?",
+    a: "All sales are final. We do not offer refunds or replacements after a purchase is completed.\n\nIf you receive a damaged, defective, or incorrect product, contact our Support Team within 48 hours of delivery with your order details, clear photos, and an unboxing video (mandatory). After verification, we will review and resolve if eligible.",
   },
-  { q: "How do I access digital products after purchase?", a: "Digital products are available immediately in your Profile under 'My Orders'. You'll also receive an email with download links." },
+  { q: "The app is not loading or showing an error. What should I do?", a: "Try these steps:\n1. Check your internet connection.\n2. Close and reopen the app.\n3. Clear the app cache from phone settings.\n4. Update the app from the Play Store.\nIf the issue persists, contact us at team.makersflow@gmail.com." },
 ];
 
 export default function HelpScreen() {

@@ -135,16 +135,27 @@ export async function getShiprocketRate(params: {
       return fallback;
     }
 
-    // Sort by rate — pick cheapest with a valid rate
-    const sorted = couriers
-      .filter((c) => typeof c.rate === "number" && c.rate > 0)
-      .sort((a, b) => a.rate - b.rate);
+    // Filter valid couriers
+    const valid = couriers.filter((c) => typeof c.rate === "number" && c.rate > 0);
 
-    if (sorted.length === 0) {
+    if (valid.length === 0) {
       console.warn("[Shiprocket] All couriers have rate ≤ 0");
       return fallback;
     }
 
+    // FIX: Prefer surface/ground couriers over air
+    // Air couriers (Delhivery Air, Blue Dart Air etc.) are faster but more expensive
+    // For normal e-commerce, surface is preferred unless only air is available
+    const isAirCourier = (name: string) => {
+      const n = (name ?? "").toLowerCase();
+      return n.includes("air") || n.includes("express air") || n.includes("air cargo");
+    };
+
+    const surfaceCouriers = valid.filter((c) => !isAirCourier(c.courier_name ?? ""));
+    const pool = surfaceCouriers.length > 0 ? surfaceCouriers : valid;
+
+    // Sort by rate — pick cheapest from preferred pool
+    const sorted = pool.sort((a, b) => a.rate - b.rate);
     const best = sorted[0];
     console.log("[Shiprocket] Best rate:", best.courier_name, "₹", best.rate, "in", best.estimated_delivery_days, "days");
 

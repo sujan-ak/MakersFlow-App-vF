@@ -348,7 +348,12 @@ export default function CheckoutScreen() {
 
     setShippingLoading(true);
     const fallback = shippingConfig.remoteFee || 149;
-    const totalWeight = physicalItems.reduce((s, i) => s + (i.quantity * 0.5), 0);
+    // Use actual product weight_kg set by admin, else default 0.5kg
+    // Weight is per shipment — not multiplied by quantity
+    const totalWeight = physicalItems.reduce((s, i) => {
+      const productWeight = (i.product as any).weight_kg ?? 0.5;
+      return s + productWeight;
+    }, 0);
 
     getShiprocketRate({
       deliveryPincode: pincode,

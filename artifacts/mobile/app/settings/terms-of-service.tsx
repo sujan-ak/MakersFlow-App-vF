@@ -150,6 +150,9 @@ export default function TermsOfServiceScreen() {
           Email: team.makersflow@gmail.com
         </Text>
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          Phone: +91 83095 89858
+        </Text>
+        <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Support: Settings → Help & Support
         </Text>
       </ScrollView>

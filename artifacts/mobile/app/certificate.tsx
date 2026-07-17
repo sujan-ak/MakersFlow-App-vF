@@ -332,11 +332,11 @@ export default function CertificateScreen() {
         setIsGenerating(false);
         return;
       }
-      const { status: currentStatus, canAskAgain } = await MediaLibrary.getPermissionsAsync();
+      const { status: currentStatus, canAskAgain } = await MediaLibrary.getPermissionsAsync(false);
       let hasPermission = currentStatus === 'granted';
 
       if (!hasPermission && canAskAgain) {
-        const { status: requestStatus } = await MediaLibrary.requestPermissionsAsync();
+        const { status: requestStatus } = await MediaLibrary.requestPermissionsAsync(false);
         hasPermission = requestStatus === 'granted';
       }
 

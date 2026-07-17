@@ -43,6 +43,10 @@ export async function upsertProductReview(
   rating: number,
   comment: string
 ): Promise<void> {
+  const { data: existing } = await supabase.from("product_reviews").select("id, status, comment").eq("user_id", userId).maybeSingle();
+  const isEditingApproved = existing?.status === "approved";
+  const payload: Record<string, any> = { user_id: userId, rating, comment: comment.trim() || null, status: "pending" };
+  if (isEditingApproved) payload.approved_comment = existing.comment;
   const { error } = await supabase.from("product_reviews").upsert(
     {
       user_id: userId,

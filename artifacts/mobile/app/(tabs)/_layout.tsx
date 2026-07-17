@@ -5,12 +5,15 @@ import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContextSupabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 
 function TabLayout() {
   const colors = useColors();
+  const { items } = useCart();
+  const cartCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const { user } = useAuth();
@@ -65,6 +68,7 @@ function TabLayout() {
       // and sign-in → home transition.
       screenOptions={{
         lazy: true,
+        unmountOnBlur: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
@@ -104,6 +108,8 @@ function TabLayout() {
         options={{
           title: "Store",
           tabBarIcon: ({ color }) => <Ionicons name="storefront" size={22} color={color} />,
+          tabBarBadge: cartCount > 0 ? cartCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: "#EF4444", color: "#FFF", fontSize: 10 },
           tabBarAccessibilityLabel: "Store tab",
         }}
       />
