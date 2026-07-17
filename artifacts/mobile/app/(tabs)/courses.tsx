@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useTabSwipe } from "@/hooks/useTabSwipe";
 import { ScrollView, View, Text, Pressable, StyleSheet, Platform, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
@@ -104,11 +103,8 @@ export default function CoursesScreen() {
   const totalEnrolled = enrolledCourses.length;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/courses");
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
-      <SwipeIndicator />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <View>

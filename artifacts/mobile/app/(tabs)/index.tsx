@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTabSwipe } from "@/hooks/useTabSwipe";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
@@ -309,8 +308,6 @@ export default function HomeScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)");
-
   if (isLoading) {
     return <HomeSkeleton />;
   }
@@ -330,8 +327,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
-      <SwipeIndicator />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Fixed Header */}
       <View style={[styles.fixedHeader, { backgroundColor: colors.background, paddingTop: topPad + 16, borderBottomColor: colors.border }]}>
         <View style={styles.header}>
@@ -577,7 +573,7 @@ export default function HomeScreen() {
             </View>
             <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border, overflow: 'hidden' }]}>
               <Image
-                source={require('@/assets/images/partners/edodwaja_foundation.webp')}
+                source={require('@/assets/images/partners/foundation_logo.png')}
                 style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
               />
             </View>

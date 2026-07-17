@@ -27,7 +27,6 @@ import { supabase } from "@/lib/supabase";
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
 import { setInvoicePath } from "@/lib/invoiceStorage";
-import { buildInvoiceHtml, generateInvoiceNumber, type InvoiceLineItem } from "@/lib/invoiceUtils";
 import { RazorpayWebView, type RazorpayPaymentParams } from "@/components/RazorpayWebView";
 interface ShiprocketRate {
   success: boolean;
@@ -163,14 +162,13 @@ function SlideToPayButton({
 type StepStatus = "done" | "current" | "upcoming";
 
 function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
-  const colors = useColors();
   const steps: { id: number; label: string; status: StepStatus }[] = [
     { id: 1, label: "Cart",     status: step > 1 ? "done" : step === 1 ? "current" : "upcoming" },
     { id: 2, label: "Checkout", status: step > 2 ? "done" : step === 2 ? "current" : "upcoming" },
     { id: 3, label: "Payment",  status: step > 3 ? "done" : step === 3 ? "current" : "upcoming" },
   ];
   return (
-    <View style={[styles.stepIndicatorContainer, { backgroundColor: colors.card }]}>
+    <View style={styles.stepIndicatorContainer}>
       {steps.map((s, idx) => (
         <React.Fragment key={s.id}>
           <View style={styles.stepItem}>
@@ -242,9 +240,6 @@ export default function CheckoutScreen() {
   const [formState, setFormState] = useState("");
   const [formPostalCode, setFormPostalCode] = useState("");
   const [formPhone, setFormPhone] = useState("+91");
-
-  // ── Buyer GSTIN (optional, B2B) ──
-  const [buyerGstin, setBuyerGstin] = useState("");
 
   // ── Payment ──
   const [showPayment, setShowPayment] = useState(false);
@@ -331,8 +326,6 @@ export default function CheckoutScreen() {
     const addr = addresses.find((a) => String(a.id) === String(selectedAddressId));
 
     if (!addr) {
-      console.log("[Shiprocket] No matched addr for selectedId:", selectedAddressId,
-        "available ids:", addresses.map(a => String(a.id)));
       setShiprocketRate(null);
       setShippingLoading(false);
       return;
@@ -345,11 +338,6 @@ export default function CheckoutScreen() {
     const physicalItems = items.filter((i) => i.product.category === "physical");
     const isPhys = physicalItems.length > 0;
 
-    console.log("[Shiprocket] selectedId:", selectedAddressId,
-      "matched addr:", addr.city,
-      "pincode field:", rawPincode,
-      "cleaned pincode:", pincode,
-      "isPhys:", isPhys);
 
     if (!pincode || pincode.length < 6 || !isPhys) {
       setShiprocketRate(null);
@@ -358,7 +346,11 @@ export default function CheckoutScreen() {
     }
 
     setShippingLoading(true);
-    const totalWeight = physicalItems.reduce((s, i) => s + (i.quantity * 0.5), 0);
+    // Weight per shipment — not multiplied by quantity
+    const totalWeight = physicalItems.reduce((s, i) => {
+      const w = (i.product as any).weight_kg ?? 0.5;
+      return s + w;
+    }, 0);
     const physicalSubtotal = physicalItems.reduce((s, i) => s + i.product.price * i.quantity, 0);
 
     supabase.functions.invoke("get-shipping-rate", {
@@ -372,7 +364,6 @@ export default function CheckoutScreen() {
         console.warn("[Shiprocket] Edge function calculation failed:", error);
         setShiprocketRate(null);
       } else {
-        console.log("[Shiprocket] rate result:", data);
         setShiprocketRate(data);
       }
     }).catch((err) => {
@@ -692,51 +683,67 @@ export default function CheckoutScreen() {
 
 
 
-      // Generate GST-compliant invoice
+      // Generate invoice
       try {
         const ordId = Date.now().toString();
-        const invoiceNumber = await generateInvoiceNumber();
-
-        // Build per-item discount allocation proportional to subtotal share
-        const invoiceItems: InvoiceLineItem[] = items.map((i) => {
-          const itemSubtotal = i.product.price * i.quantity;
-          const discountShare = total > 0 ? (itemSubtotal / total) * discount : 0;
-          const gstRate = gstRates.get(String(i.product.id)) ?? 18;
-          const isCourse = (i.product as any).is_course ?? false;
-          return {
-            description: i.product.title,
-            hsnSac: isCourse ? "999294" : "84733099", // SAC for e-learning / HSN for electronic kits
-            isService: isCourse,
-            quantity: i.quantity,
-            unitPrice: i.product.price,
-            discountAmount: parseFloat(discountShare.toFixed(2)),
-            gstRate,
-          };
-        });
-
-        const addr = pendingAddress;
-        const billingAddr = {
-          name: addr?.full_name ?? name,
-          line1: addr?.address_line1 ?? "",
-          line2: addr?.address_line2 ?? undefined,
-          city: addr?.city ?? "",
-          state: addr?.state ?? "Andhra Pradesh",
-          pincode: addr?.postal_code ?? addr?.pincode ?? "",
-          phone: addr?.phone ? `+91 ${addr.phone}` : phone,
-          gstin: buyerGstin.trim() || undefined,
-        };
-
-        const html = buildInvoiceHtml({
-          invoiceNumber,
-          invoiceDate: new Date(),
-          paymentId,
-          items: invoiceItems,
-          billingAddress: billingAddr,
-          shippingAddress: hasPhysical ? billingAddr : undefined,
-          shippingFee,
-          couponCode: appliedPromo?.code,
-          totalDiscount: discount,
-        });
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<style>
+  body { font-family: Arial, sans-serif; padding: 30px; color: #111; font-size: 12px; }
+  .page { max-width: 750px; margin: 0 auto; }
+  .title { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; letter-spacing: 2px; }
+  .top-grid { display: flex; gap: 0; border: 1px solid #333; margin-bottom: 0; }
+  .seller-box { flex: 1; padding: 12px; border-right: 1px solid #333; }
+  .inv-box { flex: 0 0 200px; padding: 12px; }
+  .inv-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .inv-label { font-weight: bold; font-size: 11px; }
+  .buyer-box { border: 1px solid #333; border-top: none; padding: 12px; margin-bottom: 0; }
+  .buyer-label { font-size: 11px; color: #555; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; border: 1px solid #333; border-top: none; }
+  th { background: #f5f5f5; padding: 8px; text-align: center; border: 1px solid #333; font-size: 11px; font-weight: bold; }
+  td { padding: 8px; border: 1px solid #333; font-size: 11px; vertical-align: top; }
+  .total-row td { font-weight: bold; }
+  .company-name { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+  .section-label { font-weight: bold; font-size: 11px; margin-bottom: 6px; color: #333; }
+</style>
+</head><body>
+<div class="page">
+  <div class="title">TAX INVOICE</div>
+  <div class="top-grid">
+    <div class="seller-box">
+      <div class="company-name">MAKERSFLOW / EDODWAJA PRIVATE LIMITED</div>
+      <div>10-91, Vaddila Street, Near Post Office, Srungavru</div>
+      <div>West Godavari, Andhra Pradesh, Code: 37</div>
+    </div>
+    <div class="inv-box">
+      <div class="inv-row"><span class="inv-label">Invoice No.</span><span>${paymentId.slice(-6).toUpperCase()}</span></div>
+      <div class="inv-row"><span class="inv-label">Dated</span><span>${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}</span></div>
+      <div class="inv-row"><span class="inv-label">Payment ID</span><span style="font-size:9px;">${paymentId}</span></div>
+    </div>
+  </div>
+  <div class="buyer-box">
+    <div class="buyer-label">Buyer (Bill to)</div>
+    <div class="company-name">${name}</div>
+    ${pendingAddress ? `<div>${pendingAddress.address_line1 || ""} ${pendingAddress.address_line2 || ""}</div><div>${pendingAddress.city || ""}, ${pendingAddress.state || ""}</div>` : ""}
+  </div>
+  <table>
+    <thead>
+      <tr><th>Particulars</th><th>Qty</th><th>Rate</th><th>GST%</th><th>CGST</th><th>SGST</th><th>Amount</th></tr>
+    </thead>
+    <tbody>
+      ${items.map((i) => {
+        const gstRate = 18;
+        const baseAmt = i.product.price * i.quantity;
+        const cgst = Math.round(baseAmt * (gstRate / 2) / 100);
+        const sgst = Math.round(baseAmt * (gstRate / 2) / 100);
+        return `<tr><td>${i.product.title}</td><td style="text-align:center;">${i.quantity}</td><td style="text-align:right;">₹${i.product.price}</td><td style="text-align:center;">${gstRate}%</td><td style="text-align:right;">₹${cgst}</td><td style="text-align:right;">₹${sgst}</td><td style="text-align:right;">₹${baseAmt}</td></tr>`;
+      }).join("")}
+      ${shippingFee > 0 ? `<tr><td>Shipping (${shiprocketRate?.source === "shiprocket" ? shiprocketRate.courierName : "Standard"})</td><td style="text-align:center;">1</td><td style="text-align:right;">₹${shippingFee}</td><td style="text-align:center;">0%</td><td style="text-align:right;">₹0</td><td style="text-align:right;">₹0</td><td style="text-align:right;">₹${shippingFee}</td></tr>` : ""}
+      ${appliedPromo ? `<tr><td colspan="6">Discount (${appliedPromo.code})</td><td style="text-align:right;color:#059669;">-₹${discount}</td></tr>` : ""}
+      <tr><td colspan="6" style="text-align:right;font-weight:bold;">Total</td><td style="text-align:right;font-weight:bold;">₹${finalTotal}</td></tr>
+    </tbody>
+  </table>
+</div>
+</body></html>`;
 
         if (Platform.OS === "web") {
           await setInvoicePath(ordId, `html:${html}`);
@@ -913,22 +920,6 @@ export default function CheckoutScreen() {
             <View style={[styles.totalRow, { borderTopColor: "#D6E9F2" }]}>
               <Text style={[styles.totalLabel, { color: colors.foreground }]}>Total</Text>
               <Text style={[styles.totalAmount, { color: colors.foreground }]}>₹{finalTotal}</Text>
-            </View>
-          </View>
-
-          {/* ── Buyer GSTIN (optional, B2B) ── */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>GST Details <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>(optional — for B2B buyers)</Text></Text>
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, paddingVertical: 10 }]}>
-            <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <TextInput
-                style={[styles.input, { color: colors.foreground }]}
-                value={buyerGstin}
-                onChangeText={(t) => setBuyerGstin(t.toUpperCase())}
-                placeholder="Your GSTIN (e.g. 29AADCE1234F1Z5)"
-                placeholderTextColor={colors.mutedForeground}
-                autoCapitalize="characters"
-                maxLength={15}
-              />
             </View>
           </View>
 
@@ -1366,7 +1357,7 @@ const styles = StyleSheet.create({
   modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   modalBtnText: { color: "#FFF", fontFamily: "Fredoka_600SemiBold", fontSize: 14 },
   // Step indicator
-  stepIndicatorContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#D6E9F2" },
+  stepIndicatorContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 14, backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: "#D6E9F2" },
   stepItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   stepCircle: { width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   stepNum: { fontSize: 11, fontFamily: "Fredoka_700Bold" },

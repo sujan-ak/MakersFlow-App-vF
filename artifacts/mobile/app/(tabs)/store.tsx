@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useTabSwipe } from "@/hooks/useTabSwipe";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -137,11 +136,8 @@ export default function StoreScreen() {
     setSearch("");
   };
 
-  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/store");
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
-      <SwipeIndicator />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <Text style={[styles.pageTitle, { color: colors.foreground }]}>Store</Text>
@@ -190,6 +186,7 @@ export default function StoreScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
+        overScrollMode="never"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0B6FAD']} />
         }

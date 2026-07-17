@@ -68,6 +68,7 @@ function TabLayout() {
       // and sign-in → home transition.
       screenOptions={{
         lazy: true,
+        unmountOnBlur: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,

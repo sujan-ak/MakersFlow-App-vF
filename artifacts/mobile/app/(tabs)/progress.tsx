@@ -733,7 +733,7 @@ export default function ProgressScreen() {
             <View style={styles.leaderboardSection}>
               <View style={styles.leaderboardHeader}>
                 <Ionicons name="trophy" size={32} color="#F59E0B" />
-                <Text style={[styles.leaderboardTitle, { color: colors.foreground }]}>Weekly Leaderboard</Text>
+                <Text style={[styles.leaderboardTitle, { color: colors.foreground }]}>Top Learners</Text>
               </View>
               {isLoadingLeaderboard ? (
                 <ActivityIndicator color="#0B6FAD" style={{ marginTop: 20 }} />
@@ -745,12 +745,12 @@ export default function ProgressScreen() {
                     key={item.rank}
                     style={[
                       styles.leaderboardRow,
-                      item.isSelf && { backgroundColor: colors.accent, borderColor: colors.secondary },
+                      item.isSelf && { backgroundColor: '#0B6FAD', borderColor: '#0B6FAD' },
                     ]}
                   >
                     <Text style={[styles.leaderboardRank, { color: colors.primary }]}>#{item.rank}</Text>
-                    <Text style={[styles.leaderboardName, { color: colors.foreground }, item.isSelf && { color: colors.accentForeground }]}>{item.name}</Text>
-                    <Text style={[styles.leaderboardPoints, { color: colors.mutedForeground }]}>{item.points} {item.points === 1 ? 'day' : 'days'}</Text>
+                    <Text style={[styles.leaderboardName, { color: colors.foreground }, item.isSelf && { color: '#FFFFFF' }]}>{item.name}</Text>
+                    <Text style={[styles.leaderboardPoints, { color: colors.mutedForeground }]}>{item.points} pts</Text>
                   </View>
                 ))
               )}
