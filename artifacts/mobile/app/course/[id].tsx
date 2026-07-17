@@ -230,24 +230,6 @@ export default function CourseDetailScreen() {
     await loadCourseData(true);
   };
 
-  if (isLoading) {
-    return <DetailSkeleton />;
-  }
-
-  if (!course) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Pressable onPress={() => {
-          if (router.canGoBack()) router.back();
-          else router.replace("/(tabs)/courses");
-        }} style={styles.backCircleWeb}>
-          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
-        </Pressable>
-        <Text style={[styles.errorText, { color: colors.foreground }]}>Course not found.</Text>
-      </View>
-    );
-  }
-
   const quiz = useMemo(() => QUIZZES.find((q) => q.courseId === course?.id), [course?.id]);
   const isCourseCompleted = !!enrollment?.completed_at;
   const accessExpired = useMemo(() => isExpired(enrollment), [enrollment]);
@@ -272,6 +254,24 @@ export default function CourseDetailScreen() {
 
   const totalDurationMin = useMemo(() => modules.reduce((sum, m) => sum + (m.duration_minutes || 0), 0), [modules]);
   const displayDuration = totalDurationMin > 0 ? `${totalDurationMin} mins` : "Self-paced";
+
+  if (isLoading) {
+    return <DetailSkeleton />;
+  }
+
+  if (!course) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <Pressable onPress={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace("/(tabs)/courses");
+        }} style={styles.backCircleWeb}>
+          <Ionicons name="arrow-back" size={22} color="#0B6FAD" />
+        </Pressable>
+        <Text style={[styles.errorText, { color: colors.foreground }]}>Course not found.</Text>
+      </View>
+    );
+  }
 
   const handleFavoriteToggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

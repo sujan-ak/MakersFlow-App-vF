@@ -205,6 +205,29 @@ export default function TransactionsScreen() {
                   {isRefund ? "-" : ""}₹{item.total.toLocaleString("en-IN")}
                 </Text>
               </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+                <Pressable
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    borderWidth: 1.5,
+                    borderColor: "#0B6FAD",
+                  }}
+                  onPress={() => router.push(`/store/orders?id=${item.id}`)}
+                >
+                  <Ionicons name="eye-outline" size={14} color="#0B6FAD" />
+                  <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: "#0B6FAD" }}>
+                    View Order
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           );
         }}

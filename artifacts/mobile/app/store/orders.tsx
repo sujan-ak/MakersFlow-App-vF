@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, ActivityIndicator, Modal, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -112,6 +112,7 @@ export default function OrdersScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { id: filterOrderId } = useLocalSearchParams<{ id?: string }>();
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnce = useRef(false);
@@ -289,6 +290,10 @@ export default function OrdersScreen() {
     return { bg: "#FEF3C7", text: "#D97706" };
   };
 
+  const filteredOrders = filterOrderId
+    ? orders.filter(o => o.id === filterOrderId)
+    : orders;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -310,15 +315,41 @@ export default function OrdersScreen() {
           />
         }
       >
-        {orders.length === 0 ? (
+        {filterOrderId && (
+          <View style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: 12,
+            backgroundColor: colors.muted,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            marginBottom: 16,
+            gap: 10,
+          }}>
+            <Text style={{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_600SemiBold", flex: 1 }}>
+              Showing details for Order #{filterOrderId.toUpperCase()}
+            </Text>
+            <Pressable onPress={() => router.setParams({ id: undefined })}>
+              <Text style={{ fontSize: 13, color: "#0B6FAD", fontFamily: "Inter_700Bold", textDecorationLine: "underline" }}>
+                Show All
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {filteredOrders.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyIconCircle}>
               <Ionicons name="cube" size={40} color="#0B6FAD" />
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No orders yet</Text>
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              {filterOrderId ? "Order not found" : "No orders yet"}
+            </Text>
           </View>
         ) : (
-          orders.map((order) => {
+          filteredOrders.map((order) => {
             const statusStyle = getStatusStyle(order.status);
             return (
               <View key={order.id} style={[styles.orderCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

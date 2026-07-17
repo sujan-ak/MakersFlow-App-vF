@@ -89,8 +89,8 @@ function FeatureActionCards() {
       target: "/(tabs)/store",
     },
     {
-      title: "Join a Challenge",
-      sub: "Compete with other makers weekly",
+      title: "My Progress",
+      sub: "Track your learning progress",
       icon: "trophy",
       iconBg: "#17E5D3",
       iconColor: "#063B4F",

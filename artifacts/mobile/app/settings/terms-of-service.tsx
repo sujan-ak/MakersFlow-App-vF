@@ -152,9 +152,16 @@ export default function TermsOfServiceScreen() {
         <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
           Phone: +91 83095 89858
         </Text>
-        <Text style={[styles.body, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          Support: Settings → Help & Support
-        </Text>
+        <Pressable 
+          onPress={() => router.push("/settings/help")}
+          style={({ pressed }) => [
+            { opacity: pressed ? 0.7 : 1, marginTop: 4 }
+          ]}
+        >
+          <Text style={[styles.body, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            Support: Settings → <Text style={{ textDecorationLine: "underline" }}>Help & Support</Text>
+          </Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
