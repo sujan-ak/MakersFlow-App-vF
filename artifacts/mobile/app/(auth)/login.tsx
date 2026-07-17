@@ -174,7 +174,7 @@ export default function LoginScreen() {
       >
         <View style={styles.header}>
           <Image
-            source={require("@/assets/images/logos/logo.png")}
+            source={require("@/assets/images/logos/logo.webp")}
             style={styles.logoImage}
             resizeMode="contain"
           />
