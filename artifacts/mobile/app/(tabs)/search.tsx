@@ -311,6 +311,8 @@ export default function SearchScreen() {
       </View>
 
       <ScrollView
+        overScrollMode="never"
+        removeClippedSubviews={true}
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: Platform.OS === "web" ? 100 : insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}

@@ -294,9 +294,7 @@ export default function ProgressScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!hasLoadedOnce.current) {
-        loadStatsAndCourses(false);
-      } else {
-        loadStatsAndCourses(true);
+        loadStatsAndCourses(false); // first load only — instant on return
       }
     }, [loadStatsAndCourses])
   );

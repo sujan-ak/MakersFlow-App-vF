@@ -228,7 +228,7 @@ export default function AchievementsScreen() {
                 return (
                   <View key={badge.id} style={styles.badgeItem}>
                     <LinearGradient
-                      colors={["#DCF7F4", "#B2F1EA"]}
+                      colors={[colors.accent, colors.accent]}
                       style={styles.badgeIconCircle}
                     >
                       <Ionicons name={badge.icon as any} size={28} color={colors.primary} />

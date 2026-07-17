@@ -765,7 +765,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await authService.resetPasswordForEmail(
         email,
-        'makersflow:///(auth)/reset-password'
+        Linking.createURL('(auth)/reset-password', { scheme: 'makersflow' })
       );
 
       if (error) {

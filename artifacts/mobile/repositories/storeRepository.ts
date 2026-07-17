@@ -118,6 +118,7 @@ function mapRow(row: any, index: number): Product {
     rating: Number(row.rating) || 0,
     reviews: Number(row.total_reviews) || 0,
     inStock: row.in_stock === undefined ? true : Boolean(row.in_stock),
+    weight_kg: row.weight_kg ? Number(row.weight_kg) : undefined,
     badge: row.badge || undefined,
     features: Array.isArray(row.features) ? row.features : [],
   };
@@ -128,7 +129,7 @@ async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
     .select(
-      'id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, images, videos, in_stock, status, is_course, course_id'
+      'id, title, slug, description, price, original_price, category, subcategory, thumbnail_url, images, videos, in_stock, status, is_course, course_id, weight_kg'
     )
     .or('status.eq.available,status.eq.active');
 

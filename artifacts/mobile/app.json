@@ -49,7 +49,8 @@
         "android.permission.VIBRATE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.INTERNET"
-      ]
+      ],
+      "minSdkVersion": 24
     },
     "web": {
       "bundler": "metro",
@@ -91,6 +92,7 @@
         "projectId": "6c37114c-1de2-402a-82f4-1e3589d3bc24"
       }
     },
-    "owner": "makersflow"
+    "owner": "makersflow",
+    "privacy": "unlisted"
   }
 }
