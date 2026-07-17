@@ -36,7 +36,9 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ extended: true }));
-app.use(rateLimit({ windowMs: 60_000, max: 120 }));
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000;
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 120;
+app.use(rateLimit({ windowMs: rateLimitWindowMs, max: rateLimitMax }));
 
 app.use("/api", router);
 

@@ -204,7 +204,19 @@ export default function HomeScreen() {
     try {
       await refreshProgress().catch(() => {});
 
-      const result = await homeRepository.get(user?.id, isOffline);
+      const result = await homeRepository.get(
+        user?.id,
+        isOffline,
+        isRefreshing,
+        (bgData) => {
+          setEnrolledCourses(bgData.progress.enrolledCourses);
+          setLearningStreak(bgData.progress.learningStreak);
+          setLongestStreak(bgData.progress.longestStreak);
+          setTotalLessonsCompleted(bgData.progress.totalLessonsCompleted);
+          setTotalHoursLearned(bgData.progress.totalHoursLearned);
+          setUnreadNotifCount(bgData.unreadNotifCount);
+        }
+      );
       const data = result.data;
 
       setPromotions(data.promotions);
@@ -550,13 +562,13 @@ export default function HomeScreen() {
           <View style={styles.brandsContainer}>
             <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border, overflow: 'hidden' }]}>
               <Image
-                source={require('@/assets/images/partners/Flow Logo Gradient- v2.png')}
+                source={require('@/assets/images/partners/Flow Logo Gradient- v2.webp')}
                 style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
               />
             </View>
             <View style={[styles.brandPlaceholder, { backgroundColor: colors.muted, borderColor: colors.border, overflow: 'hidden' }]}>
               <Image
-                source={require('@/assets/images/partners/Ed-Logo-.jpg')}
+                source={require('@/assets/images/partners/edodwaja_foundation.webp')}
                 style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
               />
             </View>

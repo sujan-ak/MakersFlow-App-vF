@@ -31,6 +31,7 @@ import { STORAGE_KEYS } from '@/constants/storageKeys';
 import { CACHE_POLICY } from '@/constants/cachePolicy';
 import { cacheManager, networkResult, cacheResult, RepositoryResult } from '@/services/cacheManager';
 import { isNetworkError } from '@/lib/networkUtils';
+import { firstThumbnailUrl, parseThumbnailUrls } from '@/lib/thumbnailUtils';
 import { fetchAllCourses } from '@/services/courseDataProvider';
 import { fetchEnrolledCourses } from '@/services/enrollmentService';
 import { fetchCourseProgress } from '@/lib/progressStorage';
@@ -80,20 +81,6 @@ export const EMPTY_HOME_DATA: HomeData = {
   unreadNotifCount: 0,
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function firstThumbnailUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('[')) {
-    try {
-      const arr = JSON.parse(trimmed);
-      return Array.isArray(arr) && arr[0] ? String(arr[0]) : null;
-    } catch { /* fall through */ }
-  }
-  return trimmed.split(',')[0].trim() || null;
-}
-
 // ── Remote fetchers ──────────────────────────────────────────────────────────
 
 async function fetchPromotions(): Promise<any[]> {
@@ -139,7 +126,8 @@ async function fetchCourses(): Promise<{ courses: any[]; popularCourses: any[] }
       isFree: c.is_free,
       thumbnail: firstThumbnailUrl(c.thumbnail_url)
         ? { uri: firstThumbnailUrl(c.thumbnail_url)! }
-        : require('@/assets/images/courses/course_robotics.png'),
+        : require('@/assets/images/courses/course_robotics.webp'),
+      images: parseThumbnailUrls(c.thumbnail_url),
       instructor: c.profiles?.full_name || '',
       rating,
       reviews,
@@ -160,9 +148,9 @@ async function fetchProducts(): Promise<any[]> {
     .limit(8);
   if (error) throw error;
   const fallbacks = [
-    require('@/assets/images/products/product_kit_1.png'),
-    require('@/assets/images/products/product_kit_2.png'),
-    require('@/assets/images/products/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.webp'),
+    require('@/assets/images/products/product_kit_2.webp'),
+    require('@/assets/images/products/product_kit_3.webp'),
   ];
   return (data ?? []).map((row: any, idx: number) => {
     const thumbUrl = firstThumbnailUrl(row.thumbnail_url);
@@ -283,9 +271,83 @@ export const homeRepository = {
    * Online:  fetchRemote → write caches → return live data
    * Offline: readCache   → return stale data (or empty if cold)
    */
-  async get(userId: string | undefined, isOffline: boolean): Promise<RepositoryResult<HomeData>> {
+  async get(
+    userId: string | undefined,
+    isOffline: boolean,
+    forceRefresh = false,
+    onBackgroundUpdate?: (data: HomeData) => void
+  ): Promise<RepositoryResult<HomeData>> {
     if (isOffline) {
       return homeRepository.loadFromCache(userId);
+    }
+
+    // Cache-first optimization: check public cache first
+    if (!forceRefresh) {
+      try {
+        const coursesMeta = await cacheManager.readWithMeta<{ courses: any[]; popularCourses: any[] }>(
+          STORAGE_KEYS.CACHED_HOME_COURSES,
+          CACHE_POLICY.HOME_COURSES_TTL_MS
+        );
+
+        if (coursesMeta && !coursesMeta.stale) {
+          // Public cache is fresh! Load the rest from cache and serve immediately.
+          const [promotions, popularKits, progressMeta, unreadNotifMeta] = await Promise.all([
+            cacheManager.read<any[]>(STORAGE_KEYS.CACHED_HOME_PROMOTIONS, CACHE_POLICY.HOME_PROMOTIONS_TTL_MS),
+            cacheManager.read<any[]>(STORAGE_KEYS.CACHED_HOME_PRODUCTS, CACHE_POLICY.HOME_PRODUCTS_TTL_MS),
+            userId
+              ? cacheManager.readWithMeta<HomeProgress>(STORAGE_KEYS.CACHED_HOME_PROGRESS, CACHE_POLICY.HOME_PROGRESS_TTL_MS)
+              : Promise.resolve(null),
+            userId
+              ? cacheManager.readWithMeta<number>(STORAGE_KEYS.CACHED_HOME_NOTIFICATIONS, CACHE_POLICY.HOME_NOTIFICATIONS_TTL_MS)
+              : Promise.resolve(null),
+          ]);
+
+          const cachedData: HomeData = {
+            promotions: promotions ?? [],
+            courses: coursesMeta.data.courses ?? [],
+            popularCourses: coursesMeta.data.popularCourses ?? [],
+            popularKits: popularKits ?? [],
+            progress: progressMeta?.data ?? EMPTY_PROGRESS,
+            unreadNotifCount: unreadNotifMeta?.data ?? 0,
+          };
+
+          // Mixed-TTL: if private data is stale/expired, kick off a background refresh
+          const progressStale = !progressMeta || progressMeta.stale;
+          const notificationsStale = !unreadNotifMeta || unreadNotifMeta.stale;
+
+          if (userId && (progressStale || notificationsStale) && onBackgroundUpdate) {
+            Promise.all([
+              progressStale ? fetchProgress(userId).catch(() => null) : Promise.resolve(progressMeta?.data ?? null),
+              notificationsStale ? fetchNotificationCount(userId).catch(() => null) : Promise.resolve(unreadNotifMeta?.data ?? null),
+            ]).then(([newProgress, newNotifCount]) => {
+              let updated = false;
+              const nextProgress = newProgress !== null ? newProgress : (progressMeta?.data ?? EMPTY_PROGRESS);
+              const nextNotifCount = newNotifCount !== null ? newNotifCount : (unreadNotifMeta?.data ?? 0);
+
+              if (progressStale && newProgress !== null) {
+                cacheManager.write(STORAGE_KEYS.CACHED_HOME_PROGRESS, newProgress);
+                updated = true;
+              }
+              if (notificationsStale && newNotifCount !== null) {
+                cacheManager.write(STORAGE_KEYS.CACHED_HOME_NOTIFICATIONS, newNotifCount);
+                updated = true;
+              }
+
+              if (updated) {
+                onBackgroundUpdate({
+                  ...cachedData,
+                  progress: nextProgress,
+                  unreadNotifCount: nextNotifCount,
+                });
+              }
+            }).catch(() => {});
+          }
+
+          return cacheResult(cachedData, coursesMeta.updatedAt, CACHE_POLICY.HOME_COURSES_TTL_MS);
+        }
+      } catch (err) {
+        console.warn('[homeRepo] Error checking public cache:', err);
+      }
     }
 
     try {

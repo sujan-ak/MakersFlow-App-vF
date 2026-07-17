@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View, ViewStyle } from "react-native";
+import { Animated, StyleSheet, View, ViewStyle, Dimensions } from "react-native";
 import { useColors } from "@/hooks/useColors";
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
 interface SkeletonProps {
   width?: number | string;
@@ -32,9 +35,9 @@ export function Skeleton({ width = "100%", height = 16, borderRadius = 8, style 
   );
 }
 
-export function CourseCardSkeleton() {
+export function CourseCardSkeleton({ width = CARD_WIDTH, style }: { width?: number | string; style?: ViewStyle }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { width: width as any }, style]}>
       <Skeleton height={110} borderRadius={0} />
       <View style={styles.content}>
         <Skeleton width={70} height={14} />
@@ -46,9 +49,9 @@ export function CourseCardSkeleton() {
   );
 }
 
-export function ProductCardSkeleton() {
+export function ProductCardSkeleton({ width = CARD_WIDTH, style }: { width?: number | string; style?: ViewStyle }) {
   return (
-    <View style={styles.productCard}>
+    <View style={[styles.productCard, { width: width as any }, style]}>
       <Skeleton height={140} borderRadius={0} />
       <View style={styles.productContent}>
         <Skeleton width="80%" height={14} />
@@ -58,9 +61,59 @@ export function ProductCardSkeleton() {
   );
 }
 
+export function CertificateSkeleton() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, gap: 12 }}>
+      <Skeleton width={40} height={40} borderRadius={20} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <Skeleton width="80%" height={16} />
+        <Skeleton width="40%" height={12} />
+      </View>
+      <Skeleton width={60} height={28} borderRadius={14} />
+    </View>
+  );
+}
+
+export function WishlistSkeleton() {
+  return (
+    <View style={{ flexDirection: "row", gap: 12, paddingVertical: 4 }}>
+      <ProductCardSkeleton width={140} />
+      <ProductCardSkeleton width={140} />
+    </View>
+  );
+}
+
+export function BadgeSkeleton() {
+  return (
+    <View style={{ width: "47%", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#E6EDF0", gap: 8 }}>
+      <Skeleton width={64} height={64} borderRadius={32} />
+      <Skeleton width="70%" height={16} />
+      <Skeleton width="90%" height={12} style={{ marginTop: 4 }} />
+      <Skeleton width="50%" height={12} />
+    </View>
+  );
+}
+
+export function AchievementsSkeleton() {
+  return (
+    <View style={{ flex: 1, padding: 20, gap: 24, backgroundColor: "#F8FAFC" }}>
+      {/* Hero Header Stats Skeleton */}
+      <Skeleton width="100%" height={140} borderRadius={16} />
+      {/* Title */}
+      <Skeleton width={100} height={22} style={{ marginTop: 8 }} />
+      {/* Grid of Badges Skeletons */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
+        <BadgeSkeleton />
+        <BadgeSkeleton />
+        <BadgeSkeleton />
+        <BadgeSkeleton />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
-    width: 200,
     borderRadius: 14,
     overflow: "hidden",
     marginRight: 12,
@@ -71,7 +124,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   productCard: {
-    width: 160,
     borderRadius: 14,
     overflow: "hidden",
     marginRight: 12,

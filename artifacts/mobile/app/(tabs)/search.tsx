@@ -16,21 +16,21 @@ import { supabase } from "@/lib/supabase";
 const POPULAR_TOPICS = ["Robotics", "Arduino", "AI & ML", "IoT", "Python", "Electronics", "Circuits", "3D Printing"];
 
 const COURSE_FALLBACKS = [
-  require('@/assets/images/courses/course_robotics.png'),
-  require('@/assets/images/courses/course_ai.png'),
-  require('@/assets/images/courses/course_electronics.png'),
+  require('@/assets/images/courses/course_robotics.webp'),
+  require('@/assets/images/courses/course_ai.webp'),
+  require('@/assets/images/courses/course_electronics.webp'),
 ];
 
 const PRODUCT_FALLBACKS: Record<string, any[]> = {
   physical: [
-    require('@/assets/images/products/product_kit_1.png'),
-    require('@/assets/images/products/product_kit_2.png'),
-    require('@/assets/images/products/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.webp'),
+    require('@/assets/images/products/product_kit_2.webp'),
+    require('@/assets/images/products/product_kit_3.webp'),
   ],
   digital: [
-    require('@/assets/images/product_notes_1.png'),
-    require('@/assets/images/product_notes_2.png'),
-    require('@/assets/images/product_notes_3.png'),
+    require('@/assets/images/product_notes_1.webp'),
+    require('@/assets/images/product_notes_2.webp'),
+    require('@/assets/images/product_notes_3.webp'),
   ],
 };
 

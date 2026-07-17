@@ -186,7 +186,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
         moduleId,
         courseTitle: course.title,
         moduleTitle: module.title,
-        courseThumbnail: course.thumbnail_url ? { uri: course.thumbnail_url } : require('@/assets/images/courses/course_robotics.png'),
+        courseThumbnail: course.thumbnail_url ? { uri: course.thumbnail_url } : require('@/assets/images/courses/course_robotics.webp'),
         lastWatchedAt: moduleProgress.lastAccessedAt,
         videoProgress: moduleProgress.videoProgress,
         courseProgress: progress.progress,

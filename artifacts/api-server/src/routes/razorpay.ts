@@ -42,11 +42,12 @@ function requireAdmin(req: Request, res: Response): boolean {
     res.status(500).json({ error: "ADMIN_API_SECRET is not configured" });
     return false;
   }
-  const provided = req.header("x-admin-secret");
-  if (!provided || !crypto.timingSafeEqual(
-    Buffer.from(provided.padEnd(secret.length)),
-    Buffer.from(secret.padEnd(provided.length)),
-  )) {
+  const provided = req.header("x-admin-secret") || "";
+  
+  const providedHash = crypto.createHash("sha256").update(provided).digest();
+  const secretHash = crypto.createHash("sha256").update(secret).digest();
+  
+  if (!crypto.timingSafeEqual(providedHash, secretHash)) {
     res.status(401).json({ error: "Unauthorized" });
     return false;
   }
@@ -255,14 +256,23 @@ router.post("/razorpay/reconcile", async (req: Request, res: Response) => {
 
 // ── Refund (admin-initiated) ──────────────────────────────────────────────────
 
+import { z } from "zod";
+
+const refundSchema = z.object({
+  order_id: z.string().uuid("Invalid order ID"),
+  amount: z.number().positive().optional(),
+  reason: z.string().min(3).max(255).optional(),
+});
+
 router.post("/razorpay/refund", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   try {
-    const { order_id, amount, reason } = req.body ?? {};
-    if (!order_id) {
-      res.status(400).json({ error: "order_id is required" });
+    const result = refundSchema.safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json({ error: "Invalid refund request parameters" });
       return;
     }
+    const { order_id, amount, reason } = result.data;
 
     const supabase = getSupabaseAdmin();
     const { data: order } = await supabase
@@ -299,8 +309,8 @@ router.post("/razorpay/refund", async (req: Request, res: Response) => {
 
     const refund = await rzpRes.json();
     if (!rzpRes.ok) {
-      logger.error(refund, "Razorpay refund failed");
-      res.status(502).json({ error: "Razorpay refund failed", details: refund });
+      logger.error({ refund }, "Razorpay refund failed");
+      res.status(502).json({ error: "Razorpay refund processing failed." });
       return;
     }
 
@@ -309,7 +319,7 @@ router.post("/razorpay/refund", async (req: Request, res: Response) => {
       .update({ status: "refunded", refund_id: (refund as any).id ?? null })
       .eq("id", order.id);
 
-    res.json({ success: true, refund });
+    res.json({ success: true });
   } catch (e) {
     logger.error(e, "Refund error");
     res.status(500).json({ error: "Refund failed" });

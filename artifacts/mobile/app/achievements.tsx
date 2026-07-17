@@ -19,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { getCourseModules } from "@/services/courseDataProvider";
 import { TEXT_STYLES, TYPOGRAPHY } from "@/constants/typography";
+import { AchievementsSkeleton } from "@/components/SkeletonLoader";
 
 interface CompletedCourse {
   courseId: string;
@@ -182,10 +183,7 @@ export default function AchievementsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ marginTop: 12, fontSize: 14, color: colors.mutedForeground, fontWeight: "500" }}>Loading...</Text>
-        </View>
+        <AchievementsSkeleton />
       ) : (
         <ScrollView
           contentContainerStyle={{

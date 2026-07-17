@@ -2,7 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, Alert, Platform, Dimensions } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, Alert, Platform, Dimensions } from "react-native";
+import { Image } from "expo-image";
 import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
@@ -19,7 +20,7 @@ interface ProductCardProps {
   variant?: "flat" | "boxed";
 }
 
-export function ProductCard({ product, onAddedToCart, gridMode = false, variant = "boxed" }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ product, onAddedToCart, gridMode = false, variant = "boxed" }: ProductCardProps) {
   const colors = useColors();
   const { addToCart } = useCart();
   const { isProductInWishlist, toggleWishlistProduct } = useFavorites();
@@ -125,7 +126,9 @@ export function ProductCard({ product, onAddedToCart, gridMode = false, variant 
                   <Image
                     key={`img_${index}`}
                     source={src}
-                    style={{ width: containerWidth || CARD_WIDTH, height: 120, resizeMode: "cover" }}
+                    style={{ width: containerWidth || CARD_WIDTH, height: 120 }}
+                    contentFit="cover"
+                    transition={200}
                   />
                 );
               })}
@@ -145,7 +148,7 @@ export function ProductCard({ product, onAddedToCart, gridMode = false, variant 
             )}
           </View>
         ) : (
-          <Image source={product.thumbnail} style={styles.thumbnail} />
+          <Image source={product.thumbnail} style={styles.thumbnail} contentFit="cover" transition={200} />
         )}
         {product.badge && (
           <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
@@ -232,7 +235,7 @@ export function ProductCard({ product, onAddedToCart, gridMode = false, variant 
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
@@ -262,7 +265,6 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   badge: {
     position: "absolute",

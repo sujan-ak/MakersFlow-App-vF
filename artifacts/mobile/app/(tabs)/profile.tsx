@@ -25,6 +25,7 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { getCourseModules } from "@/services/courseDataProvider";
 import { ProductCard } from "@/components/ProductCard";
+import { CertificateSkeleton, WishlistSkeleton } from "@/components/SkeletonLoader";
 import { Product } from "@/data/mockData";
 import { useFavorites } from "@/context/FavoritesContext";
 
@@ -66,9 +67,9 @@ export default function ProfileScreen() {
         .in('id', wishlistProductIds.map(Number));
       if (!error && data) {
         const kitFallbacks = [
-          require('@/assets/images/products/product_kit_1.png'),
-          require('@/assets/images/products/product_kit_2.png'),
-          require('@/assets/images/products/product_kit_3.png'),
+          require('@/assets/images/products/product_kit_1.webp'),
+          require('@/assets/images/products/product_kit_2.webp'),
+          require('@/assets/images/products/product_kit_3.webp'),
         ];
         const mapped: Product[] = data.map((row: any, idx: number) => ({
           id: String(row.id),
@@ -568,9 +569,9 @@ export default function ProfileScreen() {
         </View>
 
         {certsLoading ? (
-          <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
-            <ActivityIndicator size="small" color="#0B6FAD" />
-            <Text style={{ marginTop: 8, fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }}>Loading...</Text>
+          <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, padding: 16 }]}>
+            <CertificateSkeleton />
+            <CertificateSkeleton />
           </View>
         ) : completedCourses.length === 0 ? (
           <View style={[styles.certsCard, styles.emptyCertsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -658,9 +659,7 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>My Wishlist</Text>
         {wishlistLoading ? (
-          <View style={[styles.certsCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 20 }]}>
-            <ActivityIndicator size="small" color="#0B6FAD" />
-          </View>
+          <WishlistSkeleton />
         ) : wishlistProducts.length === 0 ? (
           <View style={[styles.certsCard, styles.emptyCertsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Ionicons name="heart" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />

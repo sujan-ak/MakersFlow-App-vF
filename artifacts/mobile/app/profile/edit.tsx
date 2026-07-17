@@ -22,6 +22,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import { TEXT_STYLES } from "@/constants/typography";
+import { validateImageFile } from "@/lib/fileValidation";
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -80,6 +81,11 @@ export default function EditProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
+      const validation = await validateImageFile(result.assets[0].uri);
+      if (!validation.valid) {
+        Alert.alert("Invalid File", validation.error || "Please select a valid image.");
+        return;
+      }
       setAvatarUri(result.assets[0].uri);
     }
   }

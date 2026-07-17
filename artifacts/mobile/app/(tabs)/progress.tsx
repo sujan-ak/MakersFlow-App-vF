@@ -94,7 +94,7 @@ export default function ProgressScreen() {
         level: c.level ? (c.level.charAt(0).toUpperCase() + c.level.slice(1)) : "Beginner",
         price: c.price || 0,
         isFree: c.is_free,
-        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/courses/course_robotics.png'),
+        thumbnail: c.thumbnail_url ? { uri: c.thumbnail_url } : require('@/assets/images/courses/course_robotics.webp'),
         instructor: "MakersFlow Instructor",
         rating: 4.8,
         reviews: 120,
@@ -666,7 +666,7 @@ export default function ProgressScreen() {
 
               {/* Achievement Badges Section */}
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>Achievement Badges</Text>
+                <Text style={[styles.sectionTitle, { paddingHorizontal: 20, color: colors.foreground }]}>Achievement Badges</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}

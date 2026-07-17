@@ -254,9 +254,9 @@ export default function CertificateScreen() {
           return TRANSPARENT_1X1_PNG;
         };
 
-        flowLogoBase64 = await resolveBase64(require('@/assets/images/certificates/flow_logo.png'));
-        edodwajaLogoBase64 = await resolveBase64(require('@/assets/images/certificates/edodwaja_logo.jpg'));
-        badgeBase64 = await resolveBase64(require('@/assets/images/certificates/badge.png'));
+        flowLogoBase64 = await resolveBase64(require('@/assets/images/certificates/flow_logo.webp'));
+        edodwajaLogoBase64 = await resolveBase64(require('@/assets/images/certificates/edodwaja_logo.webp'));
+        badgeBase64 = await resolveBase64(require('@/assets/images/certificates/badge.webp'));
       } else {
         flowLogoBase64 = 'https://oodqutwsljhvuyotuthu.supabase.co/storage/v1/object/public/partners/Flow%20Logo%20Gradient-%20v2.png';
         edodwajaLogoBase64 = 'https://oodqutwsljhvuyotuthu.supabase.co/storage/v1/object/public/partners/Ed-Logo-.jpg';

@@ -30,6 +30,7 @@ import { STORAGE_KEYS } from '@/constants/storageKeys';
 import { CACHE_POLICY } from '@/constants/cachePolicy';
 import { cacheManager, networkResult, cacheResult, RepositoryResult } from '@/services/cacheManager';
 import { isNetworkError } from '@/lib/networkUtils';
+import { firstThumbnailUrl, parseThumbnailUrls } from '@/lib/thumbnailUtils';
 import { fetchAllCourses } from '@/services/courseDataProvider';
 import { fetchEnrolledCourses } from '@/services/enrollmentService';
 import { fetchCourseProgress } from '@/lib/progressStorage';
@@ -74,23 +75,6 @@ export const EMPTY_COURSES_DATA: CoursesData = {
   enrollments: [],
 };
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Extracts the first URL from a thumbnail_url that may be a comma-separated
- *  list or a JSON array (as stored when admin uploads multiple images). */
-function firstThumbnailUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('[')) {
-    try {
-      const arr = JSON.parse(trimmed);
-      return Array.isArray(arr) && arr[0] ? String(arr[0]) : null;
-    } catch { /* fall through */ }
-  }
-  const first = trimmed.split(',')[0].trim();
-  return first || null;
-}
-
 // ── Remote fetchers ──────────────────────────────────────────────────────────
 
 async function fetchCatalog(): Promise<CourseCatalogItem[]> {
@@ -123,7 +107,8 @@ async function fetchCatalog(): Promise<CourseCatalogItem[]> {
       isFree: c.is_free,
       thumbnail: firstThumbnailUrl(c.thumbnail_url)
         ? { uri: firstThumbnailUrl(c.thumbnail_url)! }
-        : require('@/assets/images/courses/course_robotics.png'),
+        : require('@/assets/images/courses/course_robotics.webp'),
+      images: parseThumbnailUrls(c.thumbnail_url),
       instructor: c.profiles?.full_name || '',
       rating,
       reviews,
@@ -147,7 +132,8 @@ async function fetchEnrollments(userId: string): Promise<EnrolledCourseDetail[]>
           instructor:       c.profiles?.full_name || '',
           thumbnail:        firstThumbnailUrl(c.thumbnail_url)
                               ? { uri: firstThumbnailUrl(c.thumbnail_url)! }
-                              : require('@/assets/images/courses/course_robotics.png'),
+                              : require('@/assets/images/courses/course_robotics.webp'),
+          images:           parseThumbnailUrls(c.thumbnail_url),
           progress:         prog.percentage,
           totalModules:     prog.total,
           completedModules: prog.completed,
@@ -166,9 +152,60 @@ export const coursesRepository = {
    * The repository assembles CoursesData from remote or cache.
    * The screen does not know the data origin.
    */
-  async get(userId: string | undefined, isOffline: boolean): Promise<RepositoryResult<CoursesData>> {
+  async get(
+    userId: string | undefined,
+    isOffline: boolean,
+    forceRefresh = false,
+    onBackgroundUpdate?: (data: CoursesData) => void
+  ): Promise<RepositoryResult<CoursesData>> {
     if (isOffline) {
       return coursesRepository.loadFromCache(userId);
+    }
+
+    // Cache-first optimization: check public catalog first
+    if (!forceRefresh) {
+      try {
+        const catalogResult = await cacheManager.readWithMeta<CourseCatalogItem[]>(
+          STORAGE_KEYS.CACHED_COURSES_CATALOG,
+          CACHE_POLICY.COURSES_CATALOG_TTL_MS
+        );
+
+        if (catalogResult && !catalogResult.stale) {
+          const enrollmentsResult = userId
+            ? await cacheManager.readWithMeta<EnrolledCourseDetail[]>(
+                STORAGE_KEYS.CACHED_COURSES_ENROLLMENTS,
+                CACHE_POLICY.COURSES_ENROLLMENTS_TTL_MS
+              )
+            : null;
+
+          const cachedEnrollments = enrollmentsResult?.data ?? [];
+          const enrolledIds = new Set(cachedEnrollments.map((e) => e.courseId));
+          const cachedData: CoursesData = {
+            catalog: catalogResult.data.filter((c) => !enrolledIds.has(c.id)),
+            enrollments: cachedEnrollments,
+          };
+
+          // Mixed-TTL: if enrollments cache is stale/expired, kick off background refetch
+          const enrollmentsStale = userId && (!enrollmentsResult || enrollmentsResult.stale);
+
+          if (userId && enrollmentsStale && onBackgroundUpdate) {
+            fetchEnrollments(userId)
+              .then((newEnrollments) => {
+                cacheManager.write(STORAGE_KEYS.CACHED_COURSES_ENROLLMENTS, newEnrollments);
+                const newEnrolledIds = new Set(newEnrollments.map((e) => e.courseId));
+                onBackgroundUpdate({
+                  catalog: catalogResult.data.filter((c) => !newEnrolledIds.has(c.id)),
+                  enrollments: newEnrollments,
+                });
+              })
+              .catch(() => {});
+          }
+
+          return cacheResult(cachedData, catalogResult.updatedAt, CACHE_POLICY.COURSES_CATALOG_TTL_MS);
+        }
+      } catch (err) {
+        console.warn('[coursesRepo] Error checking public cache:', err);
+      }
     }
 
     try {

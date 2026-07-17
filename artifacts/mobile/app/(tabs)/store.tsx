@@ -67,8 +67,9 @@ export default function StoreScreen() {
   const loadProducts = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing && !hasLoadedOnce.current) setIsLoading(true);
     try {
-      const result = await storeRepository.get(isOffline);
+      const result = await storeRepository.get(isOffline, isRefreshing);
       setProducts(result.data.products);
+      hasLoadedOnce.current = true;
     } catch (err) {
       console.error('[Store] loadProducts error:', err);
     } finally {
@@ -122,11 +123,11 @@ export default function StoreScreen() {
     return matchSearch && matchCat;
   });
 
-  const handleAddedToCart = () => {
+  const handleAddedToCart = useCallback(() => {
     if (Platform.OS === "web") {
       Alert.alert("Added to cart", "Item has been added to your cart");
     }
-  };
+  }, []);
 
   const handleCartPress = () => {
     router.push("/cart");
@@ -191,12 +192,32 @@ export default function StoreScreen() {
         }
       >
         {isLoading ? (
-          <View style={styles.section}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carouselContent}>
-              <ProductCardSkeleton />
-              <ProductCardSkeleton />
-            </ScrollView>
-          </View>
+          <>
+            <View style={styles.section}>
+              <SectionHeader title="Physical Kits" />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.carouselContent}
+              >
+                <ProductCardSkeleton width={160} />
+                <ProductCardSkeleton width={160} />
+                <ProductCardSkeleton width={160} />
+              </ScrollView>
+            </View>
+            <View style={styles.section}>
+              <SectionHeader title="Digital Resources" />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.carouselContent}
+              >
+                <ProductCardSkeleton width={160} />
+                <ProductCardSkeleton width={160} />
+                <ProductCardSkeleton width={160} />
+              </ScrollView>
+            </View>
+          </>
         ) : products.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}>

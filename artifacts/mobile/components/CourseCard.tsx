@@ -1,7 +1,8 @@
 import { Feather, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View, ToastAndroid, Platform, Alert } from "react-native";
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View, ToastAndroid, Platform, Alert } from "react-native";
+import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { Course } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
@@ -19,7 +20,7 @@ interface CourseCardProps {
   compact?: boolean;
 }
 
-export function CourseCard({ course, horizontal = false, compact = false }: CourseCardProps) {
+export const CourseCard = React.memo(function CourseCard({ course, horizontal = false, compact = false }: CourseCardProps) {
   const colors = useColors();
   const { getCourseProgress } = useProgress();
   const { isFavoriteCourse, toggleFavoriteCourse } = useFavorites();
@@ -93,7 +94,7 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
         onPress={() => router.push({ pathname: "/course/[id]", params: { id: course.id } })}
       >
         <View style={styles.horizontalThumbnailContainer}>
-          <Image source={course.thumbnail} style={styles.horizontalThumbnail} />
+          <Image source={course.thumbnail} style={styles.horizontalThumbnail} contentFit="cover" transition={200} />
           {badge && (
             <View style={[styles.badge, { backgroundColor: badge.color }]}>
               <Text style={styles.badgeText}>{badge.text}</Text>
@@ -176,8 +177,9 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
                     style={{
                       width: containerWidth || (compact ? 170 : CARD_WIDTH),
                       height: compact ? 85 : 110,
-                      resizeMode: "cover"
                     }}
+                    contentFit="cover"
+                    transition={200}
                   />
                 );
               })}
@@ -197,7 +199,7 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
             )}
           </View>
         ) : (
-          <Image source={course.thumbnail} style={compact ? styles.compactThumbnail : styles.thumbnail} />
+          <Image source={course.thumbnail} style={compact ? styles.compactThumbnail : styles.thumbnail} contentFit="cover" transition={200} />
         )}
         {badge && (
           <View style={[styles.badge, { backgroundColor: badge.color }]}>
@@ -255,7 +257,7 @@ export function CourseCard({ course, horizontal = false, compact = false }: Cour
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   // Vertical card - borderless modern style
@@ -275,12 +277,10 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: "100%",
     height: 110,
-    resizeMode: "cover",
   },
   compactThumbnail: {
     width: "100%",
     height: 85,
-    resizeMode: "cover",
   },
   badge: {
     position: "absolute",
@@ -397,7 +397,6 @@ const styles = StyleSheet.create({
   horizontalThumbnail: {
     width: 120,
     height: 90,
-    resizeMode: "cover",
   },
   horizontalContent: {
     flex: 1,

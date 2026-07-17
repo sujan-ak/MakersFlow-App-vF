@@ -34,9 +34,18 @@ export default function CoursesScreen() {
   const loadData = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing && !hasLoadedOnce.current) setIsLoading(true);
     try {
-      const result = await coursesRepository.get(user?.id, isOffline);
+      const result = await coursesRepository.get(
+        user?.id,
+        isOffline,
+        isRefreshing,
+        (bgData) => {
+          setEnrolledCourses(bgData.enrollments);
+          setBrowseMoreCourses(bgData.catalog);
+        }
+      );
       setEnrolledCourses(result.data.enrollments);
       setBrowseMoreCourses(result.data.catalog);
+      hasLoadedOnce.current = true;
     } catch (err) {
       console.error('[CoursesScreen] loadData error:', err);
     } finally {
@@ -168,10 +177,13 @@ export default function CoursesScreen() {
         }
       >
         {isLoading ? (
-          <View style={styles.skeletonContainer}>
-            <CourseCardSkeleton />
-            <CourseCardSkeleton />
-            <CourseCardSkeleton />
+          <View style={[styles.browseSection, { marginTop: 8 }]}>
+            <View style={styles.gridContainer}>
+              <CourseCardSkeleton />
+              <CourseCardSkeleton />
+              <CourseCardSkeleton />
+              <CourseCardSkeleton />
+            </View>
           </View>
         ) : (
           <>

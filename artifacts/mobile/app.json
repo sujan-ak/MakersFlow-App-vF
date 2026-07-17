@@ -4,12 +4,12 @@
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logos/icon.png",
+    "icon": "./assets/images/logos/icon.webp",
     "scheme": "makersflow",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash/splash.png",
+      "image": "./assets/images/splash/splash.webp",
       "resizeMode": "contain",
       "backgroundColor": "#0B6FAD"
     },
@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logos/icon.png",
+        "foregroundImage": "./assets/images/logos/icon.webp",
         "backgroundColor": "#0B6FAD"
       },
       "package": "com.makersflow.mobile",

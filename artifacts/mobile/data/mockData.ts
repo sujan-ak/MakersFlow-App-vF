@@ -139,7 +139,7 @@ export const NEWS_ITEMS: NewsItem[] = [
     author: "Education Desk",
     date: "Jun 6, 2026",
     readTime: "4 min read",
-    thumbnail: require("../assets/images/news_1.png"),
+    thumbnail: require("../assets/images/news_1.webp"),
     tags: ["AI", "Education Policy", "India"],
   },
   {
@@ -151,7 +151,7 @@ export const NEWS_ITEMS: NewsItem[] = [
     author: "Priya Menon",
     date: "Jun 5, 2026",
     readTime: "6 min read",
-    thumbnail: require("../assets/images/news_2.png"),
+    thumbnail: require("../assets/images/news_2.webp"),
     tags: ["Robotics", "Competitions", "Scholarships"],
   },
   {
@@ -163,7 +163,7 @@ export const NEWS_ITEMS: NewsItem[] = [
     author: "Dr. Ananya Kapoor",
     date: "Jun 4, 2026",
     readTime: "5 min read",
-    thumbnail: require("../assets/images/news_3.png"),
+    thumbnail: require("../assets/images/news_3.webp"),
     tags: ["Research", "STEM", "Learning"],
   },
   {
@@ -175,7 +175,7 @@ export const NEWS_ITEMS: NewsItem[] = [
     author: "Education Desk",
     date: "Jun 3, 2026",
     readTime: "3 min read",
-    thumbnail: require("../assets/images/news_4.png"),
+    thumbnail: require("../assets/images/news_4.webp"),
     tags: ["CBSE", "Curriculum", "AI Education"],
   },
   {
@@ -187,7 +187,7 @@ export const NEWS_ITEMS: NewsItem[] = [
     author: "Kerala Correspondent",
     date: "Jun 2, 2026",
     readTime: "4 min read",
-    thumbnail: require("../assets/images/news_5.png"),
+    thumbnail: require("../assets/images/news_5.webp"),
     tags: ["Student Achievement", "AI", "Award"],
   },
 ];

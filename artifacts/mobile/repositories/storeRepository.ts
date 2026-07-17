@@ -26,6 +26,7 @@ import { STORAGE_KEYS } from '@/constants/storageKeys';
 import { CACHE_POLICY } from '@/constants/cachePolicy';
 import { cacheManager, networkResult, cacheResult, RepositoryResult } from '@/services/cacheManager';
 import { isNetworkError } from '@/lib/networkUtils';
+import { firstThumbnailUrl } from '@/lib/thumbnailUtils';
 import { Product } from '@/data/mockData';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -35,34 +36,17 @@ export interface StoreData {
 
 export const EMPTY_STORE_DATA: StoreData = { products: [] };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Extracts the first URL from a thumbnail_url that may be a comma-separated
- *  list or a JSON array (as stored when admin uploads multiple images). */
-function firstThumbnailUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('[')) {
-    try {
-      const arr = JSON.parse(trimmed);
-      return Array.isArray(arr) && arr[0] ? String(arr[0]) : null;
-    } catch { /* fall through */ }
-  }
-  const first = trimmed.split(',')[0].trim();
-  return first || null;
-}
-
 // ── Product mapper (lifted from screen — single source of truth) ─────────────
 const productFallbacks: Record<string, any[]> = {
   physical: [
-    require('@/assets/images/products/product_kit_1.png'),
-    require('@/assets/images/products/product_kit_2.png'),
-    require('@/assets/images/products/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.webp'),
+    require('@/assets/images/products/product_kit_2.webp'),
+    require('@/assets/images/products/product_kit_3.webp'),
   ],
   digital: [
-    require('@/assets/images/product_notes_1.png'),
-    require('@/assets/images/product_notes_2.png'),
-    require('@/assets/images/product_notes_3.png'),
+    require('@/assets/images/product_notes_1.webp'),
+    require('@/assets/images/product_notes_2.webp'),
+    require('@/assets/images/product_notes_3.webp'),
   ],
 };
 
@@ -162,9 +146,23 @@ export const storeRepository = {
    *
    * The screen does not know which path was taken.
    */
-  async get(isOffline: boolean): Promise<RepositoryResult<StoreData>> {
+  async get(isOffline: boolean, forceRefresh = false): Promise<RepositoryResult<StoreData>> {
     if (isOffline) {
       return storeRepository.loadFromCache();
+    }
+
+    if (!forceRefresh) {
+      try {
+        const cached = await cacheManager.readWithMeta<Product[]>(
+          STORAGE_KEYS.CACHED_PRODUCTS_CATALOG,
+          CACHE_POLICY.STORE_PRODUCTS_TTL_MS
+        );
+        if (cached && !cached.stale) {
+          return cacheResult({ products: cached.data }, cached.updatedAt, CACHE_POLICY.STORE_PRODUCTS_TTL_MS);
+        }
+      } catch (err) {
+        console.warn('[storeRepo] Error checking public cache:', err);
+      }
     }
 
     try {

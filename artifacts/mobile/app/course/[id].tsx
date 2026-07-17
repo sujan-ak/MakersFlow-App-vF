@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -37,6 +37,7 @@ import { getCourseById, getCourseModules } from "@/services/courseDataProvider";
 import { enrollInCourse, isEnrolled as checkEnrollment, getEnrollment, isExpired } from "@/services/enrollmentService";
 import { fetchCourseLessonsProgress } from "@/lib/progressStorage";
 import { fetchCourseReviews, fetchMyReview, upsertReview } from "@/services/reviewService";
+import { parseThumbnailUrls } from "@/lib/thumbnailUtils";
 
 export default function CourseDetailScreen() {
   const colors = useColors();
@@ -89,26 +90,15 @@ export default function CourseDetailScreen() {
     }
   };
 
-  const loadCourseData = useCallback(async (isRefreshing = false) => {
+  const loadCourseData = useCallback(async (isRefreshing = false, cancelledRef = { current: false }) => {
     if (!id) return;
     if (!isRefreshing) {
       setIsLoading(true);
     }
 
-    function parseThumbnailUrls(raw: string | null | undefined): string[] {
-      if (!raw) return [];
-      const trimmed = raw.trim();
-      if (trimmed.startsWith('[')) {
-        try {
-          const arr = JSON.parse(trimmed);
-          if (Array.isArray(arr)) return arr.map(String).filter(Boolean);
-        } catch { /* fall through */ }
-      }
-      return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
-    }
-
     try {
       const courseData = await getCourseById(id);
+      if (cancelledRef.current) return;
       if (courseData) {
         // Collect images from thumbnail_url AND the images[] column the admin writes to
         const fromThumb = parseThumbnailUrls(courseData.thumbnail_url);
@@ -132,7 +122,7 @@ export default function CourseDetailScreen() {
           images: images.length > 0 ? images : null,
           thumbnail: images.length > 0
             ? { uri: images[0] }
-            : require('@/assets/images/courses/course_robotics.png'),
+            : require('@/assets/images/courses/course_robotics.webp'),
           instructor: "MakersFlow Instructor",
           rating: 4.8,
           reviews: 120,
@@ -140,64 +130,93 @@ export default function CourseDetailScreen() {
           tags: [courseData.category || "Robotics"],
         };
         setCourse(mappedCourse);
-
-        const modulesData = await getCourseModules(id);
-        const flatLessons = modulesData.flatMap((m: any) =>
-          m.lessons.map((l: any) => ({
-            id: l.id,
-            title: l.title,
-            duration: l.duration_minutes ? `${l.duration_minutes} mins` : "0 mins",
-            duration_minutes: l.duration_minutes,
-          }))
-        );
-        setModules(flatLessons);
-      }
-
-      if (user?.id) {
-        const enrolledStatus = await checkEnrollment(user.id, id);
-        setIsEnrolled(enrolledStatus);
-        if (enrolledStatus) {
-          const progressData = await fetchCourseLessonsProgress(user.id, id);
-          setLessonsProgress(progressData);
-          const enrollData = await getEnrollment(user.id, id);
-          setEnrollment(enrollData);
-        } else {
-          setEnrollment(null);
-        }
-      }
-
-      let reviews: any[] = [];
-      try {
-        reviews = await fetchCourseReviews(id);
-      } catch (reviewErr) {
-        console.error("[CourseDetail] fetchCourseReviews error:", reviewErr);
-      }
-      setAllReviews(reviews);
-      if (reviews.length > 0) {
-        const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
-        setAvgRating(Math.round(avg * 10) / 10);
-      } else {
-        setAvgRating(null);
-      }
-
-      if (user?.id) {
-        const mine = await fetchMyReview(user.id, id);
-        if (mine) {
-          setMyReview({ rating: mine.rating, comment: mine.comment ?? "" });
-          setDraftRating(mine.rating);
-          setDraftComment(mine.comment ?? "");
-        }
       }
     } catch (error) {
-      console.error("[CourseDetail] load error", error);
+      console.error("[CourseDetail] load critical course details error:", error);
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      if (!cancelledRef.current) {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
+    }
+
+    // Defer below-the-fold queries: modules, enrollment status, reviews, my review
+
+    getCourseModules(id)
+      .then((modulesData) => {
+        if (cancelledRef.current) return;
+        if (modulesData) {
+          const flatLessons = modulesData.flatMap((m: any) =>
+            m.lessons.map((l: any) => ({
+              id: l.id,
+              title: l.title,
+              duration: l.duration_minutes ? `${l.duration_minutes} mins` : "0 mins",
+              duration_minutes: l.duration_minutes,
+            }))
+          );
+          setModules(flatLessons);
+        }
+      })
+      .catch((err) => console.error("[CourseDetail] Defer modules error:", err));
+
+    if (user?.id) {
+      checkEnrollment(user.id, id)
+        .then((enrolledStatus) => {
+          if (cancelledRef.current) return;
+          setIsEnrolled(enrolledStatus);
+          if (enrolledStatus) {
+            fetchCourseLessonsProgress(user.id, id)
+              .then((progressData) => {
+                if (cancelledRef.current) return;
+                setLessonsProgress(progressData);
+              })
+              .catch(() => {});
+            getEnrollment(user.id, id)
+              .then((enrollData) => {
+                if (cancelledRef.current) return;
+                setEnrollment(enrollData);
+              })
+              .catch(() => {});
+          } else {
+            setEnrollment(null);
+          }
+        })
+        .catch((err) => console.error("[CourseDetail] Defer enrollment check error:", err));
+    }
+
+    fetchCourseReviews(id)
+      .then((reviews) => {
+        if (cancelledRef.current) return;
+        setAllReviews(reviews);
+        if (reviews.length > 0) {
+          const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
+          setAvgRating(Math.round(avg * 10) / 10);
+        } else {
+          setAvgRating(null);
+        }
+      })
+      .catch((err) => console.error("[CourseDetail] Defer reviews error:", err));
+
+    if (user?.id) {
+      fetchMyReview(user.id, id)
+        .then((mine) => {
+          if (cancelledRef.current) return;
+          if (mine) {
+            setMyReview({ rating: mine.rating, comment: mine.comment ?? "" });
+            setDraftRating(mine.rating);
+            setDraftComment(mine.comment ?? "");
+          }
+        })
+        .catch((err) => console.error("[CourseDetail] Defer my review error:", err));
     }
   }, [id, user?.id]);
 
   useEffect(() => {
-    loadCourseData(false);
+    const cancelledRef = { current: false };
+    loadCourseData(false, cancelledRef);
+    return () => {
+      cancelledRef.current = true;
+    };
   }, [loadCourseData]);
 
   useFocusEffect(
@@ -229,20 +248,29 @@ export default function CourseDetailScreen() {
     );
   }
 
-  const quiz = QUIZZES.find((q) => q.courseId === course.id);
+  const quiz = useMemo(() => QUIZZES.find((q) => q.courseId === course?.id), [course?.id]);
   const isCourseCompleted = !!enrollment?.completed_at;
-  const accessExpired = isExpired(enrollment);
-  const completedModules = lessonsProgress.filter((p) => p.is_completed).length;
-  const progress = isCourseCompleted
-    ? 100
-    : (modules.length > 0 ? Math.min(100, Math.round((completedModules / modules.length) * 100)) : 0);
-  const remainingModules = isCourseCompleted ? 0 : Math.max(0, modules.length - completedModules);
+  const accessExpired = useMemo(() => isExpired(enrollment), [enrollment]);
+  const completedModules = useMemo(() => lessonsProgress.filter((p) => p.is_completed).length, [lessonsProgress]);
   
-  const lastModuleId = lessonsProgress.length > 0 
-    ? lessonsProgress.sort((a, b) => new Date(b.last_watched_at || 0).getTime() - new Date(a.last_watched_at || 0).getTime())[0]?.lesson_id 
-    : null;
+  const progress = useMemo(() => {
+    if (isCourseCompleted) return 100;
+    if (modules.length === 0) return 0;
+    return Math.min(100, Math.round((completedModules / modules.length) * 100));
+  }, [isCourseCompleted, completedModules, modules.length]);
 
-  const totalDurationMin = modules.reduce((sum, m) => sum + (m.duration_minutes || 0), 0);
+  const remainingModules = useMemo(() => {
+    if (isCourseCompleted) return 0;
+    return Math.max(0, modules.length - completedModules);
+  }, [isCourseCompleted, modules.length, completedModules]);
+  
+  const lastModuleId = useMemo(() => {
+    if (lessonsProgress.length === 0) return null;
+    const sorted = [...lessonsProgress].sort((a, b) => new Date(b.last_watched_at || 0).getTime() - new Date(a.last_watched_at || 0).getTime());
+    return sorted[0]?.lesson_id;
+  }, [lessonsProgress]);
+
+  const totalDurationMin = useMemo(() => modules.reduce((sum, m) => sum + (m.duration_minutes || 0), 0), [modules]);
   const displayDuration = totalDurationMin > 0 ? `${totalDurationMin} mins` : "Self-paced";
 
   const handleFavoriteToggle = () => {

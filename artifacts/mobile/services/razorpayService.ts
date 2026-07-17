@@ -8,6 +8,7 @@ export type RazorpayCartItem = {
   qty: number;
   is_course?: boolean;
   course_id?: string | null;
+  title?: string;
 };
 
 export type RazorpayOrderResult = {
@@ -35,30 +36,41 @@ export type PaymentVerifyParams = {
 export async function createRazorpayOrder(
   items: RazorpayCartItem[],
   totalAmount: number,
+  userId: string,
+  shippingAddress: any,
+  promoCode?: string | null,
+  discountAmount?: number
 ): Promise<RazorpayOrderResult> {
   const { data, error } = await supabase.functions.invoke("create-razorpay-order", {
     body: {
       items: items.map((i) => ({
-        id: i.is_course ? (i.course_id ?? i.id) : i.id,
+        id: i.id,
         qty: i.qty,
         is_course: i.is_course ?? false,
         price: i.price,
+        title: i.title || "Product Item",
       })),
       total_amount: totalAmount,
-      currency: "INR",
-      receipt: `mobile_${Date.now()}`,
-      notes: { source: "mobile_app" },
+      user_id: userId,
+      shipping_address: shippingAddress,
+      promo_code: promoCode || null,
+      discount_amount: discountAmount || 0,
     },
   });
 
   if (error) {
     throw new Error(`Could not create payment order: ${error.message}`);
   }
-  if (!data?.id) {
+  if (!data?.razorpayOrderId) {
     throw new Error("Invalid response from payment server");
   }
 
-  return data as RazorpayOrderResult;
+  return {
+    id: data.razorpayOrderId,
+    amount: data.amount,
+    currency: data.currency,
+    key_id: data.keyId,
+  };
 }
 
 // ─── Verify Payment Signature ─────────────────────────────────────────────────
@@ -68,16 +80,17 @@ export async function verifyRazorpayPayment(
   params: PaymentVerifyParams,
 ): Promise<{ success: boolean; payment_id?: string }> {
   const { data, error } = await supabase.functions.invoke("verify-razorpay-payment", {
-    body: params,
+    body: {
+      orderId: params.razorpay_order_id,
+      paymentId: params.razorpay_payment_id,
+      signature: params.razorpay_signature,
+    },
   });
 
   if (error) {
     throw new Error(`Payment verification failed: ${error.message}`);
   }
 
-  // The shared edge function (same one the web app uses) returns
-  // { verified: boolean } — NOT { success }. Normalize it here so callers
-  // keep a stable shape. This was silently failing every mobile payment.
-  const verified = (data as any)?.verified === true || (data as any)?.success === true;
-  return { success: verified, payment_id: (data as any)?.payment_id };
+  const verified = data?.success === true;
+  return { success: verified, payment_id: params.razorpay_payment_id };
 }

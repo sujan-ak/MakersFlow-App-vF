@@ -1,11 +1,11 @@
 import { supabase } from '@/lib/supabase';
 
 const newsThumbnails = [
-  require('@/assets/images/news_1.png'),
-  require('@/assets/images/news_2.png'),
-  require('@/assets/images/news_3.png'),
-  require('@/assets/images/news_4.png'),
-  require('@/assets/images/news_5.png'),
+  require('@/assets/images/news_1.webp'),
+  require('@/assets/images/news_2.webp'),
+  require('@/assets/images/news_3.webp'),
+  require('@/assets/images/news_4.webp'),
+  require('@/assets/images/news_5.webp'),
 ];
 
 const getDeterministicThumbnail = (id: string) => {

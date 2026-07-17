@@ -36,14 +36,14 @@ import { ActivityIndicator, TextInput } from "react-native";
 
 const productFallbacks: Record<string, any[]> = {
   physical: [
-    require('@/assets/images/products/product_kit_1.png'),
-    require('@/assets/images/products/product_kit_2.png'),
-    require('@/assets/images/products/product_kit_3.png'),
+    require('@/assets/images/products/product_kit_1.webp'),
+    require('@/assets/images/products/product_kit_2.webp'),
+    require('@/assets/images/products/product_kit_3.webp'),
   ],
   digital: [
-    require('@/assets/images/product_notes_1.png'),
-    require('@/assets/images/product_notes_2.png'),
-    require('@/assets/images/product_notes_3.png'),
+    require('@/assets/images/product_notes_1.webp'),
+    require('@/assets/images/product_notes_2.webp'),
+    require('@/assets/images/product_notes_3.webp'),
   ]
 };
 
@@ -228,7 +228,7 @@ export default function ProductDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadProduct = useCallback(async (isRefreshing = false) => {
+  const loadProduct = useCallback(async (isRefreshing = false, cancelledRef = { current: false }) => {
     if (!id || isNaN(Number(id))) {
       console.warn('[ProductDetail] Invalid or missing product id:', id);
       setIsLoading(false);
@@ -246,96 +246,116 @@ export default function ProductDetailScreen() {
 
       if (error) {
         console.error('[ProductDetail] Error loading product:', error);
-        setIsLoading(false);
+        if (!cancelledRef.current) setIsLoading(false);
         return;
       }
 
       if (!data) {
         console.warn('[ProductDetail] Product not found for id:', id);
-        setIsLoading(false);
+        if (!cancelledRef.current) setIsLoading(false);
         return;
       }
 
-      if (data) {
-        const mapped = mapSupabaseProduct(data);
-
-        // Fallback: some admin portals store gallery media in a separate
-        // `product_media` table instead of a column on `products`.
-        const imagesList = mapped.images ?? [];
-        if (imagesList.length <= 1) {
-          try {
-            const { data: mediaRows } = await supabase
-              .from('product_media')
-              .select('*')
-              .eq('product_id', Number(id));
-            if (mediaRows && mediaRows.length > 0) {
-              const extra = extractProductImages(
-                { images: mediaRows },
-                mapped.thumbnail,
-              );
-              if (extra.length > imagesList.length) {
-                mapped.images = extra;
-              }
-            }
-          } catch {
-            // Table doesn't exist — ignore silently.
-          }
-        }
-
+      const mapped = mapSupabaseProduct(data);
+      if (!cancelledRef.current) {
         setProduct(mapped);
+        setIsLoading(false);
+        setRefreshing(false);
       }
 
-      // Load reviews
-      const reviewsData = await fetchProductReviews(id);
-      setAllReviews(reviewsData);
-
-      // Calculate average rating dynamically
-      if (reviewsData.length > 0) {
-        const sum = reviewsData.reduce((acc, r) => acc + r.rating, 0);
-        setAvgRating(sum / reviewsData.length);
-      } else {
-        setAvgRating(null);
+      // Defer 1: product_media table
+      const imagesList = mapped.images ?? [];
+      if (imagesList.length <= 1) {
+        supabase
+          .from('product_media')
+          .select('*')
+          .eq('product_id', Number(id))
+          .then(
+            ({ data: mediaRows }) => {
+              if (cancelledRef.current) return;
+              if (mediaRows && mediaRows.length > 0) {
+                const extra = extractProductImages(
+                  { images: mediaRows },
+                  mapped.thumbnail,
+                );
+                if (extra.length > imagesList.length) {
+                  setProduct((prev) => prev ? { ...prev, images: extra } : null);
+                }
+              }
+            },
+            () => {}
+          );
       }
 
-      // If user is authenticated, check my review & purchase status
+      // Defer 2: reviews
+      fetchProductReviews(id)
+        .then((reviewsData) => {
+          if (cancelledRef.current) return;
+          setAllReviews(reviewsData);
+          if (reviewsData.length > 0) {
+            const sum = reviewsData.reduce((acc, r) => acc + r.rating, 0);
+            setAvgRating(sum / reviewsData.length);
+          } else {
+            setAvgRating(null);
+          }
+        })
+        .catch((err: any) => console.error('[ProductDetail] Defer reviews error:', err));
+
+      // Defer 3: user specific details (myReview, purchase-check)
       if (user?.id) {
-        const myReviewData = await fetchMyProductReview(user.id, id);
-        setMyReview(myReviewData);
-        if (myReviewData) {
-          setDraftRating(myReviewData.rating);
-          setDraftComment(myReviewData.comment || "");
-        }
+        fetchMyProductReview(user.id, id)
+          .then((myReviewData) => {
+            if (cancelledRef.current) return;
+            setMyReview(myReviewData);
+            if (myReviewData) {
+              setDraftRating(myReviewData.rating);
+              setDraftComment(myReviewData.comment || "");
+            }
+          })
+          .catch((err: any) => console.error('[ProductDetail] Defer myReview error:', err));
 
-        // Check if user has purchased this product
-        const { data: userOrders, error: ordersErr } = await supabase
+        // Defer 4: purchase check
+        supabase
           .from("orders")
           .select("items")
           .eq("user_id", user.id)
-          .in("status", ["paid", "completed"]);
-
-        if (!ordersErr && userOrders) {
-          const bought = userOrders.some((order: any) => {
-            let itemsList: any[] = [];
-            try {
-              itemsList = typeof order.items === "string" ? JSON.parse(order.items) : order.items;
-            } catch (e) {
-              itemsList = Array.isArray(order.items) ? order.items : [];
+          .in("status", ["paid", "completed"])
+          .then(
+            ({ data: userOrders, error: ordersErr }) => {
+              if (cancelledRef.current) return;
+              if (!ordersErr && userOrders) {
+                const bought = userOrders.some((order: any) => {
+                  let itemsList: any[] = [];
+                  try {
+                    itemsList = typeof order.items === "string" ? JSON.parse(order.items) : order.items;
+                  } catch (e) {
+                    itemsList = Array.isArray(order.items) ? order.items : [];
+                  }
+                  return Array.isArray(itemsList) && itemsList.some((item: any) => String(item.id) === String(id));
+                });
+                setHasPurchased(bought);
+              }
+            },
+            (err: any) => {
+              console.error('[ProductDetail] Defer orders check error:', err);
             }
-            return Array.isArray(itemsList) && itemsList.some((item: any) => String(item.id) === String(id));
-          });
-          setHasPurchased(bought);
-        }
+          );
       }
     } catch (err) {
       console.error('[ProductDetail] load error:', err);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      if (!cancelledRef.current) {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [id, user?.id]);
 
   useEffect(() => {
-    loadProduct(false);
+    const cancelledRef = { current: false };
+    loadProduct(false, cancelledRef);
+    return () => {
+      cancelledRef.current = true;
+    };
   }, [loadProduct]);
 
   const onRefresh = async () => {

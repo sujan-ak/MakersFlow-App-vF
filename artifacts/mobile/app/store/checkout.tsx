@@ -28,7 +28,13 @@ import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
 import { setInvoicePath } from "@/lib/invoiceStorage";
 import { RazorpayWebView, type RazorpayPaymentParams } from "@/components/RazorpayWebView";
-import { getShiprocketRate, type ShiprocketRate } from "@/lib/shiprocket";
+interface ShiprocketRate {
+  success: boolean;
+  fee: number | null;
+  courierName: string;
+  estimatedDays: string;
+  source: "shiprocket" | "fallback";
+}
 import {
   createRazorpayOrder,
   verifyRazorpayPayment,
@@ -283,8 +289,8 @@ export default function CheckoutScreen() {
     if (!hasPhysical) return 0;
     if (!activeAddress) return 0;                          // no address yet
     if (taxable >= shippingConfig.threshold) return 0;    // free shipping threshold
-    if (shippingLoading) return shiprocketRate ? shiprocketRate.fee : 0; // calculating — don't flash fallback
-    return shiprocketRate ? shiprocketRate.fee : fallbackShippingFee;
+    if (shippingLoading) return (shiprocketRate && shiprocketRate.fee !== null) ? shiprocketRate.fee : 0; // calculating — don't flash fallback
+    return (shiprocketRate && shiprocketRate.fee !== null) ? shiprocketRate.fee : fallbackShippingFee;
   })();
   // Don't add shipping to total until address is selected — avoids confusing ₹3 total for new users
   const finalTotal = taxable + taxAmount + (activeAddress ? shippingFee : 0);
@@ -347,19 +353,25 @@ export default function CheckoutScreen() {
     }
 
     setShippingLoading(true);
-    const fallback = shippingConfig.remoteFee || 149;
     const totalWeight = physicalItems.reduce((s, i) => s + (i.quantity * 0.5), 0);
+    const physicalSubtotal = physicalItems.reduce((s, i) => s + i.product.price * i.quantity, 0);
 
-    getShiprocketRate({
-      deliveryPincode: pincode,
-      weightKg: Math.max(totalWeight, 0.1),
-      declaredValue: Math.max(items.reduce((s, i) => s + i.product.price * i.quantity, 0), 1),
-      fallbackFee: fallback,
-    }).then((rate) => {
-      console.log("[Shiprocket] rate result:", rate);
-      setShiprocketRate(rate);
+    supabase.functions.invoke("get-shipping-rate", {
+      body: {
+        deliveryPincode: pincode,
+        weightKg: Math.max(totalWeight, 0.1),
+        declaredValue: Math.max(physicalSubtotal, 1),
+      }
+    }).then(({ data, error }) => {
+      if (error || !data || !data.success) {
+        console.warn("[Shiprocket] Edge function calculation failed:", error);
+        setShiprocketRate(null);
+      } else {
+        console.log("[Shiprocket] rate result:", data);
+        setShiprocketRate(data);
+      }
     }).catch((err) => {
-      console.warn("[Shiprocket] error:", err);
+      console.warn("[Shiprocket] calculation exception:", err);
       setShiprocketRate(null);
     }).finally(() => {
       setShippingLoading(false);
@@ -594,11 +606,28 @@ export default function CheckoutScreen() {
         qty: item.quantity,
         is_course: (item.product as any).is_course ?? false,
         course_id: (item.product as any).course_id ?? null,
+        title: item.product.title,
       }));
 
       let rzpOrder;
       try {
-        rzpOrder = await createRazorpayOrder(cartItems, finalTotal);
+        rzpOrder = await createRazorpayOrder(
+          cartItems,
+          finalTotal,
+          user!.id,
+          hasPhysical && activeAddress
+            ? {
+                name: activeAddress.full_name,
+                address: `${activeAddress.address_line1}${activeAddress.address_line2 ? `, ${activeAddress.address_line2}` : ""}`,
+                city: activeAddress.city,
+                state: activeAddress.state,
+                pincode: activeAddress.postal_code ?? activeAddress.pincode,
+                phone: activeAddress.phone,
+              }
+            : null,
+          appliedPromo?.code ?? null,
+          discount
+        );
       } catch (orderErr: any) {
         throw new Error(orderErr.message ?? "Failed to create Razorpay order.");
       }
@@ -656,89 +685,7 @@ export default function CheckoutScreen() {
         return;
       }
 
-      const { data: prodFlags } = await supabase
-        .from("products")
-        .select("id, is_course, course_id")
-        .in("id", items.map((i) => i.product.id));
-      const flagMap = new Map((prodFlags ?? []).map((p: any) => [String(p.id), p]));
 
-      const orderItems = items.map((item) => {
-        const f = flagMap.get(String(item.product.id));
-        return {
-          id: String(item.product.id),
-          title: item.product.title,
-          price: item.product.price,
-          qty: item.quantity,
-          is_course: !!(f?.is_course || f?.course_id),
-          course_id: f?.course_id ? String(f.course_id) : (f?.is_course ? String(item.product.id) : null),
-        };
-      });
-
-      const orderPayload = {
-        user_id: user!.id,
-        total_amount: finalTotal,
-        status: "paid",
-        razorpay_order_id: orderId,
-        razorpay_payment_id: paymentId,
-        promo_code: appliedPromo?.code ?? null,
-        discount_amount: discount,
-        tax_amount: taxAmount,
-        shipping_address: hasPhysical && pendingAddress
-          ? {
-              name: pendingAddress.full_name,
-              address: `${pendingAddress.address_line1}${pendingAddress.address_line2 ? `, ${pendingAddress.address_line2}` : ""}`,
-              city: `${pendingAddress.city}, ${pendingAddress.state} - ${pendingAddress.postal_code}`,
-              phone: pendingAddress.phone,
-            }
-          : { name, phone },
-        items: orderItems,
-      };
-
-      const { error: rpcError } = await supabase.rpc("complete_paid_order", {
-        p_order: orderPayload,
-        p_product_ids: items.map((i) => String(i.product.id)),
-        p_promo_id: appliedPromo?.id ?? null,
-      });
-
-      if (rpcError) {
-        console.error("[Checkout] complete_paid_order RPC failed, using legacy path:", rpcError.message);
-
-        let payload: Record<string, any> = { ...orderPayload };
-        let orderError: any = null;
-        for (let attempt = 0; attempt < 6; attempt++) {
-          const { error: insErr } = await supabase.from("orders").insert(payload);
-          orderError = insErr;
-          if (!insErr) break;
-          const match = insErr.code === "PGRST204"
-            ? insErr.message?.match(/'([^']+)' column/)
-            : null;
-          if (match && match[1] in payload) {
-            delete payload[match[1]];
-          } else {
-            break;
-          }
-        }
-
-        if (orderError) throw orderError;
-
-        for (const oi of orderItems) {
-          if (oi.is_course && oi.course_id) {
-            const enrolledAt = new Date();
-            const expiresAt = new Date(enrolledAt.getTime() + 365 * 24 * 60 * 60 * 1000);
-            await supabase.from("enrollments").upsert(
-              {
-                user_id: user!.id,
-                course_id: oi.course_id,
-                payment_status: "completed",
-                status: "active",
-                enrolled_at: enrolledAt.toISOString(),
-                expires_at: expiresAt.toISOString(),
-              },
-              { onConflict: "user_id,course_id" },
-            );
-          }
-        }
-      }
 
       // Generate invoice
       try {
@@ -901,7 +848,7 @@ export default function CheckoutScreen() {
                       ? typeof item.product.thumbnail === "string"
                         ? { uri: item.product.thumbnail }
                         : item.product.thumbnail
-                      : require("@/assets/images/courses/course_robotics.png")
+                      : require("@/assets/images/courses/course_robotics.webp")
                   }
                   style={styles.itemThumbnail}
                 />
@@ -1219,12 +1166,7 @@ export default function CheckoutScreen() {
         {/* ── Bottom CTA — only show Slide to Pay when ready ── */}
         <View style={[styles.cta, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === "web" ? 20 : insets.bottom + 8 }]}>
           {isShippingReady ? (
-            <>
-              <SlideToPayButton amount={finalTotal} onSlideComplete={handlePay} loading={loading} />
-              <Text style={[styles.secureNote, { color: colors.mutedForeground }]}>
-                <Ionicons name="lock-closed" size={11} color={colors.mutedForeground} /> Secured by Razorpay · 100% Safe
-              </Text>
-            </>
+            <SlideToPayButton amount={finalTotal} onSlideComplete={handlePay} loading={loading} />
           ) : (
             <View style={[styles.disabledPayBtn, { backgroundColor: colors.muted }]}>
               <Ionicons name="lock-closed" size={16} color={colors.mutedForeground} />
@@ -1233,6 +1175,9 @@ export default function CheckoutScreen() {
               </Text>
             </View>
           )}
+          <Text style={[styles.secureNote, { color: colors.mutedForeground }]}>
+            <Ionicons name="lock-closed" size={11} color={colors.mutedForeground} /> Secured by Razorpay · 100% Safe
+          </Text>
         </View>
       </View>
 

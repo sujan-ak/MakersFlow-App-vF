@@ -22,6 +22,7 @@ import { useColors } from "@/hooks/useColors";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
+import { validateImageFile } from "@/lib/fileValidation";
 
 function getPasswordStrength(pass: string) {
   if (!pass) return 0;
@@ -93,21 +94,11 @@ export default function RegisterScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-
-        if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
-          Alert.alert("Image too large", "Image too large, please choose a smaller photo");
+        const validation = await validateImageFile(asset.uri);
+        if (!validation.valid) {
+          Alert.alert("Invalid File", validation.error || "Please select a valid image.");
           return;
         }
-
-        const uri = asset.uri.toLowerCase();
-        const extension = uri.split('.').pop() || '';
-        const validExtensions = ['jpg', 'jpeg', 'png'];
-
-        if (!validExtensions.includes(extension) && !uri.startsWith('data:image/jpeg') && !uri.startsWith('data:image/png')) {
-          Alert.alert("Invalid format", "Only image/jpeg and image/png files are allowed.");
-          return;
-        }
-
         setAvatarUri(asset.uri);
       }
     } catch (e) {
