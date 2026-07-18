@@ -23,10 +23,12 @@ import { useColors } from "@/hooks/useColors";
 import { storeRepository } from "@/repositories/storeRepository";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useNetwork } from "@/context/NetworkContext";
+import { useTabSwipe } from "@/hooks/useTabSwipe";
 
 export default function StoreScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/store");
   const { count } = useCart();
   const { isOffline } = useAuth();
   const { addReconnectListener } = useNetwork();
@@ -36,19 +38,13 @@ export default function StoreScreen() {
   const hasLoadedOnce = useRef(false);
 
   const handleShare = async () => {
-    const link = "https://edodwaja.com/store";
-    const message = `Check out Edodwaja Store on Edodwaja! ${link}`;
     try {
-      const result = await Share.share({ message });
-      if (result.action === Share.sharedAction) {
-        console.log('[StoreShare] Shared successfully');
-      }
-    } catch (error: any) {
+      await Share.share({
+        title: "MakersFlow Store",
+        message: `Check out the MakersFlow Store!\n\nOpen in app: makersflow://store\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+      });
+    } catch (error) {
       console.error("[StoreShare] Share failed error:", error);
-      Alert.alert(
-        "Share Link",
-        `Here is the link to copy:\n${link}\n\n(Sharing is not supported on this device: ${error?.message || error})`
-      );
     }
   };
   const params = useLocalSearchParams<{ category?: string }>();
@@ -137,7 +133,8 @@ export default function StoreScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <SwipeIndicator />
       <View style={[styles.topBar, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <Text style={[styles.pageTitle, { color: colors.foreground }]}>Store</Text>

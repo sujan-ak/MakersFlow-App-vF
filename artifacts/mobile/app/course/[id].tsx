@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge } from "@/components/Badge";
 import { StarRating } from "@/components/StarRating";
 import { DetailSkeleton } from "@/components/SkeletonLoader";
+import { ImageGallery } from "@/components/ImageGallery";
 import { QUIZZES } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
@@ -75,8 +76,8 @@ export default function CourseDetailScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        title: course?.title || 'MakersFlow Course',
-        message: `Check out "${course?.title || 'this course'}" on MakersFlow!\n\nOpen in app: makersflow://course/${id}\n\nDownload: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+        title: course?.title,
+        message: `Check out "${course?.title || "this course"}" on MakersFlow!\n\nOpen in app: makersflow://course/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
       });
     } catch (error) {
       console.error("Error sharing course:", error);
@@ -438,74 +439,42 @@ export default function CourseDetailScreen() {
           />
         }
       >
-        {/* Thumbnail Hero — swipeable carousel if multiple images */}
-        <View style={styles.thumbnailContainer}>
-          {course.images && course.images.length > 1 ? (
-            <>
-              <FlatList
-                ref={imageListRef}
-                data={course.images}
-                keyExtractor={(_, i) => String(i)}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => {
-                  const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-                  setActiveImageIndex(idx);
-                }}
-                renderItem={({ item }) => (
-                  <Image
-                    source={{ uri: item }}
-                    style={[styles.thumbnail, { width: SCREEN_WIDTH }]}
-                  />
-                )}
+        {/* Thumbnail Hero — swipeable gallery with thumbnails & fullscreen */}
+        <View style={{ position: "relative" }}>
+          <ImageGallery
+            images={course.images && course.images.length > 0 ? course.images : [course.thumbnail]}
+            height={280}
+          >
+            <Pressable
+              style={[styles.backCircle, { top: topOffset + 8 }]}
+              onPress={() => {
+                if (router.canGoBack()) router.back();
+                else router.replace("/(tabs)/courses");
+              }}
+            >
+              <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
+            </Pressable>
+            
+            {/* Overlaid Wishlist button */}
+            <Pressable
+              style={[styles.favoriteCircle, { top: topOffset + 8 }]}
+              onPress={handleFavoriteToggle}
+            >
+              <Ionicons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={20}
+                color={isFavorite ? "#EF4444" : "#0B6FAD"}
               />
-              {/* Dot indicators */}
-              <View style={styles.dotRow}>
-                {course.images.map((_: any, i: number) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.dot,
-                      { backgroundColor: i === activeImageIndex ? "#FFF" : "rgba(255,255,255,0.45)" },
-                    ]}
-                  />
-                ))}
-              </View>
-            </>
-          ) : (
-            <Image source={course.thumbnail} style={styles.thumbnail} />
-          )}
-          <View style={styles.overlay} />
-          <Pressable
-            style={[styles.backCircle, { top: topOffset + 8 }]}
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else router.replace("/(tabs)/courses");
-            }}
-          >
-            <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
-          </Pressable>
-          
-          {/* Overlaid Wishlist button */}
-          <Pressable
-            style={[styles.favoriteCircle, { top: topOffset + 8 }]}
-            onPress={handleFavoriteToggle}
-          >
-            <Ionicons
-              name={isFavorite ? "heart" : "heart-outline"}
-              size={20}
-              color={isFavorite ? "#EF4444" : "#0B6FAD"}
-            />
-          </Pressable>
+            </Pressable>
 
-          {/* Overlaid Share button */}
-          <Pressable
-            style={[styles.shareCircle, { top: topOffset + 8 }]}
-            onPress={handleShare}
-          >
-            <Ionicons name="share-social" size={20} color="#0B6FAD" />
-          </Pressable>
+            {/* Overlaid Share button */}
+            <Pressable
+              style={[styles.shareCircle, { top: topOffset + 8 }]}
+              onPress={handleShare}
+            >
+              <Ionicons name="share-social" size={20} color="#0B6FAD" />
+            </Pressable>
+          </ImageGallery>
           <View style={[styles.thumbnailBadge, { bottom: 16, left: 16 }]}>
             <Badge label={course.level} variant="primary" />
           </View>

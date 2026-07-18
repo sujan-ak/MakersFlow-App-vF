@@ -33,6 +33,7 @@ import { useColors } from "@/hooks/useColors";
 import { useProgress } from "@/context/ProgressContext";
 import { homeRepository, EMPTY_HOME_DATA } from "@/repositories/homeRepository";
 import { useNetwork } from "@/context/NetworkContext";
+import { useTabSwipe } from "@/hooks/useTabSwipe";
 
 const CATEGORY_DETAILS = [
   { name: "Robotics", icon: "construct", desc: "Build & program smart autonomous robots", btnText: "Start Now", btnColor: "#0B6FAD", textColor: "#FFF" },
@@ -171,6 +172,7 @@ function GuestWelcomeCard({ colors, onSignIn, onBrowseCourses }: GuestWelcomeCar
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)");
   const { user, isOffline } = useAuth();
   const { isConnected, addReconnectListener } = useNetwork();
   const { watchlist } = useProgress();
@@ -327,7 +329,8 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <SwipeIndicator />
       {/* Fixed Header */}
       <View style={[styles.fixedHeader, { backgroundColor: colors.background, paddingTop: topPad + 16, borderBottomColor: colors.border }]}>
         <View style={styles.header}>

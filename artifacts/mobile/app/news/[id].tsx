@@ -49,7 +49,8 @@ export default function NewsDetailScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `${item.title}\n\n${item.summary}\n\nRead more on MakersFlow!`,
+        title: item.title,
+        message: `Check out "${item.title}" on MakersFlow!\n\nOpen in app: makersflow://news/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
       });
     } catch (error) {
       console.error("[NewsDetail] Error sharing article:", error);

@@ -392,7 +392,8 @@ export default function ProfileScreen() {
   // ── Guest / signed-out state ─────────────────────────────────────────────────
   if (!user) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, flex: 1 }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, flex: 1 }]} {...panHandlers}>
+        <SwipeIndicator />
         {/* Header */}
         <View style={{ paddingTop: topPad + 16, paddingHorizontal: 20, paddingBottom: 8 }}>
           <Text style={[styles.pageTitle, { color: colors.foreground }]}>Profile</Text>

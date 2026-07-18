@@ -46,12 +46,9 @@ export default function LearnScreen() {
 
   const handleShare = async () => {
     try {
-      const deepLink = `makersflow://course/${courseId}`;
-      const storeLink = "https://play.google.com/store/apps/details?id=com.makersflow.mobile";
       await Share.share({
-        title: course?.title || "Course",
-        message: `Check out "${course?.title || "this course"}" on MakersFlow!\n\nOpen in app: ${deepLink}\n\nDon't have the app? Download it: ${storeLink}`,
-        url: deepLink,
+        title: course?.title,
+        message: `Check out "${course?.title || "this course"}" on MakersFlow!\n\nOpen in app: makersflow://course/${courseId}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
       });
     } catch (error) {
       console.error("Error sharing course:", error);

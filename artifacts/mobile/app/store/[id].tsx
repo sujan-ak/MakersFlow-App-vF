@@ -25,6 +25,8 @@ import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { DetailSkeleton } from "@/components/SkeletonLoader";
 import { StarRating } from "@/components/StarRating";
+import { ImageGallery } from "@/components/ImageGallery";
+import { parseThumbnailUrls } from "@/lib/thumbnailUtils";
 import { useAuth } from "@/context/AuthContextSupabase";
 import {
   fetchProductReviews,
@@ -59,18 +61,26 @@ const VIDEO_EXT_RE = /\.(mp4|mov|webm|m4v|avi)(\?.*)?$/i;
  * The thumbnail is always included first and duplicates are removed.
  */
 function extractProductImages(row: any, thumbnail: any): any[] {
-  const candidates = [row.images, row.media, row.image_urls, row.media_urls, row.gallery];
+  const candidates = [
+    row.images,
+    row.media,
+    row.image_urls,
+    row.media_urls,
+    row.gallery,
+    row.thumbnail_url,
+  ];
   const urls: string[] = [];
 
   for (let raw of candidates) {
     if (raw == null) continue;
     if (typeof raw === 'string') {
-      try {
-        raw = JSON.parse(raw);
-      } catch {
-        // Not JSON — maybe a single URL or a comma-separated list
-        raw = raw.includes(',') ? raw.split(',').map((s: string) => s.trim()) : [raw];
+      const parsed = parseThumbnailUrls(raw);
+      for (const u of parsed) {
+        if (u.startsWith('http') && !VIDEO_EXT_RE.test(u)) {
+          urls.push(u);
+        }
       }
+      continue;
     }
     if (!Array.isArray(raw)) raw = [raw];
 
@@ -79,7 +89,6 @@ function extractProductImages(row: any, thumbnail: any): any[] {
       if (typeof item === 'string') {
         url = item;
       } else if (item && typeof item === 'object') {
-        // Skip entries explicitly marked as videos
         if (typeof item.type === 'string' && item.type.toLowerCase().includes('video')) continue;
         url = item.url || item.uri || item.src || item.publicUrl || item.public_url || item.path || null;
       }
@@ -208,19 +217,13 @@ export default function ProductDetailScreen() {
   };
 
   const handleShare = async () => {
-    const link = `https://edodwaja.com/store/${id}`;
-    const message = `Check out ${product?.title || "Product"} on Edodwaja! ${link}`;
     try {
-      const result = await Share.share({ message });
-      if (result.action === Share.sharedAction) {
-        console.log('[ProductShare] Shared successfully');
-      }
-    } catch (error: any) {
+      await Share.share({
+        title: product?.title,
+        message: `Check out "${product?.title || "this product"}" on MakersFlow!\n\nOpen in app: makersflow://store/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+      });
+    } catch (error) {
       console.error("[ProductShare] Share failed error:", error);
-      Alert.alert(
-        "Share Product",
-        `Here is the product link to copy:\n${link}\n\n(Sharing is not supported on this device: ${error?.message || error})`
-      );
     }
   };
 
@@ -406,75 +409,40 @@ export default function ProductDetailScreen() {
           />
         }
       >
-        <View style={styles.imageContainer}>
-          {product.images && product.images.length > 1 ? (
-            <>
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={(e) => {
-                  const slide = Math.round(e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width);
-                  if (slide !== activeSlide) setActiveSlide(slide);
-                }}
-                scrollEventThrottle={16}
-                style={{ width: screenWidth, height: 280 }}
-                contentContainerStyle={{ height: 280 }}
-              >
-                {product.images.map((img, index) => (
-                  <Image
-                    key={index}
-                    source={img}
-                    style={{ width: screenWidth, height: 280, resizeMode: "cover" }}
-                  />
-                ))}
-              </ScrollView>
-              
-              {/* Pagination Dots */}
-              <View style={styles.paginationContainer}>
-                {product.images.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.paginationDot,
-                      activeSlide === index ? styles.paginationDotActive : styles.paginationDotInactive,
-                    ]}
-                  />
-                ))}
-              </View>
-            </>
-          ) : (
-            <Image source={product.thumbnail} style={styles.image} />
-          )}
-          <View style={styles.overlay} />
-          <Pressable
-            style={[styles.backCircle, { top: topPad + 8 }]}
-            onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace("/(tabs)/store");
-              }
-            }}
+        <View style={{ position: "relative" }}>
+          <ImageGallery
+            images={product.images && product.images.length > 0 ? product.images : [product.thumbnail]}
+            height={320}
           >
-            <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
-          </Pressable>
-          <Pressable
-            style={[styles.shareCircle, { top: topPad + 8 }]}
-            onPress={handleShare}
-          >
-            <Ionicons name="share-social" size={20} color="#0B6FAD" />
-          </Pressable>
-          <Pressable
-            style={[styles.heartCircle, { top: topPad + 8 }]}
-            onPress={handleToggleWishlist}
-          >
-            <Ionicons
-              name={isWishlisted ? "heart" : "heart-outline"}
-              size={20}
-              color={isWishlisted ? "#EF4444" : "#0B6FAD"}
-            />
-          </Pressable>
+            <Pressable
+              style={[styles.backCircle, { top: topPad + 8 }]}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/(tabs)/store");
+                }
+              }}
+            >
+              <Ionicons name="arrow-back" size={20} color="#0B6FAD" />
+            </Pressable>
+            <Pressable
+              style={[styles.shareCircle, { top: topPad + 8 }]}
+              onPress={handleShare}
+            >
+              <Ionicons name="share-social" size={20} color="#0B6FAD" />
+            </Pressable>
+            <Pressable
+              style={[styles.heartCircle, { top: topPad + 8 }]}
+              onPress={handleToggleWishlist}
+            >
+              <Ionicons
+                name={isWishlisted ? "heart" : "heart-outline"}
+                size={20}
+                color={isWishlisted ? "#EF4444" : "#0B6FAD"}
+              />
+            </Pressable>
+          </ImageGallery>
           {product.badge && (
             <View style={[styles.badge, { backgroundColor: colors.secondary, bottom: 16, left: 16 }]}>
               <Text style={styles.badgeText}>{product.badge}</Text>

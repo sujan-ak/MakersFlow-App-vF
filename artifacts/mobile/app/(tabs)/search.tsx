@@ -263,7 +263,8 @@ export default function SearchScreen() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }} {...panHandlers}>
+        <SwipeIndicator />
         <ListSkeleton />
       </View>
     );

@@ -84,10 +84,15 @@ export function buildUser(
     email,
     name:
       profile?.full_name ||
+      supabaseUser.user_metadata?.full_name ||
       supabaseUser.user_metadata?.name ||
       fallbackName,
     phone: profile?.phone || supabaseUser.phone || undefined,
-    avatar: profile?.avatar_url || undefined,
+    avatar:
+      profile?.avatar_url ||
+      supabaseUser.user_metadata?.avatar_url ||
+      supabaseUser.user_metadata?.picture ||
+      undefined,
     grade: profile?.grade || undefined,
     school: profile?.school || undefined,
     age: profile?.age || undefined,
@@ -201,7 +206,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sync user metadata details back to profile database if missing
       const meta = supabaseUser.user_metadata || {};
       const updates: any = {};
-      if (!profile.full_name && meta.name) updates.full_name = meta.name;
+      if (!profile.full_name && (meta.full_name || meta.name)) updates.full_name = meta.full_name || meta.name;
+      if (!profile.avatar_url && (meta.avatar_url || meta.picture)) updates.avatar_url = meta.avatar_url || meta.picture;
       if (!profile.grade && meta.grade) updates.grade = meta.grade;
       if (!profile.school && meta.school) updates.school = meta.school;
       if (!profile.phone && meta.phone) updates.phone = meta.phone;
@@ -440,18 +446,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       devLog('[Auth] Browser session result:', result.type);
 
       if (result.type === 'success') {
-        // Extract tokens from the callback URL.
-        // Supabase appends tokens in the URL fragment: makersflow://auth/callback#access_token=...&refresh_token=...
-        // new URL() throws on custom schemes in React Native's JS engine, so we
-        // parse the fragment manually instead of relying on the WHATWG URL parser.
         const { url } = result;
-        const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
-        const params = new URLSearchParams(fragment);
+        devLog('[Auth] OAuth success URL:', url);
 
+        // Extract parameters from query string (?code=...) or URL fragment (#access_token=...)
+        const queryString = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
+        const fragmentString = url.includes('#') ? url.split('#')[1] : '';
+        const params = new URLSearchParams(queryString || fragmentString);
+
+        const code = params.get('code');
         const access_token = params.get('access_token');
         const refresh_token = params.get('refresh_token');
 
-        if (access_token && refresh_token) {
+        let sessionUser: any = null;
+
+        if (code) {
+          devLog('[Auth] Exchanging PKCE code for session...');
+          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            devError('[Auth] Failed to exchange PKCE code:', exchangeError.message);
+            setIsLoading(false);
+            return { success: false, error: exchangeError.message };
+          }
+          sessionUser = exchangeData.user;
+        } else if (access_token && refresh_token) {
+          devLog('[Auth] Setting session from implicit tokens...');
           const { data: sessionData, error: sessionError } = await authService.setSession(
             access_token,
             refresh_token
@@ -462,16 +481,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(false);
             return { success: false, error: sessionError.message };
           }
-
-          devLog('[Auth] Google OAuth successful');
+          sessionUser = sessionData.user || sessionData.session?.user || null;
+        } else {
+          devError('[Auth] Neither PKCE code nor tokens found in callback URL:', url);
           setIsLoading(false);
-          const userId = sessionData.user?.id || sessionData.session?.user?.id;
-          if (userId) {
-            const { data: profile } = await authService.getProfile(userId);
-            return { success: true, profile } as any;
-          }
-          return { success: true };
+          return { success: false, error: 'Invalid authentication callback' };
         }
+
+        devLog('[Auth] Google OAuth successful');
+        setIsLoading(false);
+        if (sessionUser?.id) {
+          const { data: profile } = await authService.getProfile(sessionUser.id);
+          return { success: true, profile } as any;
+        }
+        return { success: true };
       } else if (result.type === 'cancel') {
         devLog('[Auth] User cancelled OAuth');
         setIsLoading(false);

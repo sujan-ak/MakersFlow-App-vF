@@ -88,8 +88,10 @@ export async function updateProfile(
 ) {
   return await supabase
     .from('profiles')
-    .update(updates)
-    .eq('id', userId)
+    .upsert(
+      { id: userId, ...updates },
+      { onConflict: 'id' }
+    )
     .select()
     .single();
 }

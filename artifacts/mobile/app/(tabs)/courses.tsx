@@ -10,10 +10,12 @@ import { CourseCardSkeleton } from "@/components/SkeletonLoader";
 import { CourseCard } from "@/components/CourseCard";
 import { coursesRepository } from "@/repositories/coursesRepository";
 import { useNetwork } from "@/context/NetworkContext";
+import { useTabSwipe } from "@/hooks/useTabSwipe";
 
 export default function CoursesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/courses");
   const { user, isOffline } = useAuth();
   const { addReconnectListener } = useNetwork();
 
@@ -104,7 +106,8 @@ export default function CoursesScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]} {...panHandlers}>
+      <SwipeIndicator />
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <View style={styles.titleRow}>
           <View>
