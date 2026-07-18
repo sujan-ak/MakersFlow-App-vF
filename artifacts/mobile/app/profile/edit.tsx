@@ -22,7 +22,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import { TEXT_STYLES } from "@/constants/typography";
-import { validateImageFile } from "@/lib/fileValidation";
+import { validateImageFile, uploadAvatarFile } from "@/lib/fileValidation";
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -34,19 +34,51 @@ export default function EditProfileScreen() {
   const [grade, setGrade] = useState(user?.grade ?? "");
   const [school, setSchool] = useState(user?.school ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.avatar ?? "");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadPromise, setUploadPromise] = useState<Promise<{ success: boolean; publicUrl?: string; error?: string }> | null>(null);
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   async function handleSave() {
+    if (!user?.id) return;
+
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    let finalAvatarUrl = avatarUri;
+    const isLocalUri =
+      avatarUri.startsWith("file://") ||
+      avatarUri.startsWith("ph://") ||
+      avatarUri.startsWith("content://");
+
+    if (isLocalUri) {
+      let uploadRes = null;
+      if (uploadPromise) {
+        uploadRes = await uploadPromise;
+      } else {
+        uploadRes = await uploadAvatarFile(user.id, avatarUri);
+      }
+
+      if (!uploadRes || !uploadRes.success || !uploadRes.publicUrl) {
+        setLoading(false);
+        Alert.alert(
+          "Upload Failed",
+          uploadRes?.error || "Profile picture upload failed. Please try again before saving.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      finalAvatarUrl = uploadRes.publicUrl;
+    }
+
     const result = await updateUser({
       name,
       phone: phone.trim() || undefined,
       grade,
       school,
-      avatar: avatarUri, // empty string = photo removed
+      avatar: finalAvatarUrl,
     });
     setLoading(false);
 
@@ -56,6 +88,8 @@ export default function EditProfileScreen() {
       } else {
         router.replace("/(tabs)/profile");
       }
+    } else {
+      Alert.alert("Save Failed", result.error || "Failed to update profile.");
     }
   }
 
@@ -81,12 +115,34 @@ export default function EditProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      const validation = await validateImageFile(result.assets[0].uri);
+      const pickedUri = result.assets[0].uri;
+
+      // 1. Validate file size & magic bytes first
+      const validation = await validateImageFile(pickedUri);
       if (!validation.valid) {
         Alert.alert("Invalid File", validation.error || "Please select a valid image.");
         return;
       }
-      setAvatarUri(result.assets[0].uri);
+
+      // 4. Instant optimistic UI feedback
+      setAvatarUri(pickedUri);
+
+      // 2. Upload to Supabase Storage in background
+      if (user?.id) {
+        setIsUploading(true);
+        const promise = uploadAvatarFile(user.id, pickedUri);
+        setUploadPromise(promise);
+
+        promise.then((res) => {
+          setIsUploading(false);
+          if (!res.success) {
+            Alert.alert(
+              "Upload Failed",
+              res.error || "Could not upload profile picture. Please try another image."
+            );
+          }
+        });
+      }
     }
   }
 
@@ -121,7 +177,7 @@ export default function EditProfileScreen() {
         >
           {/* Avatar */}
           <View style={styles.avatarSection}>
-            <Pressable onPress={pickImage} style={styles.avatarPressable}>
+            <Pressable onPress={pickImage} style={styles.avatarPressable} disabled={isUploading}>
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
               ) : (
@@ -130,20 +186,27 @@ export default function EditProfileScreen() {
                 </View>
               )}
               <View style={[styles.editBadge, { backgroundColor: colors.primary }]}>
-                <Ionicons name="camera" size={16} color="#FFF" />
+                {isUploading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Ionicons name="camera" size={16} color="#FFF" />
+                )}
               </View>
             </Pressable>
             <View style={{ flexDirection: "row", gap: 20 }}>
-              <Pressable onPress={pickImage}>
-                <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: colors.primary }]}>Change Photo</Text>
+              <Pressable onPress={pickImage} disabled={isUploading}>
+                <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: colors.primary }]}>
+                  {isUploading ? "Uploading..." : "Change Photo"}
+                </Text>
               </Pressable>
               {avatarUri ? (
                 <Pressable
+                  disabled={isUploading}
                   onPress={async () => {
                     try {
                       // Remove the stored avatar file from Supabase storage
                       if (avatarUri.includes("supabase.co") && avatarUri.includes("avatars")) {
-                        const filename = avatarUri.split("/").pop();
+                        const filename = avatarUri.split("?")[0].split("/").pop();
                         if (filename) {
                           await supabase.storage.from("avatars").remove([filename]);
                         }
@@ -152,6 +215,7 @@ export default function EditProfileScreen() {
                       // Storage cleanup failure shouldn't block removing the photo
                     }
                     setAvatarUri("");
+                    setUploadPromise(null);
                   }}
                 >
                   <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: "#DC2626" }]}>Remove Photo</Text>

@@ -16,7 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   Gesture,
   GestureDetector,
-  GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
@@ -230,7 +229,7 @@ export function ImageGallery({
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <View style={styles.container}>
       {/* ── MAIN IMAGE SWIPER (ZOOMABLE + SINGLE TAP FOR FULLSCREEN) ────── */}
       <View style={{ width: SCREEN_WIDTH, height }}>
         <FlatList
@@ -331,7 +330,7 @@ export function ImageGallery({
         animationType="fade"
         onRequestClose={() => setFullscreenVisible(false)}
       >
-        <GestureHandlerRootView style={styles.fullscreenContainer}>
+        <View style={styles.fullscreenContainer}>
           {/* Top Bar */}
           <View style={styles.fullscreenTopBar}>
             <Text style={styles.fullscreenCounter}>
@@ -402,9 +401,9 @@ export function ImageGallery({
               />
             </View>
           )}
-        </GestureHandlerRootView>
+        </View>
       </Modal>
-    </GestureHandlerRootView>
+    </View>
   );
 }
 

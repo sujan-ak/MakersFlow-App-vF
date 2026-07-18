@@ -23,7 +23,7 @@ import { useColors } from "@/hooks/useColors";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
-import { validateImageFile } from "@/lib/fileValidation";
+import { validateImageFile, uploadAvatarFile } from "@/lib/fileValidation";
 
 function getPasswordStrength(pass: string) {
   if (!pass) return 0;
@@ -109,26 +109,12 @@ export default function RegisterScreen() {
 
   const uploadAvatar = async (userId: string) => {
     if (!avatarUri) return null;
-    try {
-      const response = await fetch(avatarUri);
-      const blob = await response.blob();
-      const filename = `${userId}_avatar.jpg`;
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(filename, blob, { contentType: 'image/jpeg', upsert: true });
-
-      if (error) {
-        console.error('Error uploading avatar:', error);
-        return null;
-      }
-
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filename);
-      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', userId);
-      return publicUrl;
-    } catch (e) {
-      console.error('Exception during avatar upload:', e);
-      return null;
+    const res = await uploadAvatarFile(userId, avatarUri);
+    if (res.success && res.publicUrl) {
+      await supabase.from('profiles').update({ avatar_url: res.publicUrl }).eq('id', userId);
+      return res.publicUrl;
     }
+    return null;
   };
 
   async function handleGoogleSignup() {
