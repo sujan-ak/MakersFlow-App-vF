@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Metro
+.metro-health-check*
+
+# Native
+ios/
+android/.gradle/
+android/.cxx/
+android/build/
+android/app/build/
+android/local.properties
+android/app/debug.keystore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Vercel
+.vercel
+
+# AI Workflow / Agents
+.agents/
+
+# Documentation (only if you don't want docs tracked)
+# docs/
+
+# Security
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+*.orig.*
+
+supabase/.temp/
