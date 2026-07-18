@@ -4,13 +4,17 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 import { Asset } from 'expo-asset';
 import { TEXT_STYLES, TYPOGRAPHY } from '@/constants/typography';
 
 // Lazy-load: this expo-media-library version needs the ExpoMediaLibraryNext
 // native module, which Expo Go doesn't include — top-level import crashes.
 function getMediaLibrary(): typeof import('expo-media-library') | null {
-  if (Application.applicationId === 'host.exp.Exponent') return null;
+  // Use Constants.appOwnership for reliable Expo Go detection in built APKs
+  const isExpoGo = (Constants as any).appOwnership === 'expo'
+    || Application.applicationId === 'host.exp.Exponent';
+  if (isExpoGo) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require('expo-media-library');
@@ -307,7 +311,9 @@ export default function CertificateScreen() {
       const dest = `${dir}certificate_${Date.now()}.pdf`;
       await FileSystem.moveAsync({ from: uri, to: dest });
 
-      if (Application.applicationId === 'host.exp.Exponent') {
+      const isExpoGo = (Constants as any).appOwnership === 'expo'
+        || Application.applicationId === 'host.exp.Exponent';
+      if (isExpoGo) {
         // Expo Go — skip MediaLibrary, use share only
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
@@ -358,7 +364,12 @@ export default function CertificateScreen() {
         } else {
           await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
         }
-        Alert.alert('Success', 'Certificate downloaded and saved to your device.');
+        // ✅ Download complete — show alert only, never the share sheet
+        Alert.alert(
+          '✅ Downloaded!',
+          'Certificate saved to your Photos → Certificates album.',
+          [{ text: 'OK' }]
+        );
       } catch (saveErr) {
         console.warn('[Certificate] MediaLibrary save failed, falling back to share:', saveErr);
         const canShare = await Sharing.isAvailableAsync();

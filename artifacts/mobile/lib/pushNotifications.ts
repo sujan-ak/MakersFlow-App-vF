@@ -58,10 +58,26 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     }
 
     if (Platform.OS === "android") {
+      // MAX importance = shows on lock screen, makes sound, shows in status bar
       await Notifications.setNotificationChannelAsync("default", {
-        name: "Default",
-        importance: Notifications.AndroidImportance.HIGH,
+        name: "MakersFlow Notifications",
+        description: "Order updates, course announcements and more",
+        importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#0B6FAD",
+        sound: "default",
+        enableVibrate: true,
+        showBadge: true,
+      });
+      // Order updates channel — separate so user can control independently
+      await Notifications.setNotificationChannelAsync("orders", {
+        name: "Order Updates",
+        description: "Shipping and delivery status updates",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        sound: "default",
+        enableVibrate: true,
+        showBadge: true,
       });
     }
 

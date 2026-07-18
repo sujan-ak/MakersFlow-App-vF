@@ -2,7 +2,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import GoogleLogo from "@/components/GoogleLogo";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -18,6 +18,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 function getFriendlyErrorMessage(err: string): string {
   const msg = err.toLowerCase();
@@ -54,6 +57,55 @@ export default function LoginScreen() {
 
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  // Check biometric on mount and auto-login if enabled
+  useEffect(() => {
+    checkBiometricOnMount();
+  }, []);
+
+  const checkBiometricOnMount = useCallback(async () => {
+    try {
+      const biometricEnabled = await AsyncStorage.getItem("biometric_enabled");
+      if (biometricEnabled !== "true") return;
+
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) return;
+
+      setBiometricAvailable(true);
+
+      // Auto-prompt biometric on login screen open
+      const savedEmail = await SecureStore.getItemAsync("biometric_email");
+      const savedPassword = await SecureStore.getItemAsync("biometric_password");
+      if (!savedEmail || !savedPassword) return;
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Sign in to MakersFlow",
+        fallbackLabel: "Use Password",
+        disableDeviceFallback: false,
+      });
+
+      if (result.success) {
+        setLoading(true);
+        const loginResult = await login(savedEmail, savedPassword);
+        setLoading(false);
+        if (loginResult.success) {
+          const profile = (loginResult as any).profile;
+          if (profile && profile.grade) {
+            router.replace("/(tabs)");
+          } else {
+            router.replace("/(auth)/onboarding");
+          }
+        } else {
+          setError("Biometric login failed. Please enter your password.");
+        }
+      }
+    } catch (err) {
+      // Biometric not available — silently skip
+      console.log("[Biometric] Check failed:", err);
+    }
+  }, [login]);
 
   async function handleGoogleLogin() {
     if (googleLoading) return;
