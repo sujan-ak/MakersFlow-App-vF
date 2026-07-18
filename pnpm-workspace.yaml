@@ -28,7 +28,6 @@
 minimumReleaseAge: 1440
 
 nodeLinker: hoisted
-hoistingLimits: none
 
 minimumReleaseAgeExclude:
   # Exclude trusted scoped packages from the minimum release age check.
