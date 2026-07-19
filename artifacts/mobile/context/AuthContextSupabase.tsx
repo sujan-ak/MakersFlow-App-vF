@@ -1,6 +1,7 @@
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import * as WebBrowser from 'expo-web-browser';
+import * as SecureStore from 'expo-secure-store';
 import * as Linking from 'expo-linking';
 import { Alert, AppState, Platform } from 'react-native';
 import { registerForPushNotifications, unregisterPushToken } from '@/lib/pushNotifications';
@@ -688,7 +689,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem(DEVICE_SESSION_KEY).catch(() => {});
       }
 
-      const { error } = await authService.signOut();
+      // If the user has biometric login enabled, sign out on this device only.
+      // A global sign-out revokes the refresh token server-side, which would
+      // make the stored biometric token useless and silently break fingerprint
+      // login on the next launch.
+      let biometricOn = false;
+      try {
+        biometricOn = (await SecureStore.getItemAsync('makersflow_biometric_enabled')) === 'true';
+      } catch {
+        biometricOn = false;
+      }
+
+      const { error } = biometricOn
+        ? await authService.signOutLocal()
+        : await authService.signOut();
 
       if (error) {
         devError('[Auth] Logout error:', error);

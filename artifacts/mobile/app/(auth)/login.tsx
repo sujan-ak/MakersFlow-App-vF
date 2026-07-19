@@ -20,7 +20,7 @@ import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase";
 
 function getFriendlyErrorMessage(err: string): string {
   const msg = err.toLowerCase();
@@ -64,21 +64,20 @@ export default function LoginScreen() {
     checkBiometricOnMount();
   }, []);
 
-  const checkBiometricOnMount = useCallback(async () => {
+  const runBiometricUnlock = useCallback(async (silent: boolean): Promise<void> => {
     try {
-      const biometricEnabled = await AsyncStorage.getItem("biometric_enabled");
+      const biometricEnabled = await SecureStore.getItemAsync("makersflow_biometric_enabled");
       if (biometricEnabled !== "true") return;
 
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) return;
 
-      setBiometricAvailable(true);
+      const storedToken = await SecureStore.getItemAsync("makersflow_biometric_token");
+      if (!storedToken) return;
 
-      // Auto-prompt biometric on login screen open
-      const savedEmail = await SecureStore.getItemAsync("biometric_email");
-      const savedPassword = await SecureStore.getItemAsync("biometric_password");
-      if (!savedEmail || !savedPassword) return;
+      // Only now do we know biometric sign-in is genuinely usable.
+      setBiometricAvailable(true);
 
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "Sign in to MakersFlow",
@@ -86,26 +85,45 @@ export default function LoginScreen() {
         disableDeviceFallback: false,
       });
 
-      if (result.success) {
-        setLoading(true);
-        const loginResult = await login(savedEmail, savedPassword);
-        setLoading(false);
-        if (loginResult.success) {
-          const profile = (loginResult as any).profile;
-          if (profile && profile.grade) {
-            router.replace("/(tabs)");
-          } else {
-            router.replace("/(auth)/onboarding");
-          }
-        } else {
-          setError("Biometric login failed. Please enter your password.");
+      if (!result.success) return;
+
+      setLoading(true);
+      const { data, error: refreshError } = await supabase.auth.refreshSession({
+        refresh_token: storedToken,
+      });
+      setLoading(false);
+
+      if (refreshError || !data?.session) {
+        // Token expired or was revoked — clear it and fall back to password.
+        await SecureStore.deleteItemAsync("makersflow_biometric_token").catch(() => {});
+        setBiometricAvailable(false);
+        if (!silent) {
+          setError("Biometric sign-in expired. Please sign in with your password once to re-enable it.");
         }
+        return;
       }
+
+      // Persist the rotated refresh token for next time.
+      if (data.session.refresh_token) {
+        await SecureStore.setItemAsync(
+          "makersflow_biometric_token",
+          data.session.refresh_token
+        ).catch(() => {});
+      }
+
+      router.replace("/(tabs)");
     } catch (err) {
-      // Biometric not available — silently skip
-      console.log("[Biometric] Check failed:", err);
+      setLoading(false);
+      console.log("[Biometric] Unlock failed:", err);
     }
-  }, [login]);
+  }, []);
+
+  const checkBiometricOnMount = useCallback(() => runBiometricUnlock(true), [runBiometricUnlock]);
+
+  // Manual "Use fingerprint" button handler
+  const handleBiometricPress = useCallback(async () => {
+    await runBiometricUnlock(false);
+  }, [runBiometricUnlock]);
 
   async function handleGoogleLogin() {
     if (googleLoading) return;
@@ -162,6 +180,29 @@ export default function LoginScreen() {
 
     if (result.success) {
       const profile = (result as any).profile;
+
+      // ── Two-Factor Authentication ────────────────────────────────────────
+      // If the user turned 2FA on in Settings, the password alone isn't
+      // enough — send a code to their phone and make them confirm it before
+      // they reach the app.
+      try {
+        const twoFactorOn =
+          (await SecureStore.getItemAsync("makersflow_2fa_enabled")) === "true";
+        const phone = profile?.phone ?? (result as any)?.user?.phone ?? null;
+
+        if (twoFactorOn && phone) {
+          router.replace({
+            pathname: "/(auth)/verify-otp",
+            params: { phone: String(phone), provider: "sms" },
+          });
+          return;
+        }
+      } catch (err) {
+        // If the 2FA flag can't be read, don't lock the user out — continue
+        // with the normal login flow.
+        console.log("[2FA] Check skipped:", err);
+      }
+
       if (profile && profile.grade) {
         router.replace("/(tabs)");
       } else {
@@ -319,6 +360,30 @@ export default function LoginScreen() {
               </>
             )}
           </Pressable>
+
+          {biometricAvailable ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleBtn,
+                {
+                  backgroundColor: colors.card,
+                  borderWidth: 1.5,
+                  borderColor: colors.border,
+                  borderRadius: 12,
+                  height: 52,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={handleBiometricPress}
+            >
+              <Ionicons name="finger-print" size={20} color="#0B6FAD" />
+              <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Sign in with Fingerprint</Text>
+            </Pressable>
+          ) : null}
 
         </View>
 

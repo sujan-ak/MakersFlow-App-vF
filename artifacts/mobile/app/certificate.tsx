@@ -4,6 +4,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Application from 'expo-application';
+import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Asset } from 'expo-asset';
 import { TEXT_STYLES, TYPOGRAPHY } from '@/constants/typography';
@@ -347,10 +348,24 @@ export default function CertificateScreen() {
       }
 
       if (!hasPermission) {
+        // Permission permanently denied — offer to open Settings, and also
+        // fall back to sharing so the user can still save the PDF elsewhere.
         Alert.alert(
-          'Permission Required',
-          'Media Library permission is required to save certificates. Please enable it in system settings.',
-          [{ text: 'OK' }]
+          'Save to Gallery Blocked',
+          'To save certificates to your Photos, allow storage permission in Settings. For now, you can save or share the PDF using the share sheet.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            {
+              text: 'Share PDF Instead',
+              onPress: async () => {
+                const canShare = await Sharing.isAvailableAsync();
+                if (canShare) {
+                  await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
+                }
+              },
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
         );
         setIsGenerating(false);
         return;

@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
+import { supabase } from "@/lib/supabase";
 
 const BIOMETRIC_KEY = "makersflow_biometric_enabled";
 
@@ -93,9 +94,25 @@ export default function SecurityScreen() {
       });
 
       if (result.success) {
+        // Capture the current session's refresh token. On the login screen a
+        // successful fingerprint exchanges this for a fresh session — so we
+        // never have to store the raw password anywhere.
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession?.refresh_token) {
+          Alert.alert(
+            "Could not enable",
+            "Your session could not be read. Please sign out, sign in again, then enable biometric login."
+          );
+          return;
+        }
+
         await SecureStore.setItemAsync(BIOMETRIC_KEY, "true");
+        await SecureStore.setItemAsync("makersflow_biometric_token", currentSession.refresh_token);
+        if (user?.email) {
+          await SecureStore.setItemAsync("makersflow_biometric_email", user.email);
+        }
         setBiometric(true);
-        Alert.alert("✅ Enabled", "Biometric login is now active. You can use your fingerprint or Face ID to log in.");
+        Alert.alert("✅ Enabled", "Biometric login is now active. Next time you open the app, just use your fingerprint or Face ID to sign in.");
       } else {
         Alert.alert("Authentication Failed", "Could not verify your identity. Biometric login was not enabled.");
       }
@@ -111,6 +128,8 @@ export default function SecurityScreen() {
             style: "destructive",
             onPress: async () => {
               await SecureStore.setItemAsync(BIOMETRIC_KEY, "false");
+              await SecureStore.deleteItemAsync("makersflow_biometric_token").catch(() => {});
+              await SecureStore.deleteItemAsync("makersflow_biometric_email").catch(() => {});
               setBiometric(false);
             },
           },

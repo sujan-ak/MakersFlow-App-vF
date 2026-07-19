@@ -115,10 +115,15 @@ export default function EditProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      const pickedUri = result.assets[0].uri;
+      const asset = result.assets[0];
+      const pickedUri = asset.uri;
 
-      // 1. Validate file size & magic bytes first
-      const validation = await validateImageFile(pickedUri);
+      // 1. Validate size / type using the metadata the picker already gives us
+      const validation = await validateImageFile(
+        pickedUri,
+        (asset as any).mimeType,
+        (asset as any).fileSize
+      );
       if (!validation.valid) {
         Alert.alert("Invalid File", validation.error || "Please select a valid image.");
         return;
