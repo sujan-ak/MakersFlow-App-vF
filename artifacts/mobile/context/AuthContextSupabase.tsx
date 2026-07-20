@@ -689,16 +689,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem(DEVICE_SESSION_KEY).catch(() => {});
       }
 
-      // If the user has biometric login enabled, sign out on this device only.
-      // A global sign-out revokes the refresh token server-side, which would
-      // make the stored biometric token useless and silently break fingerprint
-      // login on the next launch.
+      // Keep the refresh token alive when biometric login is enabled,
+      // otherwise fingerprint login is broken after the next signOut.
       let biometricOn = false;
       try {
         biometricOn = (await SecureStore.getItemAsync('makersflow_biometric_enabled')) === 'true';
-      } catch {
-        biometricOn = false;
-      }
+      } catch { biometricOn = false; }
 
       const { error } = biometricOn
         ? await authService.signOutLocal()

@@ -94,25 +94,16 @@ export default function SecurityScreen() {
       });
 
       if (result.success) {
-        // Capture the current session's refresh token. On the login screen a
-        // successful fingerprint exchanges this for a fresh session — so we
-        // never have to store the raw password anywhere.
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (!currentSession?.refresh_token) {
-          Alert.alert(
-            "Could not enable",
-            "Your session could not be read. Please sign out, sign in again, then enable biometric login."
-          );
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        if (!sess?.refresh_token) {
+          Alert.alert("Could not enable", "Session not found. Please sign out, sign in again, then enable biometric login.");
           return;
         }
-
         await SecureStore.setItemAsync(BIOMETRIC_KEY, "true");
-        await SecureStore.setItemAsync("makersflow_biometric_token", currentSession.refresh_token);
-        if (user?.email) {
-          await SecureStore.setItemAsync("makersflow_biometric_email", user.email);
-        }
+        await SecureStore.setItemAsync("makersflow_biometric_token", sess.refresh_token);
+        if (user?.email) await SecureStore.setItemAsync("makersflow_biometric_email", user.email);
         setBiometric(true);
-        Alert.alert("✅ Enabled", "Biometric login is now active. Next time you open the app, just use your fingerprint or Face ID to sign in.");
+        Alert.alert("✅ Enabled", "Biometric login is now active. Next time you open the app, use your fingerprint to sign in.");
       } else {
         Alert.alert("Authentication Failed", "Could not verify your identity. Biometric login was not enabled.");
       }

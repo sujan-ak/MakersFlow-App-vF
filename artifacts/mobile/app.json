@@ -80,9 +80,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#0B6FAD",
-          "defaultChannel": "default",
-          "enableBackgroundRemoteNotifications": false
+          "color": "#0B6FAD"
         }
       ],
       "expo-font",

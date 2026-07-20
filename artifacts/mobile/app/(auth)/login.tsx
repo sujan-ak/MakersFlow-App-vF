@@ -66,6 +66,7 @@ export default function LoginScreen() {
 
   const runBiometricUnlock = useCallback(async (silent: boolean): Promise<void> => {
     try {
+      // Must match the key security.tsx writes (SecureStore, not AsyncStorage)
       const biometricEnabled = await SecureStore.getItemAsync("makersflow_biometric_enabled");
       if (biometricEnabled !== "true") return;
 
@@ -76,7 +77,6 @@ export default function LoginScreen() {
       const storedToken = await SecureStore.getItemAsync("makersflow_biometric_token");
       if (!storedToken) return;
 
-      // Only now do we know biometric sign-in is genuinely usable.
       setBiometricAvailable(true);
 
       const result = await LocalAuthentication.authenticateAsync({
@@ -84,7 +84,6 @@ export default function LoginScreen() {
         fallbackLabel: "Use Password",
         disableDeviceFallback: false,
       });
-
       if (!result.success) return;
 
       setLoading(true);
@@ -94,23 +93,17 @@ export default function LoginScreen() {
       setLoading(false);
 
       if (refreshError || !data?.session) {
-        // Token expired or was revoked — clear it and fall back to password.
+        // Token expired — clear it, tell user to sign in once to re-enable
         await SecureStore.deleteItemAsync("makersflow_biometric_token").catch(() => {});
         setBiometricAvailable(false);
-        if (!silent) {
-          setError("Biometric sign-in expired. Please sign in with your password once to re-enable it.");
-        }
+        if (!silent) setError("Biometric sign-in expired. Please sign in with your password once to re-enable it.");
         return;
       }
 
-      // Persist the rotated refresh token for next time.
+      // Persist the rotated refresh token for next time
       if (data.session.refresh_token) {
-        await SecureStore.setItemAsync(
-          "makersflow_biometric_token",
-          data.session.refresh_token
-        ).catch(() => {});
+        await SecureStore.setItemAsync("makersflow_biometric_token", data.session.refresh_token).catch(() => {});
       }
-
       router.replace("/(tabs)");
     } catch (err) {
       setLoading(false);
@@ -120,7 +113,6 @@ export default function LoginScreen() {
 
   const checkBiometricOnMount = useCallback(() => runBiometricUnlock(true), [runBiometricUnlock]);
 
-  // Manual "Use fingerprint" button handler
   const handleBiometricPress = useCallback(async () => {
     await runBiometricUnlock(false);
   }, [runBiometricUnlock]);
@@ -181,25 +173,15 @@ export default function LoginScreen() {
     if (result.success) {
       const profile = (result as any).profile;
 
-      // ── Two-Factor Authentication ────────────────────────────────────────
-      // If the user turned 2FA on in Settings, the password alone isn't
-      // enough — send a code to their phone and make them confirm it before
-      // they reach the app.
+      // ── 2FA check ──────────────────────────────────────────────────────
       try {
-        const twoFactorOn =
-          (await SecureStore.getItemAsync("makersflow_2fa_enabled")) === "true";
+        const twoFactorOn = (await SecureStore.getItemAsync("makersflow_2fa_enabled")) === "true";
         const phone = profile?.phone ?? (result as any)?.user?.phone ?? null;
-
         if (twoFactorOn && phone) {
-          router.replace({
-            pathname: "/(auth)/verify-otp",
-            params: { phone: String(phone), provider: "sms" },
-          });
+          router.replace({ pathname: "/(auth)/verify-otp", params: { phone: String(phone), provider: "sms" } });
           return;
         }
       } catch (err) {
-        // If the 2FA flag can't be read, don't lock the user out — continue
-        // with the normal login flow.
         console.log("[2FA] Check skipped:", err);
       }
 
@@ -361,29 +343,15 @@ export default function LoginScreen() {
             )}
           </Pressable>
 
-          {biometricAvailable ? (
+          {biometricAvailable && (
             <Pressable
-              style={({ pressed }) => [
-                styles.googleBtn,
-                {
-                  backgroundColor: colors.card,
-                  borderWidth: 1.5,
-                  borderColor: colors.border,
-                  borderRadius: 12,
-                  height: 52,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
+              style={({ pressed }) => [styles.googleBtn, { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: pressed ? 0.85 : 1 }]}
               onPress={handleBiometricPress}
             >
               <Ionicons name="finger-print" size={20} color="#0B6FAD" />
               <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Sign in with Fingerprint</Text>
             </Pressable>
-          ) : null}
+          )}
 
         </View>
 

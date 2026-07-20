@@ -348,20 +348,16 @@ export default function CertificateScreen() {
       }
 
       if (!hasPermission) {
-        // Permission permanently denied — offer to open Settings, and also
-        // fall back to sharing so the user can still save the PDF elsewhere.
         Alert.alert(
           'Save to Gallery Blocked',
-          'To save certificates to your Photos, allow storage permission in Settings. For now, you can save or share the PDF using the share sheet.',
+          'Storage permission was denied. Open Settings to allow it, or share the PDF to save it elsewhere.',
           [
             { text: 'Open Settings', onPress: () => Linking.openSettings() },
             {
               text: 'Share PDF Instead',
               onPress: async () => {
                 const canShare = await Sharing.isAvailableAsync();
-                if (canShare) {
-                  await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
-                }
+                if (canShare) await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
               },
             },
             { text: 'Cancel', style: 'cancel' },

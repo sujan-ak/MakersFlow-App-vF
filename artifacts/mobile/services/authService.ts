@@ -35,11 +35,8 @@ export async function signOut() {
   return await supabase.auth.signOut();
 }
 
-/**
- * Signs out on this device only, WITHOUT revoking the refresh token on the
- * server. Used when biometric login is enabled so the stored refresh token
- * stays valid and the user can unlock with a fingerprint next time.
- */
+/** Signs out this device only — does NOT revoke the refresh token server-side.
+ *  Used when biometric login is enabled so the stored token stays valid. */
 export async function signOutLocal() {
   return await supabase.auth.signOut({ scope: 'local' });
 }

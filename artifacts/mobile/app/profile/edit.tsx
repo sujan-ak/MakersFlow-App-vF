@@ -118,7 +118,8 @@ export default function EditProfileScreen() {
       const asset = result.assets[0];
       const pickedUri = asset.uri;
 
-      // 1. Validate size / type using the metadata the picker already gives us
+      // 1. Validate using picker metadata (mimeType + fileSize) — avoids
+      //    the atob / positional-read crash on Android content:// URIs.
       const validation = await validateImageFile(
         pickedUri,
         (asset as any).mimeType,
