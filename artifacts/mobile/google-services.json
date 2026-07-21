@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "181660701105",
+    "project_id": "makersflow-86444",
+    "storage_bucket": "makersflow-86444.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181660701105:android:dad6bbf3398ea214386d90",
+        "android_client_info": {
+          "package_name": "com.makersflow.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAG2gn4QyDrsuO3C3rvWQuH4Igz4pvqDZ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
