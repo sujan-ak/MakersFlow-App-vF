@@ -312,83 +312,54 @@ export default function CertificateScreen() {
       const dest = `${dir}certificate_${Date.now()}.pdf`;
       await FileSystem.moveAsync({ from: uri, to: dest });
 
-      const isExpoGo = (Constants as any).appOwnership === 'expo'
-        || Application.applicationId === 'host.exp.Exponent';
-      if (isExpoGo) {
-        // Expo Go — skip MediaLibrary, use share only
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
-        } else {
-          Alert.alert('Saved', `Certificate saved to:\n${dest}`);
+      // ── Save the PDF somewhere the user can actually find it ─────────────
+      // MediaLibrary is deliberately NOT used here. It only accepts images and
+      // video, so createAssetAsync() throws "Unsupported file type" on a PDF —
+      // that failure is what made the old code fall through to the share sheet,
+      // and requesting its permission is what triggered the music/audio prompt.
+      //
+      // Android: Storage Access Framework — the user picks a folder (Downloads)
+      //          and the file is written there, visible in any file manager.
+      // iOS:     the share sheet is the platform-native "Save to Files" path.
+      if (Platform.OS === 'android') {
+        try {
+          const SAF = (FileSystem as any).StorageAccessFramework;
+          const perm = await SAF.requestDirectoryPermissionsAsync();
+
+          if (!perm.granted) {
+            Alert.alert('Save Cancelled', 'No folder was chosen, so the certificate was not saved.', [{ text: 'OK' }]);
+            setIsGenerating(false);
+            return;
+          }
+
+          const base64 = await FileSystem.readAsStringAsync(dest, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          const fileName = `MakersFlow_Certificate_${Date.now()}`;
+          const newUri = await SAF.createFileAsync(perm.directoryUri, fileName, 'application/pdf');
+          await FileSystem.writeAsStringAsync(newUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+
+          Alert.alert('✅ Downloaded!', 'Certificate saved to the folder you chose.', [{ text: 'OK' }]);
+        } catch (safErr) {
+          console.warn('[Certificate] SAF save failed:', safErr);
+          Alert.alert('Could Not Save', 'Saving to that folder failed. Use the Share button to save it elsewhere.', [{ text: 'OK' }]);
         }
         setIsGenerating(false);
         return;
       }
 
-      // MediaLibrary Permission Check (lazy — unavailable in Expo Go)
-      const MediaLibrary = getMediaLibrary();
-      if (!MediaLibrary) {
-        // Expo Go fallback: share the PDF instead of saving to an album
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
-        } else {
-          Alert.alert('Saved', `Certificate saved to:\n${dest}`);
-        }
-        setIsGenerating(false);
-        return;
-      }
-      const { status: currentStatus, canAskAgain } = await MediaLibrary.getPermissionsAsync(false);
-      let hasPermission = currentStatus === 'granted';
-
-      if (!hasPermission && canAskAgain) {
-        const { status: requestStatus } = await MediaLibrary.requestPermissionsAsync(false);
-        hasPermission = requestStatus === 'granted';
-      }
-
-      if (!hasPermission) {
-        Alert.alert(
-          'Save to Gallery Blocked',
-          'Storage permission was denied. Open Settings to allow it, or share the PDF to save it elsewhere.',
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            {
-              text: 'Share PDF Instead',
-              onPress: async () => {
-                const canShare = await Sharing.isAvailableAsync();
-                if (canShare) await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
-              },
-            },
-            { text: 'Cancel', style: 'cancel' },
-          ]
-        );
-        setIsGenerating(false);
-        return;
-      }
-
-      try {
-        const asset = await MediaLibrary.createAssetAsync(dest);
-        const album = await MediaLibrary.getAlbumAsync('Certificates');
-        if (album == null) {
-          await MediaLibrary.createAlbumAsync('Certificates', asset, false);
-        } else {
-          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-        }
-        // ✅ Download complete — show alert only, never the share sheet
-        Alert.alert(
-          '✅ Downloaded!',
-          'Certificate saved to your Photos → Certificates album.',
-          [{ text: 'OK' }]
-        );
-      } catch (saveErr) {
-        console.warn('[Certificate] MediaLibrary save failed, falling back to share:', saveErr);
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(dest, { mimeType: 'application/pdf', dialogTitle: 'Save Certificate' });
-        } else {
-          Alert.alert('Saved', `Certificate saved to:\n${dest}`);
-        }
+      // iOS
+      const canShareIos = await Sharing.isAvailableAsync();
+      if (canShareIos) {
+        await Sharing.shareAsync(dest, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Save Certificate',
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        Alert.alert('✅ Saved!', 'Certificate generated successfully.', [{ text: 'OK' }]);
       }
     } catch (e: any) {
       console.error('[Certificate] Download error:', e);

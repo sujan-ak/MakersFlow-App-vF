@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -24,14 +25,17 @@ import { supabase } from "@/lib/supabase";
 
 function getFriendlyErrorMessage(err: string): string {
   const msg = err.toLowerCase();
+  // Supabase deliberately returns the same message for a wrong password and a
+  // non-existent account (prevents user enumeration), so we cannot tell them
+  // apart. Flag it and let the UI offer both paths.
   if (msg.includes("invalid login credentials") || msg.includes("invalid credentials")) {
-    return "Incorrect email or password. Please try again.";
+    return "__NO_ACCOUNT_OR_WRONG_PASSWORD__";
   }
   if (msg.includes("email not confirmed")) {
     return "Please confirm your email address before logging in.";
   }
-  if (msg.includes("user not found")) {
-    return "No account found with this email. Please sign up.";
+  if (msg.includes("user not found") || msg.includes("no user found") || msg.includes("account not found")) {
+    return "__NO_ACCOUNT_OR_WRONG_PASSWORD__";
   }
   if (msg.includes("rate limit") || msg.includes("too many requests")) {
     return "Too many requests. Please try again in a few minutes.";
@@ -191,7 +195,21 @@ export default function LoginScreen() {
         router.replace("/(auth)/onboarding");
       }
     } else {
-      setError(getFriendlyErrorMessage(result.error || "Invalid credentials. Please try again."));
+      const msg = getFriendlyErrorMessage(result.error || "Invalid credentials. Please try again.");
+      if (msg === "__NO_ACCOUNT_OR_WRONG_PASSWORD__") {
+        Alert.alert(
+          "Couldn't Sign You In",
+          `We couldn't sign in with:\n\n${email}\n\nEither the password is wrong, or there is no account with this email yet.`,
+          [
+            { text: "Try Again", style: "cancel" },
+            { text: "Reset Password", onPress: () => router.push("/(auth)/forgot-password") },
+            { text: "Create Account", onPress: () => router.push("/(auth)/register") },
+          ]
+        );
+        setError("");
+      } else {
+        setError(msg);
+      }
     }
   }
 

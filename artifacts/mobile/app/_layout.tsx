@@ -26,6 +26,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContextSupabase";
 import { AuthRequireProvider } from "@/context/AuthRequireContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppGate } from "@/components/AppGate";
 import { CartProvider } from "@/context/CartContext";
 import { ProgressProvider } from "@/context/ProgressContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
@@ -185,7 +186,9 @@ export default function RootLayout() {
                       <CartProvider>
                         <FavoritesProvider>
                           <ProgressProvider>
-                            <RootLayoutNav />
+                            <AppGate>
+                              <RootLayoutNav />
+                            </AppGate>
                           </ProgressProvider>
                         </FavoritesProvider>
                       </CartProvider>
