@@ -41,7 +41,7 @@ export default function StoreScreen() {
     try {
       await Share.share({
         title: "MakersFlow Store",
-        message: `Check out the MakersFlow Store!\n\nOpen in app: makersflow://store\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+        message: `Check out the MakersFlow Store!\n\nOpen in app: makersflow://store\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.app`,
       });
     } catch (error) {
       console.error("[StoreShare] Share failed error:", error);

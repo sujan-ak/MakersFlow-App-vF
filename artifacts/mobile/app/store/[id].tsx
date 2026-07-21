@@ -220,7 +220,7 @@ export default function ProductDetailScreen() {
     try {
       await Share.share({
         title: product?.title,
-        message: `Check out "${product?.title || "this product"}" on MakersFlow!\n\nOpen in app: makersflow://store/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+        message: `Check out "${product?.title || "this product"}" on MakersFlow!\n\nOpen in app: makersflow://store/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.app`,
       });
     } catch (error) {
       console.error("[ProductShare] Share failed error:", error);

@@ -50,7 +50,7 @@ export default function NewsDetailScreen() {
     try {
       await Share.share({
         title: item.title,
-        message: `Check out "${item.title}" on MakersFlow!\n\nOpen in app: makersflow://news/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+        message: `Check out "${item.title}" on MakersFlow!\n\nOpen in app: makersflow://news/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.app`,
       });
     } catch (error) {
       console.error("[NewsDetail] Error sharing article:", error);

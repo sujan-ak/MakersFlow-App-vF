@@ -1,4 +1,4 @@
-package com.makersflow.mobile
+package com.makersflow.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

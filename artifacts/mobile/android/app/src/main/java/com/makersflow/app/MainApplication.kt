@@ -1,4 +1,4 @@
-package com.makersflow.mobile
+package com.makersflow.app
 
 import android.app.Application
 import android.content.res.Configuration

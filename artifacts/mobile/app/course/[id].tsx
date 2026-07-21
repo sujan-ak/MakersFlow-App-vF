@@ -77,7 +77,7 @@ export default function CourseDetailScreen() {
     try {
       await Share.share({
         title: course?.title,
-        message: `Check out "${course?.title || "this course"}" on MakersFlow!\n\nOpen in app: makersflow://course/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.mobile`,
+        message: `Check out "${course?.title || "this course"}" on MakersFlow!\n\nOpen in app: makersflow://course/${id}\n\nDownload MakersFlow: https://play.google.com/store/apps/details?id=com.makersflow.app`,
       });
     } catch (error) {
       console.error("Error sharing course:", error);

@@ -15,14 +15,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.makersflow.mobile"
+      "bundleIdentifier": "com.makersflow.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logos/icon.webp",
         "backgroundColor": "#0B6FAD"
       },
-      "package": "com.makersflow.mobile",
+      "package": "com.makersflow.app",
       "intentFilters": [
         {
           "action": "VIEW",
