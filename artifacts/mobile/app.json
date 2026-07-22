@@ -2,14 +2,14 @@
   "expo": {
     "name": "MAKERSFLOW",
     "slug": "mobile",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
-    "icon": "./assets/images/logos/icon.webp",
+    "icon": "./assets/images/logos/icon.png",
     "scheme": "makersflow",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash/splash.webp",
+      "image": "./assets/images/splash/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B6FAD"
     },
@@ -24,7 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logos/icon.webp",
+        "foregroundImage": "./assets/images/logos/icon.png",
         "backgroundColor": "#0B6FAD"
       },
       "package": "com.makersflow.app",
@@ -73,7 +73,6 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "minSdkVersion": 24,
       "googleServicesFile": "./google-services.json",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
@@ -117,7 +116,6 @@
       "typedRoutes": true
     },
     "owner": "ashrith007",
-    "privacy": "unlisted",
     "extra": {
       "router": {},
       "eas": {

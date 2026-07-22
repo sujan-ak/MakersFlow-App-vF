@@ -87,37 +87,9 @@ export function AppGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── 3. Biometric lock helpers ────────────────────────────────────────────
-  const getLocalAuth = useCallback(() => {
-    if (Platform.OS === "web") return null;
-    try {
-      return require("expo-local-authentication");
-    } catch {
-      return null;
-    }
-  }, []);
-
   const runUnlock = useCallback(async () => {
-    if (promptOpen.current) return;
-    const LocalAuth = getLocalAuth();
-    if (!LocalAuth) { setLocked(false); return; }
-    promptOpen.current = true;
-    setChecking(true);
-    backgroundedAt.current = null;
-    try {
-      const result = await LocalAuth.authenticateAsync({
-        promptMessage: "Unlock MakersFlow",
-        fallbackLabel: "Use device passcode",
-        disableDeviceFallback: false,
-      });
-      if (result.success) setLocked(false);
-    } catch {
-      // stay locked
-    } finally {
-      promptOpen.current = false;
-      backgroundedAt.current = null;
-      setChecking(false);
-    }
-  }, [getLocalAuth]);
+    setLocked(false);
+  }, []);
 
   const shouldLock = useCallback(async (): Promise<boolean> => {
     // Biometric lock disabled per specification
