@@ -20,6 +20,19 @@ import { supabase } from "@/lib/supabase";
 
 
 
+function normalizePhone(raw: string): string | null {
+  if (!raw) return null;
+  let digits = raw.replace(/[^\d+]/g, "");
+  if (digits.startsWith("+")) {
+    return /^\+\d{10,15}$/.test(digits) ? digits : null;
+  }
+  digits = digits.replace(/\D/g, "");
+  if (digits.length === 10) return "+91" + digits;
+  if (digits.length === 12 && digits.startsWith("91")) return "+" + digits;
+  if (digits.length >= 10 && digits.length <= 15) return "+" + digits;
+  return null;
+}
+
 export default function SecurityScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -47,11 +60,12 @@ export default function SecurityScreen() {
   // ── 2FA toggle ────────────────────────────────────────────────────────────
   async function handleTwoFactorToggle(value: boolean) {
     if (value) {
-      // Enabling 2FA — send OTP to their phone to verify
-      if (!user?.phone) {
+      // Enabling 2FA — validate phone is SMS-ready first
+      const phoneE164 = normalizePhone(user?.phone ?? "");
+      if (!phoneE164) {
         Alert.alert(
-          "Phone Required",
-          "Please add a phone number to your profile first to enable Two-Factor Authentication.",
+          "Valid Phone Required",
+          "Add a valid mobile number (e.g. +91 98765 43210) to your profile to enable Two-Factor Authentication.",
           [
             { text: "Cancel", style: "cancel" },
             { text: "Edit Profile", onPress: () => router.push("/profile/edit") },
@@ -62,7 +76,7 @@ export default function SecurityScreen() {
 
       Alert.alert(
         "Enable Two-Factor Auth",
-        `We will send a verification code to ${user.phone} each time you log in. Continue?`,
+        `We will send an SMS verification code to ${phoneE164} each time you log in. Continue?`,
         [
           { text: "Cancel", style: "cancel" },
           {

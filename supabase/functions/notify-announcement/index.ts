@@ -1,16 +1,17 @@
 /**
  * notify-announcement
  * ───────────────────
- * Called by a Supabase Database Webhook when an announcement is published.
- * Broadcasts a push notification to ALL users who have registered tokens.
+ * Fired by a Supabase Database Webhook when an announcement is published.
+ * Broadcasts a push to ALL users with a registered token.
  *
- * Set up a Database Webhook in Supabase:
- *   Table: announcements
+ * Webhook setup (Supabase Dashboard → Database → Webhooks):
+ *   Table:  announcements
  *   Events: INSERT, UPDATE
- *   URL: https://<project>.supabase.co/functions/v1/notify-announcement
+ *   Type:   Supabase Edge Functions
+ *   Edge Function: notify-announcement
  *
- * Can also be called manually from admin panel:
- * POST body: { title: string, body: string, data?: object }
+ * Also callable manually from an admin panel:
+ *   POST { title: string, body: string, data?: object }
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -22,9 +23,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const supabase = createClient(
@@ -38,73 +37,49 @@ serve(async (req) => {
     let body: string;
     let data: Record<string, any> = {};
 
-    // Called from Database Webhook (INSERT/UPDATE on announcements)
     if (payload.record) {
       const record = payload.record;
 
-      // Only send for published announcements
+      // Only notify for published announcements
       if (record.status !== "published") {
-        return new Response(
-          JSON.stringify({ skipped: true, reason: "Not published" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ skipped: true, reason: "Not published" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      // On UPDATE — only notify if it just became published
+      // On UPDATE, skip if it was already published (avoid re-notifying on edits)
       if (payload.type === "UPDATE" && payload.old_record?.status === "published") {
-        return new Response(
-          JSON.stringify({ skipped: true, reason: "Already was published" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ skipped: true, reason: "Already published" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      // Column is 'message' (not summary/content) per the announcements schema
       title = record.title ?? "New Announcement";
-      body = record.summary ?? record.content ?? "Check the latest update from MakersFlow.";
-      data = { screen: "announcements", announcementId: String(record.id) };
-    }
-    // Called manually from admin
-    else if (payload.title && payload.body) {
+      body  = record.message ?? "Check the latest update from MakersFlow.";
+      data  = { screen: "announcements", announcementId: String(record.id) };
+    } else if (payload.title && payload.body) {
       title = payload.title;
-      body = payload.body;
-      data = payload.data ?? {};
+      body  = payload.body;
+      data  = payload.data ?? {};
     } else {
-      return new Response(
-        JSON.stringify({ error: "Invalid payload" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid payload" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Broadcast to all users
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const sendRes = await fetch(
-      `${SUPABASE_URL}/functions/v1/send-push-notification`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        },
-        body: JSON.stringify({
-          broadcast: true,
-          title,
-          body,
-          data,
-        }),
-      }
-    );
+    const sendRes = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({ broadcast: true, title, body, data }),
+    });
 
     const result = await sendRes.json();
-    console.log("[AnnouncePush] Result:", result);
-
-    return new Response(
-      JSON.stringify({ success: true, ...result }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, ...result }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     console.error("[AnnouncePush] Error:", err.message);
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: err.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

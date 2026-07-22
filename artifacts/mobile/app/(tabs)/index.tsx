@@ -331,6 +331,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!hasLoadedOnce.current) {
+        hasLoadedOnce.current = true;   // mark loaded so we never show the skeleton again
         loadData(false); // first load — show skeleton
       }
       // No background refresh on focus — data stays cached in memory

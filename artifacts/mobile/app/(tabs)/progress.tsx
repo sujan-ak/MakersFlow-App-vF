@@ -295,6 +295,7 @@ export default function ProgressScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!hasLoadedOnce.current) {
+        hasLoadedOnce.current = true;   // mark loaded so we never show the skeleton again
         loadStatsAndCourses(false); // first load only — instant on return
       }
     }, [loadStatsAndCourses])
@@ -749,9 +750,9 @@ export default function ProgressScreen() {
                       item.isSelf && { backgroundColor: '#0B6FAD', borderColor: '#0B6FAD' },
                     ]}
                   >
-                    <Text style={[styles.leaderboardRank, { color: colors.primary }]}>#{item.rank}</Text>
+                    <Text style={[styles.leaderboardRank, { color: colors.primary }, item.isSelf && { color: '#FFFFFF' }]}>#{item.rank}</Text>
                     <Text style={[styles.leaderboardName, { color: colors.foreground }, item.isSelf && { color: '#FFFFFF' }]}>{item.name}</Text>
-                    <Text style={[styles.leaderboardPoints, { color: colors.mutedForeground }]}>{item.points} pts</Text>
+                    <Text style={[styles.leaderboardPoints, { color: colors.mutedForeground }, item.isSelf && { color: '#E0F2FE' }]}>{item.points} pts</Text>
                   </View>
                 ))
               )}
