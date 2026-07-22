@@ -1,37 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Alert,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
-import { supabase } from "@/lib/supabase";
-
-
-
-function normalizePhone(raw: string): string | null {
-  if (!raw) return null;
-  let digits = raw.replace(/[^\d+]/g, "");
-  if (digits.startsWith("+")) {
-    return /^\+\d{10,15}$/.test(digits) ? digits : null;
-  }
-  digits = digits.replace(/\D/g, "");
-  if (digits.length === 10) return "+91" + digits;
-  if (digits.length === 12 && digits.startsWith("91")) return "+" + digits;
-  if (digits.length >= 10 && digits.length <= 15) return "+" + digits;
-  return null;
-}
 
 export default function SecurityScreen() {
   const colors = useColors();
@@ -39,74 +20,7 @@ export default function SecurityScreen() {
   const { user, resetPassword } = useAuth() as any;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const [twoFactor, setTwoFactor] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // ── Load saved settings on mount ─────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      // Load 2FA preference
-      try {
-        const stored = await SecureStore.getItemAsync("makersflow_2fa_enabled");
-        setTwoFactor(stored === "true");
-      } catch { /* ignore */ }
-
-      setLoading(false);
-    })();
-  }, []);
-
-  // Biometric login disabled per specification
-
-  // ── 2FA toggle ────────────────────────────────────────────────────────────
-  async function handleTwoFactorToggle(value: boolean) {
-    if (value) {
-      // Enabling 2FA — validate phone is SMS-ready first
-      const phoneE164 = normalizePhone(user?.phone ?? "");
-      if (!phoneE164) {
-        Alert.alert(
-          "Valid Phone Required",
-          "Add a valid mobile number (e.g. +91 98765 43210) to your profile to enable Two-Factor Authentication.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Edit Profile", onPress: () => router.push("/profile/edit") },
-          ]
-        );
-        return;
-      }
-
-      Alert.alert(
-        "Enable Two-Factor Auth",
-        `We will send an SMS verification code to ${phoneE164} each time you log in. Continue?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Enable",
-            onPress: async () => {
-              await SecureStore.setItemAsync("makersflow_2fa_enabled", "true");
-              setTwoFactor(true);
-              Alert.alert("✅ Enabled", "Two-Factor Authentication is now active. A verification code will be required at each login.");
-            },
-          },
-        ]
-      );
-    } else {
-      Alert.alert(
-        "Disable Two-Factor Auth",
-        "Disabling 2FA makes your account less secure. Are you sure?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Disable",
-            style: "destructive",
-            onPress: async () => {
-              await SecureStore.setItemAsync("makersflow_2fa_enabled", "false");
-              setTwoFactor(false);
-            },
-          },
-        ]
-      );
-    }
-  }
+  const [sending, setSending] = useState(false);
 
   // ── Change Password ───────────────────────────────────────────────────────
   async function handleChangePassword() {
@@ -122,6 +36,7 @@ export default function SecurityScreen() {
         {
           text: "Send Reset Link",
           onPress: async () => {
+            setSending(true);
             try {
               const result = await resetPassword(user.email!);
               if (result.success) {
@@ -134,18 +49,12 @@ export default function SecurityScreen() {
               }
             } catch (e: any) {
               Alert.alert("Error", e.message || "Something went wrong.");
+            } finally {
+              setSending(false);
             }
           },
         },
       ]
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
     );
   }
 
@@ -163,33 +72,11 @@ export default function SecurityScreen() {
         contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Security Settings card */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-
-          {/* 2FA */}
-          <View style={styles.row}>
-            <View style={[styles.iconBox, { backgroundColor: "#DCF7F4" }]}>
-              <Ionicons name="shield-checkmark" size={18} color="#0B6FAD" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Two-Factor Auth</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                {user?.phone ? "Verify via phone OTP at login" : "Requires a phone number in your profile"}
-              </Text>
-            </View>
-            <Switch
-              value={twoFactor}
-              onValueChange={handleTwoFactorToggle}
-              trackColor={{ true: "#0B6FAD", false: "#D6E9F2" }}
-              thumbColor="#FFF"
-            />
-          </View>
-        </View>
-
         {/* Change Password */}
         <Pressable
-          style={[styles.changePasswordBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[styles.changePasswordBtn, { backgroundColor: colors.card, borderColor: colors.border, opacity: sending ? 0.6 : 1 }]}
           onPress={handleChangePassword}
+          disabled={sending}
         >
           <Ionicons name="lock-closed" size={18} color="#0B6FAD" />
           <Text style={[styles.changePasswordText, { color: colors.foreground }]}>Change Password</Text>
@@ -200,7 +87,7 @@ export default function SecurityScreen() {
         <View style={[styles.infoBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Ionicons name="information-circle" size={16} color={colors.mutedForeground} />
           <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Biometric login uses your device's fingerprint or Face ID — your biometric data never leaves your device.
+            To change your password, we'll email you a secure reset link. The link expires after a short time for your security.
           </Text>
         </View>
       </ScrollView>
@@ -215,12 +102,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 18, fontFamily: "Fredoka_700Bold" },
-  card: { borderRadius: 16, borderWidth: 1.5, overflow: "hidden" },
-  row: { flexDirection: "row", alignItems: "center", padding: 16, gap: 14 },
-  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  rowLabel: { fontSize: 15, fontFamily: "Fredoka_600SemiBold" },
-  rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  divider: { height: 1, marginLeft: 16 },
   changePasswordBtn: {
     flexDirection: "row", alignItems: "center", gap: 14,
     padding: 16, borderRadius: 16, borderWidth: 1.5,

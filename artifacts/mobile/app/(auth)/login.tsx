@@ -19,7 +19,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
-import * as SecureStore from "expo-secure-store";
 import { supabase } from "@/lib/supabase";
 
 function getFriendlyErrorMessage(err: string): string {
@@ -45,26 +44,10 @@ function getFriendlyErrorMessage(err: string): string {
   return err;
 }
 
-// Normalise an Indian phone number to Supabase's required +CountryCode format.
-// Accepts "9876543210", "+91 98765 43210", "91-9876543210", etc.
-// Returns null if it can't produce a valid +CC number.
-function normalizePhone(raw: string): string | null {
-  if (!raw) return null;
-  let digits = raw.replace(/[^\d+]/g, "");        // keep digits and +
-  if (digits.startsWith("+")) {
-    return /^\+\d{10,15}$/.test(digits) ? digits : null;
-  }
-  digits = digits.replace(/\D/g, "");             // pure digits now
-  if (digits.length === 10) return "+91" + digits; // bare 10-digit Indian number
-  if (digits.length === 12 && digits.startsWith("91")) return "+" + digits;
-  if (digits.length >= 10 && digits.length <= 15) return "+" + digits;
-  return null;
-}
-
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login, loginWithGoogle, sendOtp } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -78,7 +61,6 @@ export default function LoginScreen() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
 
-  // Biometric & 2FA disabled in login flow per specification
   useEffect(() => {
     // Biometric auto-login disabled
   }, []);
@@ -138,41 +120,6 @@ export default function LoginScreen() {
 
     if (result.success) {
       const profile = (result as any).profile;
-
-      // ── Two-Factor Authentication (SMS OTP via Supabase) ─────────────────
-      // security.tsx stores this flag. If on, require a phone OTP before access.
-      // Fail-safe: if the code can't be sent, warn but never lock the user out.
-      try {
-        const twoFAEnabled = await SecureStore.getItemAsync("makersflow_2fa_enabled");
-        if (twoFAEnabled === "true") {
-          const rawPhone = profile?.phone || (result as any).user?.phone || "";
-          const phoneE164 = normalizePhone(rawPhone);
-          if (phoneE164) {
-            const sent = await sendOtp(phoneE164);   // SMS path (signInWithOtp)
-            if (sent.success) {
-              router.replace({
-                pathname: "/(auth)/verify-otp",
-                params: { phone: phoneE164 },        // no provider => SMS branch
-              });
-              return;
-            }
-            Alert.alert(
-              "2FA Unavailable",
-              "We couldn't send your verification code right now. Signing you in without it.",
-              [{ text: "OK" }]
-            );
-          } else {
-            Alert.alert(
-              "2FA Skipped",
-              "Your saved phone number isn't valid for SMS verification. Please update it in your profile.",
-              [{ text: "OK" }]
-            );
-          }
-        }
-      } catch (e) {
-        // never let a 2FA hiccup block sign-in
-      }
-
       if (profile && profile.grade) {
         router.replace("/(tabs)");
       } else {
