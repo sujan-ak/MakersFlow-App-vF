@@ -8,21 +8,6 @@ import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { Asset } from 'expo-asset';
 import { TEXT_STYLES, TYPOGRAPHY } from '@/constants/typography';
-
-// Lazy-load: this expo-media-library version needs the ExpoMediaLibraryNext
-// native module, which Expo Go doesn't include — top-level import crashes.
-function getMediaLibrary(): typeof import('expo-media-library') | null {
-  // Use Constants.appOwnership for reliable Expo Go detection in built APKs
-  const isExpoGo = (Constants as any).appOwnership === 'expo'
-    || Application.applicationId === 'host.exp.Exponent';
-  if (isExpoGo) return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('expo-media-library');
-  } catch {
-    return null;
-  }
-}
 import React, { useState } from 'react';
 import {
   ActivityIndicator,

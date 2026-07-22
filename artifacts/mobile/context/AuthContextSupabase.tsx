@@ -232,9 +232,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const pendingAvatarUri = await AsyncStorage.getItem(emailKey);
           if (pendingAvatarUri) {
-            const uploadedUrl = await uploadAvatarFile(supabaseUser.id, pendingAvatarUri);
-            if (uploadedUrl) {
-              finalProfile = { ...finalProfile, avatar_url: uploadedUrl };
+            let avatarVal = pendingAvatarUri;
+            if (pendingAvatarUri.startsWith('file://') || pendingAvatarUri.startsWith('content://')) {
+              avatarVal = (await uploadAvatarFile(supabaseUser.id, pendingAvatarUri)) || '';
+            } else {
+              await supabase.from('profiles').update({ avatar_url: pendingAvatarUri }).eq('id', supabaseUser.id);
+            }
+            if (avatarVal) {
+              finalProfile = { ...finalProfile, avatar_url: avatarVal };
               await AsyncStorage.removeItem(emailKey);
             }
           }

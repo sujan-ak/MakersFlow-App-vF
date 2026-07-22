@@ -99,12 +99,10 @@ export async function updateProfile(
 ) {
   return await supabase
     .from('profiles')
-    .upsert(
-      { id: userId, ...updates },
-      { onConflict: 'id' }
-    )
+    .update(updates)
+    .eq('id', userId)
     .select()
-    .single();
+    .maybeSingle();
 }
 
 /**

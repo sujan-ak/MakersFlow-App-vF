@@ -21,10 +21,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SPACING } from "@/constants/spacing";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
-import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "@/lib/supabase";
-import { validateImageFile, uploadAvatarFile } from "@/lib/fileValidation";
+import { getAvatarSource } from "@/constants/avatars";
+import { AvatarPickerModal } from "@/components/AvatarPickerModal";
 
 function getPasswordStrength(pass: string) {
   if (!pass) return 0;
@@ -61,6 +61,7 @@ export default function RegisterScreen() {
   const [gradeError, setGradeError] = useState("");
   const [schoolError, setSchoolError] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
 
   const [nameFocused, setNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
@@ -79,77 +80,10 @@ export default function RegisterScreen() {
     return "#17E5D3";
   };
 
-  const pickAvatar = async () => {
-    try {
-      Alert.alert(
-        "Profile Photo",
-        "Choose photo source",
-        [
-          {
-            text: "Camera",
-            onPress: async () => {
-              const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
-              if (!cameraPerm.granted) {
-                Alert.alert("Permission Required", "MakersFlow needs full camera access to take a profile photo.");
-                return;
-              }
-              const result = await ImagePicker.launchCameraAsync({
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.6,
-              });
-              if (!result.canceled && result.assets && result.assets.length > 0) {
-                const asset = result.assets[0];
-                const validation = await validateImageFile(asset.uri);
-                if (!validation.valid) {
-                  Alert.alert("Invalid File", validation.error || "Please select a valid image.");
-                  return;
-                }
-                setAvatarUri(asset.uri);
-              }
-            },
-          },
-          {
-            text: "Photo Library",
-            onPress: async () => {
-              const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (!permissionResult.granted) {
-                Alert.alert("Permission Required", "MakersFlow needs full photo library access to upload a profile photo.");
-                return;
-              }
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.6,
-              });
-              if (!result.canceled && result.assets && result.assets.length > 0) {
-                const asset = result.assets[0];
-                const validation = await validateImageFile(asset.uri);
-                if (!validation.valid) {
-                  Alert.alert("Invalid File", validation.error || "Please select a valid image.");
-                  return;
-                }
-                setAvatarUri(asset.uri);
-              }
-            },
-          },
-          { text: "Cancel", style: "cancel" },
-        ]
-      );
-    } catch (e) {
-      console.error('Error picking image:', e);
-    }
-  };
-
-  const uploadAvatar = async (userId: string) => {
+  const setProfileAvatar = async (userId: string) => {
     if (!avatarUri) return null;
-    const res = await uploadAvatarFile(userId, avatarUri);
-    if (res.success && res.publicUrl) {
-      await supabase.from('profiles').update({ avatar_url: res.publicUrl }).eq('id', userId);
-      return res.publicUrl;
-    }
-    return null;
+    await supabase.from('profiles').update({ avatar_url: avatarUri }).eq('id', userId);
+    return avatarUri;
   };
 
   async function handleGoogleSignup() {
@@ -479,10 +413,10 @@ export default function RegisterScreen() {
         try {
           const { data: { user: supabaseUser } } = await supabase.auth.getUser();
           if (supabaseUser) {
-            await uploadAvatar(supabaseUser.id);
+            await setProfileAvatar(supabaseUser.id);
           }
         } catch (uploadErr) {
-          console.error("Avatar upload failed:", uploadErr);
+          console.error("Avatar update failed:", uploadErr);
         }
       }
       router.replace("/(auth)/onboarding");
@@ -599,13 +533,13 @@ export default function RegisterScreen() {
 
           {/* Avatar Picker */}
           <View style={{ alignItems: 'center', marginBottom: 20 }}>
-            <Pressable onPress={pickAvatar} style={[styles.avatarContainer, { backgroundColor: colors.card }]}>
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+            <Pressable onPress={() => setPickerModalVisible(true)} style={[styles.avatarContainer, { backgroundColor: colors.card }]}>
+              {getAvatarSource(avatarUri) ? (
+                <Image source={getAvatarSource(avatarUri)!} style={styles.avatarImage} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="camera-outline" size={24} color="#0B6FAD" />
-                  <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+                  <Ionicons name="person-add-outline" size={24} color="#0B6FAD" />
+                  <Text style={styles.avatarPlaceholderText}>Choose Avatar</Text>
                 </View>
               )}
             </Pressable>
@@ -849,6 +783,12 @@ export default function RegisterScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      <AvatarPickerModal
+        visible={pickerModalVisible}
+        selectedAvatarId={avatarUri}
+        onSelectAvatar={(id) => setAvatarUri(id)}
+        onClose={() => setPickerModalVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

@@ -16,11 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.makersflow.app",
-      "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "MakersFlow requires full access to your photo library to select profile photos and upload media.",
-        "NSCameraUsageDescription": "MakersFlow requires full access to your camera to capture photos and videos.",
-        "NSMicrophoneUsageDescription": "MakersFlow requires microphone access for video recordings."
-      }
+      "infoPlist": {}
     },
     "android": {
       "adaptiveIcon": {
@@ -59,24 +55,24 @@
         }
       ],
       "permissions": [
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA",
         "android.permission.VIBRATE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.WAKE_LOCK",
-        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
-        "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO"
+        "android.permission.WAKE_LOCK"
       ],
       "googleServicesFile": "./google-services.json",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -95,22 +91,7 @@
         }
       ],
       "expo-font",
-      "expo-asset",
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "MakersFlow requires full access to your photo library to select photos and videos.",
-          "cameraPermission": "MakersFlow requires full access to your camera to capture photos and videos."
-        }
-      ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "MakersFlow needs access to your photos to save certificates.",
-          "savePhotosPermission": "MakersFlow needs permission to save certificates to your gallery.",
-          "isAccessMediaLocationEnabled": true
-        }
-      ]
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

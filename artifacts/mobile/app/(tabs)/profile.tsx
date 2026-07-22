@@ -30,6 +30,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { CertificateSkeleton, WishlistSkeleton } from "@/components/SkeletonLoader";
 import { Product } from "@/data/mockData";
 import { useFavorites } from "@/context/FavoritesContext";
+import { getAvatarSource } from "@/constants/avatars";
 
 interface MenuItem {
   icon: string;
@@ -474,8 +475,8 @@ export default function ProfileScreen() {
       {/* User Banner */}
       <View style={[styles.profileCard, { backgroundColor: "#0B6FAD" }]}>
         <View style={styles.avatarContainer}>
-          {user?.avatar ? (
-            <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+          {getAvatarSource(user?.avatar) ? (
+            <Image source={getAvatarSource(user?.avatar)!} style={styles.avatarImage} />
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.initials}>{initials}</Text>

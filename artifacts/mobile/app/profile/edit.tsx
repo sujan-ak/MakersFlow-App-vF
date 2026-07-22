@@ -1,6 +1,5 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -23,7 +22,8 @@ import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import { useNetwork } from "@/context/NetworkContext";
 import { TEXT_STYLES } from "@/constants/typography";
-import { validateImageFile, uploadAvatarFile } from "@/lib/fileValidation";
+import { getAvatarSource } from "@/constants/avatars";
+import { AvatarPickerModal } from "@/components/AvatarPickerModal";
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -36,8 +36,7 @@ export default function EditProfileScreen() {
   const [grade, setGrade] = useState(user?.grade ?? "");
   const [school, setSchool] = useState(user?.school ?? "");
   const [avatarUri, setAvatarUri] = useState(user?.avatar ?? "");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadPromise, setUploadPromise] = useState<Promise<{ success: boolean; publicUrl?: string; error?: string }> | null>(null);
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -48,7 +47,7 @@ export default function EditProfileScreen() {
     if (isConnected === false) {
       Alert.alert(
         "You're Offline",
-        "You're offline — profile changes and avatar uploads cannot be saved right now. Please reconnect to the internet and try again.",
+        "You're offline — profile changes cannot be saved right now. Please reconnect to the internet and try again.",
         [{ text: "OK" }]
       );
       return;
@@ -57,39 +56,12 @@ export default function EditProfileScreen() {
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    let finalAvatarUrl = avatarUri;
-    const isLocalUri =
-      avatarUri.startsWith("file://") ||
-      avatarUri.startsWith("ph://") ||
-      avatarUri.startsWith("content://");
-
-    if (isLocalUri) {
-      let uploadRes = null;
-      if (uploadPromise) {
-        uploadRes = await uploadPromise;
-      } else {
-        uploadRes = await uploadAvatarFile(user.id, avatarUri);
-      }
-
-      if (!uploadRes || !uploadRes.success || !uploadRes.publicUrl) {
-        setLoading(false);
-        Alert.alert(
-          "Upload Failed",
-          uploadRes?.error || "Profile picture upload failed. Please try again before saving.",
-          [{ text: "OK" }]
-        );
-        return;
-      }
-
-      finalAvatarUrl = uploadRes.publicUrl;
-    }
-
     const result = await updateUser({
       name,
       phone: phone.trim() || undefined,
       grade,
       school,
-      avatar: finalAvatarUrl,
+      avatar: avatarUri,
     });
     setLoading(false);
 
@@ -109,97 +81,14 @@ export default function EditProfileScreen() {
     }
   }
 
-  async function pickImage() {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    Alert.alert(
-      "Profile Photo",
-      "Choose photo source",
-      [
-        {
-          text: "Camera",
-          onPress: async () => {
-            const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!cameraPerm.granted) {
-              Alert.alert("Permission Required", "MakersFlow needs full camera access to take a profile photo.");
-              return;
-            }
-            const result = await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              await processPickedImage(result.assets[0]);
-            }
-          },
-        },
-        {
-          text: "Photo Library",
-          onPress: async () => {
-            const libraryPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!libraryPerm.granted) {
-              Alert.alert("Permission Required", "MakersFlow needs full photo library access to select a profile picture.");
-              return;
-            }
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              await processPickedImage(result.assets[0]);
-            }
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  }
-
-  async function processPickedImage(asset: ImagePicker.ImagePickerAsset) {
-    const pickedUri = asset.uri;
-
-      // 1. Validate using picker metadata (mimeType + fileSize) — avoids
-      //    the atob / positional-read crash on Android content:// URIs.
-      const validation = await validateImageFile(
-        pickedUri,
-        (asset as any).mimeType,
-        (asset as any).fileSize
-      );
-      if (!validation.valid) {
-        Alert.alert("Invalid File", validation.error || "Please select a valid image.");
-        return;
-      }
-
-      // 4. Instant optimistic UI feedback
-      setAvatarUri(pickedUri);
-
-      // 2. Upload to Supabase Storage in background
-      if (user?.id) {
-        setIsUploading(true);
-        const promise = uploadAvatarFile(user.id, pickedUri);
-        setUploadPromise(promise);
-
-        promise.then((res) => {
-          setIsUploading(false);
-          if (!res.success) {
-            Alert.alert(
-              "Upload Failed",
-              res.error || "Could not upload profile picture. Please try another image."
-            );
-          }
-        });
-      }
-  }
-
   const initials = name
     .split(" ")
     .map((w) => w[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const avatarSource = getAvatarSource(avatarUri);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -225,48 +114,27 @@ export default function EditProfileScreen() {
         >
           {/* Avatar */}
           <View style={styles.avatarSection}>
-            <Pressable onPress={pickImage} style={styles.avatarPressable} disabled={isUploading}>
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+            <Pressable onPress={() => setPickerModalVisible(true)} style={styles.avatarPressable}>
+              {avatarSource ? (
+                <Image source={avatarSource} style={styles.avatarImage} />
               ) : (
                 <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
                   <Text style={[styles.initials, TEXT_STYLES.pageTitle, { color: "#FFF", fontSize: 36 }]}>{initials || "S"}</Text>
                 </View>
               )}
               <View style={[styles.editBadge, { backgroundColor: colors.primary }]}>
-                {isUploading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Ionicons name="camera" size={16} color="#FFF" />
-                )}
+                <Ionicons name="pencil" size={15} color="#FFF" />
               </View>
             </Pressable>
             <View style={{ flexDirection: "row", gap: 20 }}>
-              <Pressable onPress={pickImage} disabled={isUploading}>
+              <Pressable onPress={() => setPickerModalVisible(true)}>
                 <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: colors.primary }]}>
-                  {isUploading ? "Uploading..." : "Change Photo"}
+                  Choose Avatar
                 </Text>
               </Pressable>
               {avatarUri ? (
-                <Pressable
-                  disabled={isUploading}
-                  onPress={async () => {
-                    try {
-                      // Remove the stored avatar file from Supabase storage
-                      if (avatarUri.includes("supabase.co") && avatarUri.includes("avatars")) {
-                        const filename = avatarUri.split("?")[0].split("/").pop();
-                        if (filename) {
-                          await supabase.storage.from("avatars").remove([filename]);
-                        }
-                      }
-                    } catch {
-                      // Storage cleanup failure shouldn't block removing the photo
-                    }
-                    setAvatarUri("");
-                    setUploadPromise(null);
-                  }}
-                >
-                  <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: "#DC2626" }]}>Remove Photo</Text>
+                <Pressable onPress={() => setAvatarUri("")}>
+                  <Text style={[styles.changePhotoText, TEXT_STYLES.label, { color: "#DC2626" }]}>Remove Avatar</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -367,6 +235,12 @@ export default function EditProfileScreen() {
             <Text style={[styles.cancelBtnText, TEXT_STYLES.button, { color: colors.primary }]}>Cancel</Text>
           </Pressable>
         </ScrollView>
+        <AvatarPickerModal
+          visible={pickerModalVisible}
+          selectedAvatarId={avatarUri}
+          onSelectAvatar={(id) => setAvatarUri(id)}
+          onClose={() => setPickerModalVisible(false)}
+        />
       </View>
     </KeyboardAvoidingView>
   );
