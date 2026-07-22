@@ -445,6 +445,9 @@ export async function fetchRemoteProgress(userId: string): Promise<UserCoursePro
             .eq('user_id', userId)
             .eq('course_id', Number(courseId));
           courseProgressObj.completedAt = nowStr;
+
+          // Dispatch Course Completion push notification
+          sendCourseCompletionPush(userId, courseId).catch(() => {});
         } else {
           courseProgressObj.completedAt = enrollment.completed_at;
         }
@@ -467,6 +470,29 @@ export async function fetchRemoteProgress(userId: string): Promise<UserCoursePro
   } catch (err) {
     console.error('[progressStorage] fetchRemoteProgress failed:', err);
     return [];
+  }
+}
+
+async function sendCourseCompletionPush(userId: string, courseId: string) {
+  try {
+    const { data: course } = await supabase
+      .from('courses')
+      .select('title')
+      .eq('id', Number(courseId))
+      .maybeSingle();
+
+    const courseTitle = course?.title || 'your course';
+
+    await supabase.functions.invoke('send-push-notification', {
+      body: {
+        user_ids: [userId],
+        title: '🎓 Course Completed!',
+        body: `Congratulations! You've completed "${courseTitle}". Your certificate is ready to view and download.`,
+        data: { screen: 'certificate', courseId: String(courseId) },
+      },
+    });
+  } catch (err) {
+    console.warn('[Push] Course completion push error:', err);
   }
 }
 

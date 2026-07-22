@@ -15,7 +15,12 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.makersflow.app"
+      "bundleIdentifier": "com.makersflow.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "MakersFlow requires full access to your photo library to select profile photos and upload media.",
+        "NSCameraUsageDescription": "MakersFlow requires full access to your camera to capture photos and videos.",
+        "NSMicrophoneUsageDescription": "MakersFlow requires microphone access for video recordings."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -57,8 +62,6 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.CAMERA",
-        "android.permission.USE_FINGERPRINT",
-        "android.permission.USE_BIOMETRIC",
         "android.permission.VIBRATE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.INTERNET",
@@ -97,7 +100,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "MakersFlow needs access to your photos to set a profile picture."
+          "photosPermission": "MakersFlow requires full access to your photo library to select photos and videos.",
+          "cameraPermission": "MakersFlow requires full access to your camera to capture photos and videos."
         }
       ],
       [

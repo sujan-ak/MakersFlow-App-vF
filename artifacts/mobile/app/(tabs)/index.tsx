@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
+import * as Haptics from "expo-haptics";
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Platform,
@@ -18,6 +19,7 @@ import {
   Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
@@ -135,6 +137,74 @@ function FeatureActionCards() {
   );
 }
 
+function HeroResumeCard({ item }: { item: any }) {
+  const colors = useColors();
+  if (!item) return null;
+
+  const pct = item.videoProgress?.watchedPercentage ?? item.courseProgress ?? 0;
+  const roundedPct = Math.min(100, Math.max(0, Math.round(pct)));
+
+  return (
+    <View style={[styles.heroResumeCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.heroResumeHeaderRow}>
+        <View style={[styles.heroResumeBadge, { backgroundColor: colors.accent }]}>
+          <Ionicons name="play-circle" size={14} color={colors.accentForeground} />
+          <Text style={[styles.heroResumeBadgeText, { color: colors.accentForeground }]}>CONTINUE LEARNING</Text>
+        </View>
+        <Text style={[styles.heroResumePctText, { color: colors.mutedForeground }]}>{roundedPct}% completed</Text>
+      </View>
+
+      <View style={styles.heroResumeBodyRow}>
+        <View style={styles.heroResumeImageContainer}>
+          <Image
+            source={
+              item.courseThumbnail
+                ? typeof item.courseThumbnail === "string"
+                  ? { uri: item.courseThumbnail }
+                  : item.courseThumbnail
+                : require("@/assets/images/courses/course_robotics.webp")
+            }
+            style={styles.heroResumeImage}
+          />
+          <View style={styles.heroResumePlayCircle}>
+            <Ionicons name="play" size={14} color={colors.primaryForeground} />
+          </View>
+        </View>
+
+        <View style={styles.heroResumeTextContent}>
+          <Text style={[styles.heroResumeCourseTitle, { color: colors.foreground }]} numberOfLines={1}>
+            {item.courseTitle}
+          </Text>
+          <Text style={[styles.heroResumeLessonTitle, { color: colors.primary }]} numberOfLines={1}>
+            Lesson: {item.moduleTitle}
+          </Text>
+          
+          <View style={[styles.heroResumeProgressTrack, { backgroundColor: colors.muted }]}>
+            <View style={[styles.heroResumeProgressFill, { width: `${roundedPct}%` as any, backgroundColor: colors.primary }]} />
+          </View>
+        </View>
+      </View>
+
+      <Pressable
+        style={({ pressed }) => [
+          styles.heroResumeActionBtn,
+          { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 }
+        ]}
+        onPress={async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.push({
+            pathname: "/course/learn",
+            params: { courseId: item.courseId, moduleId: item.moduleId },
+          });
+        }}
+      >
+        <Ionicons name="play" size={16} color={colors.primaryForeground} />
+        <Text style={[styles.heroResumeActionBtnText, { color: colors.primaryForeground }]}>Resume Lesson</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 interface GuestWelcomeCardProps {
   colors: any;
   onSignIn: () => void;
@@ -176,6 +246,11 @@ export default function HomeScreen() {
   const { user, isOffline } = useAuth();
   const { isConnected, addReconnectListener } = useNetwork();
   const { watchlist } = useProgress();
+  const sortedWatchlist = useMemo(() => {
+    return [...watchlist].sort(
+      (a, b) => new Date(b.lastWatchedAt || 0).getTime() - new Date(a.lastWatchedAt || 0).getTime()
+    );
+  }, [watchlist]);
   const currentTime = useMemo(() => new Date(), []);
   const scrollViewRef = useRef<ScrollView>(null);
   const [popularCoursesY, setPopularCoursesY] = useState(0);
@@ -409,6 +484,11 @@ export default function HomeScreen() {
             colors={colors}
           />
 
+          {/* Hero Resume Card for Most Recent Active Course */}
+          {user && sortedWatchlist.length > 0 && (
+            <HeroResumeCard item={sortedWatchlist[0]} />
+          )}
+
           {/* FEATURE ACTION CARDS below streak card */}
           <FeatureActionCards />
         </>
@@ -472,12 +552,12 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Continue Learning */}
-      {user && watchlist.length > 0 && (
+      {/* Other In-Progress Courses */}
+      {user && sortedWatchlist.length > 1 && (
         <View style={styles.section}>
           <SectionHeader 
-            title="Continue Watching" 
-            subtitle={`${watchlist.length} lesson${watchlist.length > 1 ? 's' : ''} in progress`}
+            title="In-Progress Courses" 
+            subtitle={`${sortedWatchlist.length - 1} other course${sortedWatchlist.length - 1 > 1 ? 's' : ''} in progress`}
             onSeeAll={() => router.push("/(tabs)/courses")} 
           />
           <ScrollView 
@@ -485,7 +565,7 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.carouselContent}
           >
-            {watchlist.map((item: any) => (
+            {sortedWatchlist.slice(1).map((item: any) => (
               <WatchlistCard key={`${item.courseId}-${item.moduleId}`} item={item} />
             ))}
           </ScrollView>
@@ -1092,8 +1172,8 @@ const styles = StyleSheet.create({
 
   // FEATURE ACTION CARDS STYLES (PDF item #8)
   featureCardsSection: {
-    marginHorizontal: 20,
-    gap: 12,
+    marginHorizontal: SPACING.xl,
+    gap: SPACING.md,
     marginBottom: 28,
   },
   featureActionCard: {
@@ -1134,5 +1214,103 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // HERO RESUME CARD STYLES
+  heroResumeCard: {
+    marginHorizontal: SPACING.xl,
+    marginTop: 16,
+    marginBottom: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  heroResumeHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  heroResumeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  heroResumeBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+  },
+  heroResumePctText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  heroResumeBodyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  heroResumeImageContainer: {
+    position: "relative",
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    overflow: "hidden",
+    marginRight: 14,
+  },
+  heroResumeImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroResumePlayCircle: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroResumeTextContent: {
+    flex: 1,
+  },
+  heroResumeCourseTitle: {
+    fontSize: 15,
+    fontFamily: "Fredoka_700Bold",
+    marginBottom: 2,
+  },
+  heroResumeLessonTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 8,
+  },
+  heroResumeProgressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+    width: "100%",
+  },
+  heroResumeProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  heroResumeActionBtn: {
+    height: 44,
+    borderRadius: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  heroResumeActionBtnText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontFamily: "Fredoka_700Bold",
   },
 });

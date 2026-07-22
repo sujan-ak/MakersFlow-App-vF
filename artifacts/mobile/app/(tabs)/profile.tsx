@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useProgress } from "@/context/ProgressContext";
 import { useColors } from "@/hooks/useColors";

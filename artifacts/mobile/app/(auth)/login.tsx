@@ -19,7 +19,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
-import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { supabase } from "@/lib/supabase";
 
@@ -63,63 +62,10 @@ export default function LoginScreen() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
 
-  // Check biometric on mount and auto-login if enabled
+  // Biometric & 2FA disabled in login flow per specification
   useEffect(() => {
-    checkBiometricOnMount();
+    // Biometric auto-login disabled
   }, []);
-
-  const runBiometricUnlock = useCallback(async (silent: boolean): Promise<void> => {
-    try {
-      // Must match the key security.tsx writes (SecureStore, not AsyncStorage)
-      const biometricEnabled = await SecureStore.getItemAsync("makersflow_biometric_enabled");
-      if (biometricEnabled !== "true") return;
-
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!hasHardware || !isEnrolled) return;
-
-      const storedToken = await SecureStore.getItemAsync("makersflow_biometric_token");
-      if (!storedToken) return;
-
-      setBiometricAvailable(true);
-
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Sign in to MakersFlow",
-        fallbackLabel: "Use Password",
-        disableDeviceFallback: false,
-      });
-      if (!result.success) return;
-
-      setLoading(true);
-      const { data, error: refreshError } = await supabase.auth.refreshSession({
-        refresh_token: storedToken,
-      });
-      setLoading(false);
-
-      if (refreshError || !data?.session) {
-        // Token expired — clear it, tell user to sign in once to re-enable
-        await SecureStore.deleteItemAsync("makersflow_biometric_token").catch(() => {});
-        setBiometricAvailable(false);
-        if (!silent) setError("Biometric sign-in expired. Please sign in with your password once to re-enable it.");
-        return;
-      }
-
-      // Persist the rotated refresh token for next time
-      if (data.session.refresh_token) {
-        await SecureStore.setItemAsync("makersflow_biometric_token", data.session.refresh_token).catch(() => {});
-      }
-      router.replace("/(tabs)");
-    } catch (err) {
-      setLoading(false);
-      console.log("[Biometric] Unlock failed:", err);
-    }
-  }, []);
-
-  const checkBiometricOnMount = useCallback(() => runBiometricUnlock(true), [runBiometricUnlock]);
-
-  const handleBiometricPress = useCallback(async () => {
-    await runBiometricUnlock(false);
-  }, [runBiometricUnlock]);
 
   async function handleGoogleLogin() {
     if (googleLoading) return;
@@ -176,39 +122,51 @@ export default function LoginScreen() {
 
     if (result.success) {
       const profile = (result as any).profile;
-
-      // ── 2FA check ──────────────────────────────────────────────────────
-      try {
-        const twoFactorOn = (await SecureStore.getItemAsync("makersflow_2fa_enabled")) === "true";
-        const phone = profile?.phone ?? (result as any)?.user?.phone ?? null;
-        if (twoFactorOn && phone) {
-          router.replace({ pathname: "/(auth)/verify-otp", params: { phone: String(phone), provider: "sms" } });
-          return;
-        }
-      } catch (err) {
-        console.log("[2FA] Check skipped:", err);
-      }
-
       if (profile && profile.grade) {
         router.replace("/(tabs)");
       } else {
         router.replace("/(auth)/onboarding");
       }
     } else {
-      const msg = getFriendlyErrorMessage(result.error || "Invalid credentials. Please try again.");
-      if (msg === "__NO_ACCOUNT_OR_WRONG_PASSWORD__") {
+      // Check if account exists in database to distinguish No Account vs Wrong Password
+      let accountExists = true;
+      try {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("email", email.trim().toLowerCase())
+          .maybeSingle();
+        accountExists = Boolean(existingProfile);
+      } catch {
+        accountExists = true;
+      }
+
+      if (!accountExists) {
         Alert.alert(
-          "Couldn't Sign You In",
-          `We couldn't sign in with:\n\n${email}\n\nEither the password is wrong, or there is no account with this email yet.`,
+          "Account Not Found",
+          "You do not have an account. Please sign up.",
           [
-            { text: "Try Again", style: "cancel" },
-            { text: "Reset Password", onPress: () => router.push("/(auth)/forgot-password") },
-            { text: "Create Account", onPress: () => router.push("/(auth)/register") },
+            { text: "Cancel", style: "cancel" },
+            { text: "Sign Up", onPress: () => router.push("/(auth)/register") }
           ]
         );
         setError("");
       } else {
-        setError(msg);
+        const msg = getFriendlyErrorMessage(result.error || "Invalid credentials. Please try again.");
+        if (msg === "__NO_ACCOUNT_OR_WRONG_PASSWORD__") {
+          Alert.alert(
+            "Incorrect Password",
+            "The password you entered is incorrect. Please try again or reset your password.",
+            [
+              { text: "Try Again", style: "cancel" },
+              { text: "Reset Password", onPress: () => router.push("/(auth)/forgot-password") },
+              { text: "Create Account", onPress: () => router.push("/(auth)/register") }
+            ]
+          );
+          setError("");
+        } else {
+          setError(msg);
+        }
       }
     }
   }
@@ -361,15 +319,7 @@ export default function LoginScreen() {
             )}
           </Pressable>
 
-          {biometricAvailable && (
-            <Pressable
-              style={({ pressed }) => [styles.googleBtn, { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: pressed ? 0.85 : 1 }]}
-              onPress={handleBiometricPress}
-            >
-              <Ionicons name="finger-print" size={20} color="#0B6FAD" />
-              <Text style={[styles.googleBtnText, { color: colors.foreground, fontFamily: 'Inter_600SemiBold' }]}>Sign in with Fingerprint</Text>
-            </Pressable>
-          )}
+          {/* Biometric login button removed per specification */}
 
         </View>
 

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import { PanResponder, Animated, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,13 +9,6 @@ import { Ionicons } from "@expo/vector-icons";
  *
  * Tab order (left → right):
  *   Home  →  Store  →  Courses  →  Search  →  Profile
- *
- * Usage:
- *   const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/store");
- *   <View style={{ flex: 1 }} {...panHandlers}>
- *     <SwipeIndicator />
- *     ...rest of screen
- *   </View>
  */
 
 const TAB_ORDER = [
@@ -42,14 +35,34 @@ export function useTabSwipe(currentTab: TabRoute) {
   currentTabRef.current = normTab;
 
   // Two independent opacity animations — one per arrow direction
-  const leftOpacity  = useRef(new Animated.Value(0)).current;  // ← shown when swiping right (prev tab)
-  const rightOpacity = useRef(new Animated.Value(0)).current;  // → shown when swiping left  (next tab)
+  const leftOpacity = useRef(new Animated.Value(0)).current;  // ← shown when swiping right (prev tab)
+  const rightOpacity = useRef(new Animated.Value(0)).current; // → shown when swiping left  (next tab)
 
-  const fadeOut = () => {
+  // Reset opacity values on tab change / mount to prevent stale arrows on new screens
+  useEffect(() => {
+    leftOpacity.stopAnimation();
+    rightOpacity.stopAnimation();
+    leftOpacity.setValue(0);
+    rightOpacity.setValue(0);
+  }, [normTab]);
+
+  const resetImmediate = () => {
+    leftOpacity.stopAnimation();
+    rightOpacity.stopAnimation();
+    leftOpacity.setValue(0);
+    rightOpacity.setValue(0);
+  };
+
+  const fadeOut = (onComplete?: () => void) => {
+    leftOpacity.stopAnimation();
+    rightOpacity.stopAnimation();
     Animated.parallel([
-      Animated.timing(leftOpacity,  { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(rightOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
-    ]).start();
+      Animated.timing(leftOpacity, { toValue: 0, duration: 100, useNativeDriver: true }),
+      Animated.timing(rightOpacity, { toValue: 0, duration: 100, useNativeDriver: true }),
+    ]).start(() => {
+      resetImmediate();
+      if (onComplete) onComplete();
+    });
   };
 
   const panResponder = useRef(
@@ -98,26 +111,30 @@ export function useTabSwipe(currentTab: TabRoute) {
       },
 
       onPanResponderRelease: (_, gs) => {
-        fadeOut();
         const idx = TAB_ORDER.indexOf(currentTabRef.current);
-        if (idx === -1) return;
+        if (idx === -1) {
+          resetImmediate();
+          return;
+        }
+
         if (gs.dx < -SWIPE_THRESHOLD && idx < TAB_ORDER.length - 1) {
+          resetImmediate();
           router.navigate(TAB_ORDER[idx + 1]);
         } else if (gs.dx > SWIPE_THRESHOLD && idx > 0) {
+          resetImmediate();
           router.navigate(TAB_ORDER[idx - 1]);
+        } else {
+          fadeOut();
         }
       },
 
-      onPanResponderTerminate: () => fadeOut(),
+      onPanResponderTerminate: () => resetImmediate(),
     })
   ).current;
 
-  // Inline component — reads the animated values defined above.
-  // Rendered as an absolutely-positioned overlay; pointerEvents="none" so it
-  // never blocks taps on the underlying screen content.
   const SwipeIndicator = React.useCallback(() => {
     const idx = TAB_ORDER.indexOf(currentTabRef.current);
-    const canGoBack    = idx > 0;
+    const canGoBack = idx > 0;
     const canGoForward = idx < TAB_ORDER.length - 1;
 
     return (
@@ -172,4 +189,3 @@ export function useTabSwipe(currentTab: TabRoute) {
 
   return { panHandlers: panResponder.panHandlers, SwipeIndicator };
 }
-

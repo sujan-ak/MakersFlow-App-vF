@@ -16,10 +16,12 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cacheManager } from "@/services/cacheManager";
 
 export const ANNOUNCEMENTS_LAST_SEEN_KEY = "announcements_last_seen";
 
@@ -90,11 +92,16 @@ export default function NotificationsScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
+  const [isOfflineCached, setIsOfflineCached] = useState(false);
+
   const load = useCallback(async () => {
     if (!user?.id) {
       setLoading(false);
       return;
     }
+    const cacheKey = `cached_notifications_${user.id}`;
+    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
     try {
       const lastSeen = await AsyncStorage.getItem(ANNOUNCEMENTS_LAST_SEEN_KEY);
 
@@ -129,10 +136,17 @@ export default function NotificationsScreen() {
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
       setItems(merged);
+      setIsOfflineCached(false);
 
+      await cacheManager.write(cacheKey, merged);
       await AsyncStorage.setItem(ANNOUNCEMENTS_LAST_SEEN_KEY, new Date().toISOString());
     } catch (e) {
-      if (__DEV__) console.error("[Notifications] load failed:", e);
+      if (__DEV__) console.error("[Notifications] load failed, checking offline cache:", e);
+      const cached = await cacheManager.read<AppNotification[]>(cacheKey, CACHE_TTL);
+      if (cached && cached.length > 0) {
+        setItems(cached);
+        setIsOfflineCached(true);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -237,6 +251,15 @@ export default function NotificationsScreen() {
         )}
       </View>
 
+      {isOfflineCached && (
+        <View style={{ backgroundColor: "#FEF3C7", paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 6, borderBottomWidth: 1, borderBottomColor: "#FDE68A" }}>
+          <Ionicons name="cloud-offline" size={16} color="#D97706" />
+          <Text style={{ color: "#92400E", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+            Offline — showing cached notifications
+          </Text>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color="#0B6FAD" size="large" />
@@ -246,9 +269,13 @@ export default function NotificationsScreen() {
           <View style={[styles.emptyIcon, { backgroundColor: "#DCF7F4" }]}>
             <Ionicons name="notifications-off" size={40} color="#0B6FAD" />
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No notifications yet</Text>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+            {isOfflineCached ? "No cached notifications" : "No notifications yet"}
+          </Text>
           <Text style={[styles.emptySub, { color: colors.mutedForeground }]}>
-            Course updates, offers and order updates will appear here.
+            {isOfflineCached
+              ? "Connect to the internet to fetch your latest notifications."
+              : "Course updates, offers and order updates will appear here."}
           </Text>
         </View>
       ) : (

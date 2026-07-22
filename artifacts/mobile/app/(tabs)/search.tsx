@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTabSwipe } from "@/hooks/useTabSwipe";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Platform, Pressable, ScrollView,
-  RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, FlatList,
+  RefreshControl, StyleSheet, Text, TextInput, View, Modal } from "react-native";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CourseCard } from "@/components/CourseCard";
 import { ProductCard } from "@/components/ProductCard";
@@ -197,39 +198,78 @@ export default function SearchScreen() {
 
   const query = debouncedQuery;
 
-  const filteredCourses = query
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<{
+    level: string | null;
+    price: string | null;
+    rating: number | null;
+  }>({
+    level: null,
+    price: null,
+    rating: null,
+  });
+  const [tempFilters, setTempFilters] = useState(selectedFilters);
+
+  const isFilterActive = Boolean(selectedFilters.level || selectedFilters.price || selectedFilters.rating);
+
+  const baseCourses = query
     ? courses.filter(
         (c) => 
           c.title.toLowerCase().includes(query) || 
           c.category.toLowerCase().includes(query) ||
           query.includes(c.category.toLowerCase())
       )
-    : [];
+    : (isFilterActive ? courses : []);
 
-  const filteredProducts = query
+  const filteredCourses = baseCourses.filter((c) => {
+    if (selectedFilters.level && c.level?.toLowerCase() !== selectedFilters.level.toLowerCase()) {
+      return false;
+    }
+    if (selectedFilters.price === 'Free' && !c.isFree && c.price > 0) {
+      return false;
+    }
+    if (selectedFilters.price === 'Paid' && (c.isFree || c.price === 0)) {
+      return false;
+    }
+    if (selectedFilters.rating && (c.rating ?? 0) < selectedFilters.rating) {
+      return false;
+    }
+    return true;
+  });
+
+  const baseProducts = query
     ? products.filter((p) => {
         const lowerQuery = query.toLowerCase();
         const lowerTitle = p.title.toLowerCase();
         const lowerSubcategory = p.subcategory.toLowerCase();
         const lowerCategory = p.category.toLowerCase();
         
-        // Direct matches
         if (lowerTitle.includes(lowerQuery) || 
             lowerSubcategory.includes(lowerQuery) ||
             lowerQuery.includes(lowerSubcategory)) {
           return true;
         }
-        
-        // Special handling for "Hardware & Kits" - match any kit or physical product
         if (lowerQuery.includes('hardware') || lowerQuery.includes('kits')) {
           if (lowerSubcategory.includes('kit') || lowerCategory === 'physical') {
             return true;
           }
         }
-        
         return false;
       })
-    : [];
+    : (isFilterActive ? products : []);
+
+  const filteredProducts = baseProducts.filter((p) => {
+    if (selectedFilters.price === 'Free' && p.price > 0) {
+      return false;
+    }
+    if (selectedFilters.price === 'Paid' && p.price === 0) {
+      return false;
+    }
+    if (selectedFilters.rating && (p.rating ?? 0) < selectedFilters.rating) {
+      return false;
+    }
+    return true;
+  });
 
   const hasResults = filteredCourses.length > 0 || filteredProducts.length > 0;
 
@@ -248,6 +288,7 @@ export default function SearchScreen() {
   const handleClear = () => {
     setSearchQuery("");
     setDebouncedQuery("");
+    setSelectedFilters({ level: null, price: null, rating: null });
     inputRef.current?.blur();
   };
 
@@ -255,9 +296,9 @@ export default function SearchScreen() {
     router.push("/(tabs)/store");
   };
 
-  const showIdle = !isFocused && !query;
-  const showTyping = isFocused && !query;
-  const showResults = query;
+  const showIdle = !isFocused && !query && !isFilterActive;
+  const showTyping = isFocused && !query && !isFilterActive;
+  const showResults = query || isFilterActive;
 
   const { panHandlers, SwipeIndicator } = useTabSwipe("/(tabs)/search");
 
@@ -299,6 +340,30 @@ export default function SearchScreen() {
             </Pressable>
           ) : null}
         </View>
+
+        <Pressable
+          onPress={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setTempFilters(selectedFilters);
+            setFilterModalVisible(true);
+          }}
+          style={[
+            styles.filterBtn,
+            {
+              backgroundColor: isFilterActive ? colors.accent : colors.card,
+              borderColor: isFilterActive ? colors.primary : colors.border,
+            },
+          ]}
+          hitSlop={6}
+        >
+          <Ionicons
+            name="options-outline"
+            size={20}
+            color={isFilterActive ? colors.accentForeground : colors.mutedForeground}
+          />
+          {isFilterActive && <View style={[styles.filterBadgeDot, { backgroundColor: colors.primary }]} />}
+        </Pressable>
+
         {!showResults ? (
           <Pressable
             onPress={handleCartPress}
@@ -398,7 +463,7 @@ export default function SearchScreen() {
                   Courses ({filteredCourses.length})
                 </Text>
                 {filteredCourses.map((course) => (
-                  <CourseCard key={course.id} course={course} horizontal />
+                  <CourseCard key={`search-course-${course.id}`} course={course} horizontal />
                 ))}
               </View>
             )}
@@ -414,7 +479,7 @@ export default function SearchScreen() {
                   contentContainerStyle={styles.productsScroll}
                 >
                   {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                    <ProductCard key={`search-product-${product.id}`} product={product} />
                   ))}
                 </ScrollView>
               </View>
@@ -422,6 +487,177 @@ export default function SearchScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* ── FILTER BOTTOM SHEET MODAL ────────────────────────────────────── */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setFilterModalVisible(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Filter Results</Text>
+              <Pressable
+                onPress={() => setFilterModalVisible(false)}
+                hitSlop={8}
+                style={[styles.modalCloseBtn, { backgroundColor: colors.muted }]}
+              >
+                <Ionicons name="close" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {/* Level Filter */}
+              <View style={styles.filterGroup}>
+                <Text style={[styles.filterGroupTitle, { color: colors.foreground }]}>Difficulty Level</Text>
+                <View style={styles.chipRow}>
+                  {['Beginner', 'Intermediate', 'Advanced'].map((lvl) => {
+                    const isSelected = tempFilters.level === lvl;
+                    return (
+                      <Pressable
+                        key={lvl}
+                        onPress={async () => {
+                          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setTempFilters((prev) => ({
+                            ...prev,
+                            level: isSelected ? null : lvl,
+                          }));
+                        }}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: isSelected ? colors.primary : colors.muted,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            { color: isSelected ? colors.primaryForeground : colors.foreground },
+                          ]}
+                        >
+                          {lvl}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Price Filter */}
+              <View style={styles.filterGroup}>
+                <Text style={[styles.filterGroupTitle, { color: colors.foreground }]}>Price</Text>
+                <View style={styles.chipRow}>
+                  {['Free', 'Paid'].map((pr) => {
+                    const isSelected = tempFilters.price === pr;
+                    return (
+                      <Pressable
+                        key={pr}
+                        onPress={async () => {
+                          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setTempFilters((prev) => ({
+                            ...prev,
+                            price: isSelected ? null : pr,
+                          }));
+                        }}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: isSelected ? colors.primary : colors.muted,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            { color: isSelected ? colors.primaryForeground : colors.foreground },
+                          ]}
+                        >
+                          {pr}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Rating Filter */}
+              <View style={styles.filterGroup}>
+                <Text style={[styles.filterGroupTitle, { color: colors.foreground }]}>Minimum Rating</Text>
+                <View style={styles.chipRow}>
+                  {[4.0].map((rat) => {
+                    const isSelected = tempFilters.rating === rat;
+                    return (
+                      <Pressable
+                        key={rat}
+                        onPress={async () => {
+                          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setTempFilters((prev) => ({
+                            ...prev,
+                            rating: isSelected ? null : rat,
+                          }));
+                        }}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: isSelected ? colors.primary : colors.muted,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="star"
+                          size={14}
+                          color={isSelected ? colors.primaryForeground : '#F59E0B'}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            { color: isSelected ? colors.primaryForeground : colors.foreground },
+                          ]}
+                        >
+                          4.0+ Stars
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionBar}>
+              <Pressable
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedFilters({ level: null, price: null, rating: null });
+                  setTempFilters({ level: null, price: null, rating: null });
+                  setFilterModalVisible(false);
+                }}
+                style={[styles.clearBtn, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.clearBtnText, { color: colors.mutedForeground }]}>Clear All</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={async () => {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setSelectedFilters(tempFilters);
+                  setFilterModalVisible(false);
+                }}
+                style={[styles.applyBtn, { backgroundColor: colors.primary }]}
+              >
+                <Text style={[styles.applyBtnText, { color: colors.primaryForeground }]}>Apply Filters</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -575,5 +811,112 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: "#FFF",
+  },
+
+  // FILTER BOTTOM SHEET STYLES
+  filterBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  filterBadgeDot: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    padding: 20,
+    paddingBottom: 32,
+    elevation: 20,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: "Fredoka_700Bold",
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterGroup: {
+    marginBottom: 20,
+  },
+  filterGroupTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 10,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  modalActionBar: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  clearBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  applyBtn: {
+    flex: 2,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  applyBtnText: {
+    fontSize: 15,
+    fontFamily: "Fredoka_700Bold",
   },
 });

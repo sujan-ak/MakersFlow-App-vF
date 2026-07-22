@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, Alert, Platform, Dimensions } from "react-native";
 import { Image } from "expo-image";
 import { Product } from "@/data/mockData";
+import { getOptimizedImageUrl } from "@/lib/thumbnailUtils";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
@@ -125,7 +126,8 @@ export const ProductCard = React.memo(function ProductCard({ product, onAddedToC
                 return (
                   <Image
                     key={`img_${index}`}
-                    source={src}
+                    source={getOptimizedImageUrl(src, { width: 400, height: 260 })}
+                    cachePolicy="memory-disk"
                     style={{ width: containerWidth || CARD_WIDTH, height: 120 }}
                     contentFit="cover"
                     transition={200}
@@ -148,7 +150,7 @@ export const ProductCard = React.memo(function ProductCard({ product, onAddedToC
             )}
           </View>
         ) : (
-          <Image source={product.thumbnail} style={styles.thumbnail} contentFit="cover" transition={200} />
+          <Image source={getOptimizedImageUrl(product.thumbnail, { width: 400, height: 260 })} cachePolicy="memory-disk" style={styles.thumbnail} contentFit="cover" transition={200} />
         )}
         {product.badge && (
           <View style={[styles.badge, { backgroundColor: colors.secondary }]}>

@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { useProgress } from "@/context/ProgressContext";
 import { fetchAllCourses, getCourseModules } from "@/services/courseDataProvider";
 import { useColors } from "@/hooks/useColors";

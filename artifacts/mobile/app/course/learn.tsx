@@ -17,8 +17,9 @@ import {
   TextInput,
 } from "react-native";
 import * as FileSystem from 'expo-file-system/legacy';
-import { getDownloadedPath, setDownloadedPath, removeDownloadedPath } from '@/lib/downloadStorage';
+import { getDownloadedPath, setDownloadedPath, removeDownloadedPath, downloadLessonVideo } from '@/lib/downloadStorage';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { VideoPlayerEnhanced } from "@/components/VideoPlayerEnhanced";
 import { ResumeModal } from "@/components/ResumeModal";
 import { LessonCompleteModal } from "@/components/LessonCompleteModal";
@@ -68,6 +69,8 @@ export default function LearnScreen() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [resumeFromTime, setResumeFromTime] = useState(0);
   const [downloadedPath, setDownloadedPathState] = useState<string | null>(null);
+  const [downloadedMap, setDownloadedMap] = useState<Record<string, string | null>>({});
+  const [downloadingLessonId, setDownloadingLessonId] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [isMarkingComplete, setIsMarkingComplete] = useState(false);
@@ -80,7 +83,12 @@ export default function LearnScreen() {
 
   useEffect(() => {
     if (!activeModuleId) return;
-    getDownloadedPath(activeModuleId).then(setDownloadedPathState);
+    getDownloadedPath(activeModuleId).then((path) => {
+      setDownloadedPathState(path);
+      if (path) {
+        setDownloadedMap((prev) => ({ ...prev, [activeModuleId]: path }));
+      }
+    });
   }, [activeModuleId]);
 
   const [lessonResources, setLessonResources] = useState<
@@ -165,6 +173,16 @@ export default function LearnScreen() {
           );
           setLessons(flatLessons);
           setTotalLessons(flatLessons.length);
+
+          // Populate downloaded map for all lessons
+          const map: Record<string, string | null> = {};
+          await Promise.all(
+            flatLessons.map(async (l: any) => {
+              const p = await getDownloadedPath(l.id);
+              if (p) map[l.id] = p;
+            })
+          );
+          setDownloadedMap((prev) => ({ ...prev, ...map }));
 
           if (!activeModuleId && flatLessons.length > 0) {
             setActiveModuleId(lessonId || moduleId || flatLessons[0].id);
@@ -331,22 +349,30 @@ export default function LearnScreen() {
     }
   };
 
-  const handleDownload = async () => {
-    if (!activeModule?.videoUrl || !activeModule?.id) return;
-    if (downloadedPath) {
+  const handleDownloadLesson = async (targetModule?: any) => {
+    const target = targetModule || activeModule;
+    if (!target?.videoUrl || !target?.id) {
+      showToast('No video available to download');
+      return;
+    }
+
+    const currentLocalPath = downloadedMap[target.id] || (target.id === activeModule?.id ? downloadedPath : null);
+
+    if (currentLocalPath) {
       Alert.alert(
         "Remove Download",
-        "Are you sure you want to remove this downloaded video?",
+        `Remove "${target.title}" from offline storage?`,
         [
           { text: "Cancel", style: "cancel" },
           {
             text: "Remove",
             style: "destructive",
             onPress: async () => {
-              await FileSystem.deleteAsync(downloadedPath, { idempotent: true });
-              await removeDownloadedPath(activeModule.id);
-              await removeDownloadedLesson(activeModule.id);
-              setDownloadedPathState(null);
+              await removeDownloadedPath(target.id);
+              setDownloadedMap((prev) => ({ ...prev, [target.id]: null }));
+              if (target.id === activeModule?.id) {
+                setDownloadedPathState(null);
+              }
               showToast('Download removed');
             },
           },
@@ -354,34 +380,27 @@ export default function LearnScreen() {
       );
       return;
     }
-    const localUri = `${FileSystem.documentDirectory}lesson_${activeModule.id}.mp4`;
+
     setIsDownloading(true);
+    setDownloadingLessonId(target.id);
     setDownloadProgress(0);
-    const dl = FileSystem.createDownloadResumable(
-      activeModule.videoUrl,
-      localUri,
-      {},
-      (p) => setDownloadProgress(p.totalBytesWritten / (p.totalBytesExpectedToWrite || 1)),
-    );
+
     try {
-      const result = await dl.downloadAsync();
-      if (result?.uri) {
-        await setDownloadedPath(activeModule.id, result.uri);
-        setDownloadedPathState(result.uri);
-        await addDownloadedLesson({
-          courseId,
-          moduleId: activeModule.id,
-          lessonId: activeModule.id,
-          courseTitle: course.title,
-          lessonTitle: activeModule.title,
-          courseThumbnail: course.thumbnail,
-        });
-        showToast('Downloaded for offline use');
+      const savedPath = await downloadLessonVideo(target.id, target.videoUrl, (pct) => {
+        setDownloadProgress(pct);
+      });
+
+      setDownloadedMap((prev) => ({ ...prev, [target.id]: savedPath }));
+      if (target.id === activeModule?.id) {
+        setDownloadedPathState(savedPath);
       }
-    } catch {
-      showToast('Download failed');
+      showToast('✅ Downloaded for offline use');
+    } catch (err: any) {
+      console.error('[Download] Error downloading lesson:', err);
+      Alert.alert('Download Failed', err?.message || 'Could not download video. Please check your storage or connection.');
     } finally {
       setIsDownloading(false);
+      setDownloadingLessonId(null);
       setDownloadProgress(null);
     }
   };
@@ -559,7 +578,7 @@ export default function LearnScreen() {
             color={isSaved ? "#0B6FAD" : colors.mutedForeground}
           />
         </Pressable>
-        <Pressable onPress={handleDownload} style={styles.downloadBtn} disabled={isDownloading}>
+        <Pressable onPress={() => handleDownloadLesson()} style={styles.downloadBtn} disabled={isDownloading}>
           {isDownloading ? (
             <View style={{ alignItems: 'center' }}>
               <RNActivityIndicator size="small" color="#0B6FAD" />
@@ -837,6 +856,11 @@ export default function LearnScreen() {
                           · {Math.round(watchedPercentage)}% watched
                         </Text>
                       )}
+                      {Boolean(downloadedMap[mod.id]) && (
+                        <Text style={{ fontSize: 11, color: "#17E5D3", fontFamily: "Inter_600SemiBold", marginLeft: 8 }}>
+                          ✓ Saved Offline
+                        </Text>
+                      )}
                     </View>
                     {watchedPercentage > 0 && watchedPercentage < 100 && (
                       <View style={{ height: 3, borderRadius: 1.5, width: "80%", backgroundColor: colors.border, marginTop: 6 }}>
@@ -844,6 +868,24 @@ export default function LearnScreen() {
                       </View>
                     )}
                   </View>
+
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDownloadLesson(mod);
+                    }}
+                    style={{ padding: 6, marginRight: 4 }}
+                  >
+                    {downloadingLessonId === mod.id ? (
+                      <RNActivityIndicator size="small" color="#0B6FAD" />
+                    ) : (
+                      <Ionicons
+                        name={downloadedMap[mod.id] ? "arrow-down-circle" : "arrow-down-circle-outline"}
+                        size={20}
+                        color={downloadedMap[mod.id] ? "#17E5D3" : colors.mutedForeground}
+                      />
+                    )}
+                  </Pressable>
 
                   <Ionicons
                     name={isCompleted ? "checkmark-circle" : isCurrent ? "play-circle" : isLocked ? "lock-closed" : "ellipse-outline"}

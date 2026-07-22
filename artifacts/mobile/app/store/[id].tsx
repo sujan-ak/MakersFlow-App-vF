@@ -19,11 +19,13 @@ import {
   Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { useCart } from "@/context/CartContext";
 import { Product } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { supabase } from "@/lib/supabase";
 import { DetailSkeleton } from "@/components/SkeletonLoader";
+import { cacheManager } from "@/services/cacheManager";
 import { StarRating } from "@/components/StarRating";
 import { ImageGallery } from "@/components/ImageGallery";
 import { parseThumbnailUrls } from "@/lib/thumbnailUtils";
@@ -231,6 +233,8 @@ export default function ProductDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [isOfflineCached, setIsOfflineCached] = useState(false);
+
   const loadProduct = useCallback(async (isRefreshing = false, cancelledRef = { current: false }) => {
     if (!id || isNaN(Number(id))) {
       console.warn('[ProductDetail] Invalid or missing product id:', id);
@@ -240,6 +244,10 @@ export default function ProductDetailScreen() {
     if (!isRefreshing) {
       setIsLoading(true);
     }
+
+    const cacheKey = `cached_product_detail_${id}`;
+    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
     try {
       const { data, error } = await supabase
         .from('products')
@@ -247,103 +255,94 @@ export default function ProductDetailScreen() {
         .eq('id', Number(id))
         .maybeSingle();
 
-      if (error) {
-        console.error('[ProductDetail] Error loading product:', error);
-        if (!cancelledRef.current) setIsLoading(false);
-        return;
-      }
-
-      if (!data) {
-        console.warn('[ProductDetail] Product not found for id:', id);
+      if (error || !data) {
+        console.warn('[ProductDetail] Live product query failed or missing, checking offline cache...');
+        const cached = await cacheManager.read<any>(cacheKey, CACHE_TTL);
+        if (cached && !cancelledRef.current) {
+          setIsOfflineCached(true);
+          setProduct(cached);
+          setIsLoading(false);
+          setRefreshing(false);
+          return;
+        }
         if (!cancelledRef.current) setIsLoading(false);
         return;
       }
 
       const mapped = mapSupabaseProduct(data);
       if (!cancelledRef.current) {
+        await cacheManager.write(cacheKey, mapped);
+        setIsOfflineCached(false);
         setProduct(mapped);
         setIsLoading(false);
         setRefreshing(false);
       }
 
-      // Defer 1: product_media table
+      // Parallelize all secondary below-the-fold requests in a single parallel batch
       const imagesList = mapped.images ?? [];
-      if (imagesList.length <= 1) {
-        supabase
-          .from('product_media')
-          .select('*')
-          .eq('product_id', Number(id))
-          .then(
-            ({ data: mediaRows }) => {
-              if (cancelledRef.current) return;
-              if (mediaRows && mediaRows.length > 0) {
-                const extra = extractProductImages(
-                  { images: mediaRows },
-                  mapped.thumbnail,
-                );
-                if (extra.length > imagesList.length) {
-                  setProduct((prev) => prev ? { ...prev, images: extra } : null);
-                }
-              }
-            },
-            () => {}
-          );
-      }
+      const mediaPromise = imagesList.length <= 1
+        ? supabase.from('product_media').select('*').eq('product_id', Number(id))
+        : Promise.resolve({ data: null, error: null });
 
-      // Defer 2: reviews
-      fetchProductReviews(id)
-        .then((reviewsData) => {
+      const reviewsPromise = fetchProductReviews(id);
+
+      const myReviewPromise = user?.id
+        ? fetchMyProductReview(user.id, id)
+        : Promise.resolve(null);
+
+      const ordersPromise = user?.id
+        ? supabase.from("orders").select("items").eq("user_id", user.id).in("status", ["paid", "completed"])
+        : Promise.resolve({ data: null, error: null });
+
+      Promise.allSettled([mediaPromise, reviewsPromise, myReviewPromise, ordersPromise]).then(
+        ([mediaRes, reviewsRes, myReviewRes, ordersRes]) => {
           if (cancelledRef.current) return;
-          setAllReviews(reviewsData);
-          if (reviewsData.length > 0) {
-            const sum = reviewsData.reduce((acc, r) => acc + r.rating, 0);
-            setAvgRating(sum / reviewsData.length);
-          } else {
-            setAvgRating(null);
+
+          // 1. Extra media
+          if (mediaRes.status === 'fulfilled' && (mediaRes.value as any)?.data?.length > 0) {
+            const mediaRows = (mediaRes.value as any).data;
+            const extra = extractProductImages({ images: mediaRows }, mapped.thumbnail);
+            if (extra.length > imagesList.length) {
+              setProduct((prev) => prev ? { ...prev, images: extra } : null);
+            }
           }
-        })
-        .catch((err: any) => console.error('[ProductDetail] Defer reviews error:', err));
 
-      // Defer 3: user specific details (myReview, purchase-check)
-      if (user?.id) {
-        fetchMyProductReview(user.id, id)
-          .then((myReviewData) => {
-            if (cancelledRef.current) return;
+          // 2. Reviews
+          if (reviewsRes.status === 'fulfilled' && Array.isArray(reviewsRes.value)) {
+            const reviewsData = reviewsRes.value;
+            setAllReviews(reviewsData);
+            if (reviewsData.length > 0) {
+              const sum = reviewsData.reduce((acc, r) => acc + r.rating, 0);
+              setAvgRating(sum / reviewsData.length);
+            } else {
+              setAvgRating(null);
+            }
+          }
+
+          // 3. User Review
+          if (myReviewRes.status === 'fulfilled' && myReviewRes.value) {
+            const myReviewData = myReviewRes.value;
             setMyReview(myReviewData);
-            if (myReviewData) {
-              setDraftRating(myReviewData.rating);
-              setDraftComment(myReviewData.comment || "");
-            }
-          })
-          .catch((err: any) => console.error('[ProductDetail] Defer myReview error:', err));
+            setDraftRating(myReviewData.rating);
+            setDraftComment(myReviewData.comment || "");
+          }
 
-        // Defer 4: purchase check
-        supabase
-          .from("orders")
-          .select("items")
-          .eq("user_id", user.id)
-          .in("status", ["paid", "completed"])
-          .then(
-            ({ data: userOrders, error: ordersErr }) => {
-              if (cancelledRef.current) return;
-              if (!ordersErr && userOrders) {
-                const bought = userOrders.some((order: any) => {
-                  let itemsList: any[] = [];
-                  try {
-                    itemsList = typeof order.items === "string" ? JSON.parse(order.items) : order.items;
-                  } catch (e) {
-                    itemsList = Array.isArray(order.items) ? order.items : [];
-                  }
-                  return Array.isArray(itemsList) && itemsList.some((item: any) => String(item.id) === String(id));
-                });
-                setHasPurchased(bought);
+          // 4. Purchase Check
+          if (ordersRes.status === 'fulfilled' && (ordersRes.value as any)?.data) {
+            const userOrders = (ordersRes.value as any).data;
+            const bought = userOrders.some((order: any) => {
+              let itemsList: any[] = [];
+              try {
+                itemsList = typeof order.items === "string" ? JSON.parse(order.items) : order.items;
+              } catch (e) {
+                itemsList = Array.isArray(order.items) ? order.items : [];
               }
-            },
-            (err: any) => {
-              console.error('[ProductDetail] Defer orders check error:', err);
-            }
-          );
-      }
+              return Array.isArray(itemsList) && itemsList.some((item: any) => String(item.id) === String(id));
+            });
+            setHasPurchased(bought);
+          }
+        }
+      );
     } catch (err) {
       console.error('[ProductDetail] load error:', err);
       if (!cancelledRef.current) {
@@ -452,6 +451,14 @@ export default function ProductDetailScreen() {
         </View>
 
         <View style={styles.content}>
+          {isOfflineCached && (
+            <View style={{ backgroundColor: "#FEF3C7", padding: 10, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <Ionicons name="cloud-offline" size={16} color="#D97706" />
+              <Text style={{ color: "#92400E", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                Offline Mode — Showing cached product details
+              </Text>
+            </View>
+          )}
           <Text style={[styles.subcategory, { color: colors.mutedForeground }]}>{product.subcategory}</Text>
           <Text style={[styles.title, { color: colors.foreground }]}>{product.title}</Text>
 

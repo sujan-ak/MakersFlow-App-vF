@@ -18,6 +18,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
 import * as ImagePicker from "expo-image-picker";
@@ -80,28 +81,62 @@ export default function RegisterScreen() {
 
   const pickAvatar = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "MakersFlow needs library permission to upload a profile photo.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const validation = await validateImageFile(asset.uri);
-        if (!validation.valid) {
-          Alert.alert("Invalid File", validation.error || "Please select a valid image.");
-          return;
-        }
-        setAvatarUri(asset.uri);
-      }
+      Alert.alert(
+        "Profile Photo",
+        "Choose photo source",
+        [
+          {
+            text: "Camera",
+            onPress: async () => {
+              const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+              if (!cameraPerm.granted) {
+                Alert.alert("Permission Required", "MakersFlow needs full camera access to take a profile photo.");
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.6,
+              });
+              if (!result.canceled && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+                const validation = await validateImageFile(asset.uri);
+                if (!validation.valid) {
+                  Alert.alert("Invalid File", validation.error || "Please select a valid image.");
+                  return;
+                }
+                setAvatarUri(asset.uri);
+              }
+            },
+          },
+          {
+            text: "Photo Library",
+            onPress: async () => {
+              const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!permissionResult.granted) {
+                Alert.alert("Permission Required", "MakersFlow needs full photo library access to upload a profile photo.");
+                return;
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.6,
+              });
+              if (!result.canceled && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+                const validation = await validateImageFile(asset.uri);
+                if (!validation.valid) {
+                  Alert.alert("Invalid File", validation.error || "Please select a valid image.");
+                  return;
+                }
+                setAvatarUri(asset.uri);
+              }
+            },
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      );
     } catch (e) {
       console.error('Error picking image:', e);
     }

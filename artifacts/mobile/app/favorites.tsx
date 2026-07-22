@@ -9,11 +9,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { useFavorites } from "@/context/FavoritesContext";
 import { useColors } from "@/hooks/useColors";
 import { useCart } from "@/context/CartContext";
@@ -199,11 +201,8 @@ export default function FavoritesScreen() {
                             is_course: true,
                             course_id: String(fav.courseId),
                           };
-                          if (!cartItems.some((i) => i.product.id === productForCart.id)) {
-                            addToCart(productForCart);
-                          }
-                          removeFavoriteCourse(fav.courseId);
-                          Alert.alert("Moved to Cart", `${fav.courseTitle} has been moved to your cart.`);
+                          addToCart(productForCart);
+                          Alert.alert("Added to Cart", `"${fav.courseTitle}" added to your cart.`);
                         }}
                       >
                         <Ionicons name="cart" size={14} color="#FFF" />

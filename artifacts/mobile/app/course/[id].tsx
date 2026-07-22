@@ -23,10 +23,12 @@ import {
   Share,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SPACING } from "@/constants/spacing";
 import { Badge } from "@/components/Badge";
 import { StarRating } from "@/components/StarRating";
 import { DetailSkeleton } from "@/components/SkeletonLoader";
 import { ImageGallery } from "@/components/ImageGallery";
+import { cacheManager } from "@/services/cacheManager";
 import { QUIZZES } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
@@ -43,7 +45,9 @@ import { parseThumbnailUrls } from "@/lib/thumbnailUtils";
 export default function CourseDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const rawParams = useLocalSearchParams<{ id: string }>();
+  const rawId = Array.isArray(rawParams.id) ? rawParams.id[0] : rawParams.id;
+  const id = rawId && rawId !== 'undefined' && rawId !== 'null' ? rawId : undefined;
   const { user } = useAuth();
   const { isFavoriteCourse, toggleFavoriteCourse } = useFavorites();
   const { addToCart, items: cartItems } = useCart();
@@ -92,17 +96,25 @@ export default function CourseDetailScreen() {
     }
   };
 
+  const [isOfflineCached, setIsOfflineCached] = useState(false);
+
   const loadCourseData = useCallback(async (isRefreshing = false, cancelledRef = { current: false }) => {
     if (!id) return;
     if (!isRefreshing) {
       setIsLoading(true);
     }
 
+    const cacheKey = `cached_course_detail_${id}`;
+    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
     try {
       const courseData = await getCourseById(id);
       if (cancelledRef.current) return;
       if (courseData) {
-        // Collect images from thumbnail_url AND the images[] column the admin writes to
+        // Save to local cache
+        await cacheManager.write(cacheKey, courseData);
+        setIsOfflineCached(false);
+
         const fromThumb = parseThumbnailUrls(courseData.thumbnail_url);
         let fromImages: string[] = [];
         if (courseData.images) {
@@ -134,7 +146,41 @@ export default function CourseDetailScreen() {
         setCourse(mappedCourse);
       }
     } catch (error) {
-      console.error("[CourseDetail] load critical course details error:", error);
+      console.warn("[CourseDetail] Live query failed, checking offline cache:", error);
+      // Offline fallback: check local cache before giving up
+      const cachedCourse = await cacheManager.read<any>(cacheKey, CACHE_TTL);
+      if (cachedCourse && !cancelledRef.current) {
+        setIsOfflineCached(true);
+        const fromThumb = parseThumbnailUrls(cachedCourse.thumbnail_url);
+        let fromImages: string[] = [];
+        if (cachedCourse.images) {
+          let raw: any = cachedCourse.images;
+          if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = []; } }
+          if (Array.isArray(raw)) fromImages = raw.map(String).filter((u: string) => u.startsWith('http'));
+        }
+        const seen = new Set<string>();
+        const images: string[] = [];
+        [...fromThumb, ...fromImages].forEach((u) => { if (u && !seen.has(u)) { seen.add(u); images.push(u); } });
+
+        const mappedCourse = {
+          id: String(cachedCourse.id),
+          title: cachedCourse.title,
+          category: cachedCourse.category || "General",
+          level: cachedCourse.level ? (cachedCourse.level.charAt(0).toUpperCase() + cachedCourse.level.slice(1)) : "Beginner",
+          price: cachedCourse.price || 0,
+          isFree: cachedCourse.is_free,
+          images: images.length > 0 ? images : null,
+          thumbnail: images.length > 0
+            ? { uri: images[0] }
+            : require('@/assets/images/courses/course_robotics.webp'),
+          instructor: "MakersFlow Instructor",
+          rating: 4.8,
+          reviews: 120,
+          description: cachedCourse.description || "",
+          tags: [cachedCourse.category || "Robotics"],
+        };
+        setCourse(mappedCourse);
+      }
     } finally {
       if (!cancelledRef.current) {
         setIsLoading(false);
@@ -142,12 +188,19 @@ export default function CourseDetailScreen() {
       }
     }
 
-    // Defer below-the-fold queries: modules, enrollment status, reviews, my review
+    // Parallelize below-the-fold secondary queries in a single Promise.allSettled batch
+    const modulesPromise = getCourseModules(id);
+    const reviewsPromise = fetchCourseReviews(id);
+    const enrollmentPromise = user?.id ? checkEnrollment(user.id, id) : Promise.resolve(false);
+    const myReviewPromise = user?.id ? fetchMyReview(user.id, id) : Promise.resolve(null);
 
-    getCourseModules(id)
-      .then((modulesData) => {
+    Promise.allSettled([modulesPromise, reviewsPromise, enrollmentPromise, myReviewPromise]).then(
+      async ([modulesRes, reviewsRes, enrollmentRes, myReviewRes]) => {
         if (cancelledRef.current) return;
-        if (modulesData) {
+
+        // 1. Modules
+        if (modulesRes.status === 'fulfilled' && modulesRes.value) {
+          const modulesData = modulesRes.value;
           const flatLessons = modulesData.flatMap((m: any) =>
             m.lessons.map((l: any) => ({
               id: l.id,
@@ -158,59 +211,46 @@ export default function CourseDetailScreen() {
           );
           setModules(flatLessons);
         }
-      })
-      .catch((err) => console.error("[CourseDetail] Defer modules error:", err));
 
-    if (user?.id) {
-      checkEnrollment(user.id, id)
-        .then((enrolledStatus) => {
-          if (cancelledRef.current) return;
+        // 2. Course Reviews
+        if (reviewsRes.status === 'fulfilled' && Array.isArray(reviewsRes.value)) {
+          const reviews = reviewsRes.value;
+          setAllReviews(reviews);
+          if (reviews.length > 0) {
+            const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
+            setAvgRating(Math.round(avg * 10) / 10);
+          } else {
+            setAvgRating(null);
+          }
+        }
+
+        // 3. User Review
+        if (myReviewRes.status === 'fulfilled' && myReviewRes.value) {
+          const mine = myReviewRes.value;
+          setMyReview({ rating: mine.rating, comment: mine.comment ?? "" });
+          setDraftRating(mine.rating);
+          setDraftComment(mine.comment ?? "");
+        }
+
+        // 4. Enrollment & Progress (parallelized nested check)
+        if (enrollmentRes.status === 'fulfilled' && user?.id) {
+          const enrolledStatus = Boolean(enrollmentRes.value);
           setIsEnrolled(enrolledStatus);
+
           if (enrolledStatus) {
-            fetchCourseLessonsProgress(user.id, id)
-              .then((progressData) => {
-                if (cancelledRef.current) return;
-                setLessonsProgress(progressData);
-              })
-              .catch(() => {});
-            getEnrollment(user.id, id)
-              .then((enrollData) => {
-                if (cancelledRef.current) return;
-                setEnrollment(enrollData);
-              })
-              .catch(() => {});
+            const [progressRes, enrollDetailsRes] = await Promise.allSettled([
+              fetchCourseLessonsProgress(user.id, id),
+              getEnrollment(user.id, id)
+            ]);
+            if (cancelledRef.current) return;
+            if (progressRes.status === 'fulfilled') setLessonsProgress(progressRes.value);
+            if (enrollDetailsRes.status === 'fulfilled') setEnrollment(enrollDetailsRes.value);
           } else {
             setEnrollment(null);
           }
-        })
-        .catch((err) => console.error("[CourseDetail] Defer enrollment check error:", err));
-    }
-
-    fetchCourseReviews(id)
-      .then((reviews) => {
-        if (cancelledRef.current) return;
-        setAllReviews(reviews);
-        if (reviews.length > 0) {
-          const avg = reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length;
-          setAvgRating(Math.round(avg * 10) / 10);
-        } else {
-          setAvgRating(null);
         }
-      })
-      .catch((err) => console.error("[CourseDetail] Defer reviews error:", err));
-
-    if (user?.id) {
-      fetchMyReview(user.id, id)
-        .then((mine) => {
-          if (cancelledRef.current) return;
-          if (mine) {
-            setMyReview({ rating: mine.rating, comment: mine.comment ?? "" });
-            setDraftRating(mine.rating);
-            setDraftComment(mine.comment ?? "");
-          }
-        })
-        .catch((err) => console.error("[CourseDetail] Defer my review error:", err));
-    }
+      }
+    );
   }, [id, user?.id]);
 
   useEffect(() => {
@@ -426,6 +466,28 @@ export default function CourseDetailScreen() {
 
   const topOffset = Platform.OS === "web" ? 67 : insets.top;
 
+  if (isLoading) {
+    return <DetailSkeleton />;
+  }
+
+  if (!id || !course) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: "center", alignItems: "center", padding: 24 }]}>
+        <Ionicons name="alert-circle-outline" size={48} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
+        <Text style={{ color: colors.foreground, fontSize: 18, fontFamily: "Fredoka_600SemiBold", marginBottom: 8 }}>Course Not Found</Text>
+        <Text style={{ color: colors.mutedForeground, fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", marginBottom: 20 }}>
+          The course you are looking for does not exist or has been removed.
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: "#0B6FAD", borderRadius: 12 }}
+        >
+          <Text style={{ color: "#FFF", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: false }} />
@@ -483,6 +545,14 @@ export default function CourseDetailScreen() {
 
         {/* Content */}
         <View style={styles.content}>
+          {isOfflineCached && (
+            <View style={{ backgroundColor: "#FEF3C7", padding: 10, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <Ionicons name="cloud-offline" size={16} color="#D97706" />
+              <Text style={{ color: "#92400E", fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+                Offline Mode — Showing cached course details
+              </Text>
+            </View>
+          )}
           <View style={[styles.categoryBadge, { backgroundColor: "#DCF7F4" }]}>
             <Text style={[styles.categoryText, { color: "#0B6FAD" }]}>{course.category}</Text>
           </View>
@@ -1119,8 +1189,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#D6E9F2",
-    marginBottom: 16,
+    marginBottom: SPACING.lg,
   },
   tabItem: {
     flex: 1,

@@ -143,7 +143,9 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false, animation: "fade", animationDuration: 120 }} />
         <Stack.Screen name="(auth)/reset-password" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: "none" }} />
+        <Stack.Screen name="course/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="course/learn" options={{ headerShown: false }} />
+        <Stack.Screen name="store/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="store/checkout" options={{ headerShown: false }} />
         <Stack.Screen name="store/orders" options={{ headerShown: false }} />
         <Stack.Screen name="news/[id]" options={{ headerShown: false }} />

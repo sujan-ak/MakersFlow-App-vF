@@ -35,6 +35,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SPACING } from '@/constants/spacing';
 import { useColors } from '@/hooks/useColors';
 
 const TRANSPARENT_1X1_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -332,12 +333,13 @@ export default function CertificateScreen() {
             return;
           }
 
-          const base64 = await FileSystem.readAsStringAsync(dest, {
+          const rawBase64 = await FileSystem.readAsStringAsync(dest, {
             encoding: FileSystem.EncodingType.Base64,
           });
+          const cleanBase64 = rawBase64.replace(/[\r\n\s]/g, '');
           const fileName = `MakersFlow_Certificate_${Date.now()}`;
           const newUri = await SAF.createFileAsync(perm.directoryUri, fileName, 'application/pdf');
-          await FileSystem.writeAsStringAsync(newUri, base64, {
+          await FileSystem.writeAsStringAsync(newUri, cleanBase64, {
             encoding: FileSystem.EncodingType.Base64,
           });
 

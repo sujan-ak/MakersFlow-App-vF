@@ -41,13 +41,16 @@ export function AppGate({ children }: { children: React.ReactNode }) {
   // Returning users hit INITIAL_SESSION so token was never saved.
   useEffect(() => {
     if (!user?.id) return;
-    if (registeredFor.current === user.id) return;
-    registeredFor.current = user.id;
-    // Delay slightly so the app is fully mounted before network calls
-    const t = setTimeout(() => {
-      registerForPushNotifications(user.id).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(t);
+    // Register token on initial mount / session restore
+    registerForPushNotifications(user.id).catch(() => {});
+
+    // Re-verify / refresh token when app resumes from background
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && user?.id) {
+        registerForPushNotifications(user.id).catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, [user?.id]);
 
   // ── 2. Notification tap handling ─────────────────────────────────────────
@@ -117,19 +120,9 @@ export function AppGate({ children }: { children: React.ReactNode }) {
   }, [getLocalAuth]);
 
   const shouldLock = useCallback(async (): Promise<boolean> => {
-    if (!user?.id || Platform.OS === "web") return false;
-    try {
-      const enabled = await SecureStore.getItemAsync(BIOMETRIC_KEY);
-      if (enabled !== "true") return false;
-      const LocalAuth = getLocalAuth();
-      if (!LocalAuth) return false;
-      const hasHardware = await LocalAuth.hasHardwareAsync();
-      const enrolled = await LocalAuth.isEnrolledAsync();
-      return hasHardware && enrolled;
-    } catch {
-      return false;
-    }
-  }, [user?.id, getLocalAuth]);
+    // Biometric lock disabled per specification
+    return false;
+  }, []);
 
   // Lock on first launch after auth settles
   useEffect(() => {

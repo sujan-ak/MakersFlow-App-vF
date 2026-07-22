@@ -18,6 +18,7 @@ import {
 import Slider from "@react-native-community/slider";
 const SliderComponent = Slider as any;
 import { useColors } from "@/hooks/useColors";
+import { SPACING } from "@/constants/spacing";
 import { PlaybackSpeedSelector } from "./PlaybackSpeedSelector";
 import { router } from "expo-router";
 

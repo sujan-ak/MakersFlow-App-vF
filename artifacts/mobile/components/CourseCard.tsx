@@ -5,6 +5,7 @@ import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View, ToastAndroid
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { Course } from "@/data/mockData";
+import { getOptimizedImageUrl } from "@/lib/thumbnailUtils";
 import { useColors } from "@/hooks/useColors";
 import { useProgress } from "@/context/ProgressContext";
 import { useFavorites } from "@/context/FavoritesContext";
@@ -94,7 +95,7 @@ export const CourseCard = React.memo(function CourseCard({ course, horizontal = 
         onPress={() => router.push({ pathname: "/course/[id]", params: { id: course.id } })}
       >
         <View style={styles.horizontalThumbnailContainer}>
-          <Image source={course.thumbnail} style={styles.horizontalThumbnail} contentFit="cover" transition={200} />
+          <Image source={getOptimizedImageUrl(course.thumbnail, { width: 300, height: 200 })} cachePolicy="memory-disk" style={styles.horizontalThumbnail} contentFit="cover" transition={200} />
           {badge && (
             <View style={[styles.badge, { backgroundColor: badge.color }]}>
               <Text style={styles.badgeText}>{badge.text}</Text>
@@ -173,7 +174,8 @@ export const CourseCard = React.memo(function CourseCard({ course, horizontal = 
                 return (
                   <Image
                     key={`img_${index}`}
-                    source={src}
+                    source={getOptimizedImageUrl(src, { width: 400, height: 260 })}
+                    cachePolicy="memory-disk"
                     style={{
                       width: containerWidth || (compact ? 170 : CARD_WIDTH),
                       height: compact ? 85 : 110,
@@ -199,7 +201,7 @@ export const CourseCard = React.memo(function CourseCard({ course, horizontal = 
             )}
           </View>
         ) : (
-          <Image source={course.thumbnail} style={compact ? styles.compactThumbnail : styles.thumbnail} contentFit="cover" transition={200} />
+          <Image source={getOptimizedImageUrl(course.thumbnail, { width: 400, height: 260 })} cachePolicy="memory-disk" style={compact ? styles.compactThumbnail : styles.thumbnail} contentFit="cover" transition={200} />
         )}
         {badge && (
           <View style={[styles.badge, { backgroundColor: badge.color }]}>

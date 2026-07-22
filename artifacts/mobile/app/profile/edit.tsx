@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { useColors } from "@/hooks/useColors";
+import { useNetwork } from "@/context/NetworkContext";
 import { TEXT_STYLES } from "@/constants/typography";
 import { validateImageFile, uploadAvatarFile } from "@/lib/fileValidation";
 
@@ -28,6 +29,7 @@ export default function EditProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, updateUser } = useAuth();
+  const { isConnected } = useNetwork();
 
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
@@ -42,6 +44,15 @@ export default function EditProfileScreen() {
 
   async function handleSave() {
     if (!user?.id) return;
+
+    if (isConnected === false) {
+      Alert.alert(
+        "You're Offline",
+        "You're offline — profile changes and avatar uploads cannot be saved right now. Please reconnect to the internet and try again.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
 
     setLoading(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -89,34 +100,66 @@ export default function EditProfileScreen() {
         router.replace("/(tabs)/profile");
       }
     } else {
-      Alert.alert("Save Failed", result.error || "Failed to update profile.");
+      Alert.alert(
+        "Save Failed",
+        result.error?.toLowerCase().includes("network") || result.error?.toLowerCase().includes("fetch")
+          ? "You're offline — changes will sync when reconnected."
+          : (result.error || "Failed to update profile.")
+      );
     }
   }
 
   async function pickImage() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    Alert.alert(
+      "Profile Photo",
+      "Choose photo source",
+      [
+        {
+          text: "Camera",
+          onPress: async () => {
+            const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+            if (!cameraPerm.granted) {
+              Alert.alert("Permission Required", "MakersFlow needs full camera access to take a profile photo.");
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              await processPickedImage(result.assets[0]);
+            }
+          },
+        },
+        {
+          text: "Photo Library",
+          onPress: async () => {
+            const libraryPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!libraryPerm.granted) {
+              Alert.alert("Permission Required", "MakersFlow needs full photo library access to select a profile picture.");
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
+            if (!result.canceled && result.assets[0]) {
+              await processPickedImage(result.assets[0]);
+            }
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  }
 
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Please grant permission to access your photo library to change your profile picture.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const pickedUri = asset.uri;
+  async function processPickedImage(asset: ImagePicker.ImagePickerAsset) {
+    const pickedUri = asset.uri;
 
       // 1. Validate using picker metadata (mimeType + fileSize) — avoids
       //    the atob / positional-read crash on Android content:// URIs.
@@ -149,7 +192,6 @@ export default function EditProfileScreen() {
           }
         });
       }
-    }
   }
 
   const initials = name

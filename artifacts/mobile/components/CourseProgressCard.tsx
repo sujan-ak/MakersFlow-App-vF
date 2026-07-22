@@ -2,15 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React from "react";
-import { Image, Pressable, StyleSheet, Text, View, Animated, Easing } from "react-native";
+import { Pressable, StyleSheet, Text, View, Animated, Easing } from "react-native";
+import { Image } from "expo-image";
 import { useColors } from "@/hooks/useColors";
+import { getOptimizedImageUrl } from "@/lib/thumbnailUtils";
 import { CourseWithProgress } from "@/lib/progressAnalytics";
 
 interface CourseProgressCardProps {
   course: CourseWithProgress;
 }
 
-export function CourseProgressCard({ course }: CourseProgressCardProps) {
+export const CourseProgressCard = React.memo(function CourseProgressCard({ course }: CourseProgressCardProps) {
   const colors = useColors();
   const progressAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -52,7 +54,10 @@ export function CourseProgressCard({ course }: CourseProgressCardProps) {
     >
       <View style={styles.header}>
         <Image
-          source={course.thumbnail}
+          source={getOptimizedImageUrl(course.thumbnail, { width: 200, height: 200 })}
+          cachePolicy="memory-disk"
+          contentFit="cover"
+          transition={200}
           style={styles.thumbnail}
         />
         <View style={styles.headerInfo}>
@@ -111,7 +116,7 @@ export function CourseProgressCard({ course }: CourseProgressCardProps) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

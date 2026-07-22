@@ -1,10 +1,12 @@
 import { router } from "expo-router";
 import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { NewsItem } from "@/data/mockData";
 import { useColors } from "@/hooks/useColors";
+import { getOptimizedImageUrl } from "@/lib/thumbnailUtils";
 import { TEXT_STYLES } from "@/constants/typography";
 
 interface NewsCardProps {
@@ -12,7 +14,7 @@ interface NewsCardProps {
   featured?: boolean;
 }
 
-export function NewsCard({ item, featured = false }: NewsCardProps) {
+export const NewsCard = React.memo(function NewsCard({ item, featured = false }: NewsCardProps) {
   const colors = useColors();
 
   const imageSource = typeof item.thumbnail === "string" ? { uri: item.thumbnail } : item.thumbnail;
@@ -65,7 +67,7 @@ export function NewsCard({ item, featured = false }: NewsCardProps) {
       ]}
       onPress={() => router.push({ pathname: "/news/[id]", params: { id: item.id } })}
     >
-      <Image source={imageSource} style={styles.thumbnail} />
+      <Image source={getOptimizedImageUrl(imageSource, { width: 500, height: 300 })} cachePolicy="memory-disk" contentFit="cover" transition={200} style={styles.thumbnail} />
       <View style={styles.content}>
         <View style={[styles.categoryBadge, { backgroundColor: colors.accent }]}>
           <Text style={[styles.categoryText, TEXT_STYLES.label, { color: colors.primary }]}>
@@ -90,7 +92,7 @@ export function NewsCard({ item, featured = false }: NewsCardProps) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

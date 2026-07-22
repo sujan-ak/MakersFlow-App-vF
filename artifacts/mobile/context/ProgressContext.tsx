@@ -68,7 +68,10 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       setCourseProgress(progressMap);
 
       const loadedWatchlist = await ProgressStorage.loadWatchlist(user.id);
-      setWatchlist(loadedWatchlist);
+      const sortedWatchlist = [...loadedWatchlist].sort(
+        (a, b) => new Date(b.lastWatchedAt || 0).getTime() - new Date(a.lastWatchedAt || 0).getTime()
+      );
+      setWatchlist(sortedWatchlist);
     } catch (error) {
       console.error("Failed to load progress:", error);
       // Fallback to local storage on error (e.g. offline)

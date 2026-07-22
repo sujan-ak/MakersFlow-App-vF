@@ -18,16 +18,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContextSupabase";
 import { supabase } from "@/lib/supabase";
 
-const BIOMETRIC_KEY = "makersflow_biometric_enabled";
 
-// Lazy-load expo-local-authentication (not available in Expo Go)
-function getLocalAuth(): typeof import("expo-local-authentication") | null {
-  try {
-    return require("expo-local-authentication");
-  } catch {
-    return null;
-  }
-}
 
 export default function SecurityScreen() {
   const colors = useColors();
@@ -35,28 +26,12 @@ export default function SecurityScreen() {
   const { user, resetPassword } = useAuth() as any;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const [biometric, setBiometric] = useState(false);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [twoFactor, setTwoFactor] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // ── Load saved settings on mount ─────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      // Check if biometric hardware is available
-      const LocalAuth = getLocalAuth();
-      if (LocalAuth) {
-        const compatible = await LocalAuth.hasHardwareAsync();
-        const enrolled = await LocalAuth.isEnrolledAsync();
-        setBiometricAvailable(compatible && enrolled);
-      }
-
-      // Load saved biometric preference
-      try {
-        const stored = await SecureStore.getItemAsync(BIOMETRIC_KEY);
-        setBiometric(stored === "true");
-      } catch { /* ignore */ }
-
       // Load 2FA preference
       try {
         const stored = await SecureStore.getItemAsync("makersflow_2fa_enabled");
@@ -67,67 +42,7 @@ export default function SecurityScreen() {
     })();
   }, []);
 
-  // ── Biometric toggle ──────────────────────────────────────────────────────
-  async function handleBiometricToggle(value: boolean) {
-    const LocalAuth = getLocalAuth();
-
-    if (!LocalAuth) {
-      Alert.alert("Not Supported", "Biometric authentication is not available in Expo Go. It will work in the installed APK.");
-      return;
-    }
-
-    if (!biometricAvailable) {
-      Alert.alert(
-        "Not Available",
-        "No fingerprint or Face ID is set up on this device. Please set up biometrics in your device settings first."
-      );
-      return;
-    }
-
-    if (value) {
-      // Ask user to authenticate before enabling
-      const result = await LocalAuth.authenticateAsync({
-        promptMessage: "Verify your identity to enable biometric login",
-        cancelLabel: "Cancel",
-        fallbackLabel: "Use password",
-        disableDeviceFallback: false,
-      });
-
-      if (result.success) {
-        const { data: { session: sess } } = await supabase.auth.getSession();
-        if (!sess?.refresh_token) {
-          Alert.alert("Could not enable", "Session not found. Please sign out, sign in again, then enable biometric login.");
-          return;
-        }
-        await SecureStore.setItemAsync(BIOMETRIC_KEY, "true");
-        await SecureStore.setItemAsync("makersflow_biometric_token", sess.refresh_token);
-        if (user?.email) await SecureStore.setItemAsync("makersflow_biometric_email", user.email);
-        setBiometric(true);
-        Alert.alert("✅ Enabled", "Biometric login is now active. Next time you open the app, use your fingerprint to sign in.");
-      } else {
-        Alert.alert("Authentication Failed", "Could not verify your identity. Biometric login was not enabled.");
-      }
-    } else {
-      // Confirm before disabling
-      Alert.alert(
-        "Disable Biometric Login",
-        "Are you sure you want to disable fingerprint / Face ID login?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Disable",
-            style: "destructive",
-            onPress: async () => {
-              await SecureStore.setItemAsync(BIOMETRIC_KEY, "false");
-              await SecureStore.deleteItemAsync("makersflow_biometric_token").catch(() => {});
-              await SecureStore.deleteItemAsync("makersflow_biometric_email").catch(() => {});
-              setBiometric(false);
-            },
-          },
-        ]
-      );
-    }
-  }
+  // Biometric login disabled per specification
 
   // ── 2FA toggle ────────────────────────────────────────────────────────────
   async function handleTwoFactorToggle(value: boolean) {
@@ -234,29 +149,8 @@ export default function SecurityScreen() {
         contentContainerStyle={{ padding: 20, gap: 20, paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Biometric + 2FA card */}
+        {/* Security Settings card */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {/* Biometric */}
-          <View style={styles.row}>
-            <View style={[styles.iconBox, { backgroundColor: "#DCF7F4" }]}>
-              <Ionicons name="finger-print" size={18} color="#0B6FAD" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>Biometric Login</Text>
-              <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
-                {biometricAvailable ? "Use fingerprint or Face ID" : "No biometrics enrolled on device"}
-              </Text>
-            </View>
-            <Switch
-              value={biometric}
-              onValueChange={handleBiometricToggle}
-              trackColor={{ true: "#0B6FAD", false: "#D6E9F2" }}
-              thumbColor="#FFF"
-              disabled={!biometricAvailable}
-            />
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: "#D6E9F2" }]} />
 
           {/* 2FA */}
           <View style={styles.row}>
