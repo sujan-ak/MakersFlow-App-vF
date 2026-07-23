@@ -16,7 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   Gesture,
   GestureDetector,
-  GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
@@ -46,9 +45,15 @@ function resolveImageSource(item: ImageItem): ImageSource | number {
 }
 
 /**
- * Cross-platform Zoomable Image component using RNGH + Reanimated.
- * Works natively on both Android and iOS!
- * Supports double-tap to zoom (1x <-> 2.5x) and pinch-zoom with pan.
+ * Zoomable image.
+ *
+ * KEY FIX: pinch + pan + double-tap zoom are ONLY enabled in fullscreen mode.
+ * In the inline swiper, the image is a plain <Image> with a single-tap handler,
+ * so the horizontal FlatList swipe is never intercepted by a pan gesture.
+ * This is what previously blocked swiping between images and crashed the app.
+ *
+ * In fullscreen, pan only moves the image while zoomed (scale > 1); when not
+ * zoomed the pan gesture stays inactive so the FlatList can still swipe pages.
  */
 function ZoomableImage({
   source,
@@ -66,14 +71,34 @@ function ZoomableImage({
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
-  const singleTapGesture = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd(() => {
-      if (onSingleTap) {
-        onSingleTap();
-      }
-    });
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
 
+  // ── INLINE MODE: no zoom gestures, just a tap to open fullscreen ──────────
+  // This keeps the FlatList swipe completely free.
+  if (!isFullscreen) {
+    return (
+      <Pressable
+        onPress={onSingleTap}
+        style={{ width: SCREEN_WIDTH, height: "100%" }}
+      >
+        <Image
+          source={source}
+          style={{ width: SCREEN_WIDTH, height: "100%" }}
+          contentFit="cover"
+          transition={200}
+          placeholder={{ blurhash: "L6PZf_0.00~q%M%M_3t700?b_3%M" }}
+        />
+      </Pressable>
+    );
+  }
+
+  // ── FULLSCREEN MODE: full pinch / pan / double-tap zoom ───────────────────
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
@@ -106,7 +131,10 @@ function ZoomableImage({
       }
     });
 
+  // Pan is only meaningful when zoomed in. It activates after a small movement
+  // and, crucially, does nothing (lets the FlatList swipe) when not zoomed.
   const panGesture = Gesture.Pan()
+    .minDistance(10)
     .onUpdate((e) => {
       if (scale.value > 1) {
         translateX.value = savedTranslateX.value + e.translationX;
@@ -118,23 +146,10 @@ function ZoomableImage({
       savedTranslateY.value = translateY.value;
     });
 
-  // Single tap requires double tap to fail so double tap doesn't trigger single tap
-  const tapGestures = onSingleTap
-    ? Gesture.Exclusive(doubleTapGesture, singleTapGesture)
-    : doubleTapGesture;
-
-  const composedGesture = Gesture.Simultaneous(
-    tapGestures,
+  const composedGesture = Gesture.Race(
+    doubleTapGesture,
     Gesture.Simultaneous(pinchGesture, panGesture)
   );
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-    ],
-  }));
 
   return (
     <GestureDetector gesture={composedGesture}>
@@ -147,7 +162,7 @@ function ZoomableImage({
         <Image
           source={source}
           style={{ width: SCREEN_WIDTH, height: "100%" }}
-          contentFit={isFullscreen ? "contain" : "cover"}
+          contentFit="contain"
           transition={200}
           placeholder={{ blurhash: "L6PZf_0.00~q%M%M_3t700?b_3%M" }}
         />
@@ -172,7 +187,6 @@ export function ImageGallery({
 
   const hasMultiple = images && images.length > 1;
 
-  // Reset index if images array length changes dynamically
   useEffect(() => {
     if (activeIndex >= images.length) {
       setActiveIndex(0);
@@ -189,7 +203,6 @@ export function ImageGallery({
     fullListRef.current?.scrollToIndex({ index, animated: true });
   }, []);
 
-  // Momentum scroll end replaces 60fps onScroll handler to eliminate gesture re-renders
   const onMainMomentumScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const slide = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -215,10 +228,10 @@ export function ImageGallery({
     [fullscreenIndex, images.length]
   );
 
-  const openFullscreen = (index: number) => {
+  const openFullscreen = useCallback((index: number) => {
     setFullscreenIndex(index);
     setFullscreenVisible(true);
-  };
+  }, []);
 
   if (!images || images.length === 0) {
     return (
@@ -231,7 +244,7 @@ export function ImageGallery({
 
   return (
     <View style={styles.container}>
-      {/* ── MAIN IMAGE SWIPER (ZOOMABLE + SINGLE TAP FOR FULLSCREEN) ────── */}
+      {/* ── MAIN IMAGE SWIPER (TAP FOR FULLSCREEN) ─────────────────────── */}
       <View style={{ width: SCREEN_WIDTH, height }}>
         <FlatList
           ref={mainListRef}
@@ -262,19 +275,14 @@ export function ImageGallery({
             </View>
           )}
         />
-        {/* Render overlay children (Back button, Wishlist button, Share button, etc.) */}
         {children}
       </View>
 
-      {/* ── DOT INDICATORS (ONLY MULTI-IMAGE) ─────────────────────────── */}
+      {/* ── DOT INDICATORS ─────────────────────────────────────────────── */}
       {hasMultiple && (
         <View style={styles.dotsRow}>
           {images.map((_, i) => (
-            <Pressable
-              key={i}
-              onPress={() => handleThumbnailPress(i)}
-              hitSlop={8}
-            >
+            <Pressable key={i} onPress={() => handleThumbnailPress(i)} hitSlop={8}>
               <View
                 style={[
                   styles.dot,
@@ -286,7 +294,7 @@ export function ImageGallery({
         </View>
       )}
 
-      {/* ── THUMBNAIL STRIP (ONLY MULTI-IMAGE) ─────────────────────────── */}
+      {/* ── THUMBNAIL STRIP ────────────────────────────────────────────── */}
       {hasMultiple && (
         <View style={styles.thumbnailStripContainer}>
           <FlatList
@@ -330,10 +338,9 @@ export function ImageGallery({
         transparent
         animationType="fade"
         onRequestClose={() => setFullscreenVisible(false)}
+        statusBarTranslucent
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={styles.fullscreenContainer}>
-          {/* Top Bar */}
+        <View style={styles.fullscreenContainer}>
           <View style={styles.fullscreenTopBar}>
             <Text style={styles.fullscreenCounter}>
               {fullscreenIndex + 1} / {images.length}
@@ -347,7 +354,6 @@ export function ImageGallery({
             </Pressable>
           </View>
 
-          {/* Fullscreen Swipe / Cross-Platform Zoom View */}
           <FlatList
             ref={fullListRef}
             data={images}
@@ -367,7 +373,6 @@ export function ImageGallery({
             )}
           />
 
-          {/* Fullscreen Bottom Thumbnail Strip (if multiple) */}
           {hasMultiple && (
             <View style={styles.fullscreenBottomBar}>
               <FlatList
@@ -404,7 +409,6 @@ export function ImageGallery({
             </View>
           )}
         </View>
-        </GestureHandlerRootView>
       </Modal>
     </View>
   );
