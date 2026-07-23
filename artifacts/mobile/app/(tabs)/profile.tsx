@@ -43,6 +43,8 @@ interface CompletedCourse {
   courseId: string;
   courseTitle: string;
   completedAt: string;
+  level?: string;
+  instructor?: string;
 }
 
 export default function ProfileScreen() {
@@ -179,7 +181,8 @@ export default function ProfileScreen() {
             const valid = enrollData.filter(
               (enr: any) =>
                 enr.courses &&
-                (['completed', 'free'].includes(enr.payment_status) ||
+                (!enr.payment_status ||
+                  ['completed', 'free', 'paid', 'active', 'success'].includes(enr.payment_status) ||
                   enr.courses.is_free === true)
             );
             setEnrolledCount(valid.length);
@@ -189,7 +192,7 @@ export default function ProfileScreen() {
 
           const { data: enrollments } = await supabase
             .from("enrollments")
-            .select("course_id, completed_at, enrolled_at, payment_status, courses(title, is_free)")
+            .select("course_id, completed_at, enrolled_at, payment_status, courses(title, is_free, level, instructor_id)")
             .eq("user_id", user.id);
 
           if (!enrollments) { setCertsLoading(false); return; }
@@ -197,7 +200,8 @@ export default function ProfileScreen() {
           const validEnrollments = enrollments.filter(
             (enr: any) =>
               enr.courses &&
-              (['completed', 'free'].includes(enr.payment_status) ||
+              (!enr.payment_status ||
+                ['completed', 'free', 'paid', 'active', 'success'].includes(enr.payment_status) ||
                 enr.courses.is_free === true)
           );
 
@@ -212,9 +216,11 @@ export default function ProfileScreen() {
           for (const enr of validEnrollments) {
             const courseId = String(enr.course_id);
             const courseTitle = (enr.courses as any)?.title ?? "Unknown Course";
+            const level = (enr.courses as any)?.level;
+            const instructor = undefined;
 
             if (enr.completed_at) {
-              results.push({ courseId, courseTitle, completedAt: enr.completed_at });
+              results.push({ courseId, courseTitle, completedAt: enr.completed_at, level, instructor });
               continue;
             }
 
@@ -234,6 +240,8 @@ export default function ProfileScreen() {
                 courseId,
                 courseTitle,
                 completedAt: enr.enrolled_at ?? new Date().toISOString(),
+                level,
+                instructor,
               });
             }
           }
@@ -627,6 +635,8 @@ export default function ProfileScreen() {
                             courseName: course.courseTitle,
                             studentName: user?.name ?? "",
                             completionDate: course.completedAt,
+                            level: (course as any).level,
+                            instructor: (course as any).instructor,
                           },
                         });
                       }}
@@ -646,6 +656,8 @@ export default function ProfileScreen() {
                             studentName: user?.name ?? "",
                             completionDate: course.completedAt,
                             autoDownload: "true",
+                            level: (course as any).level,
+                            instructor: (course as any).instructor,
                           },
                         });
                       }}

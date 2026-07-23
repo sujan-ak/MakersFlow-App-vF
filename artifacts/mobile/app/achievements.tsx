@@ -25,6 +25,8 @@ interface CompletedCourse {
   courseId: string;
   courseTitle: string;
   completedAt: string;
+  level?: string;
+  instructor?: string;
 }
 
 export default function AchievementsScreen() {
@@ -40,17 +42,17 @@ export default function AchievementsScreen() {
   const [viewedCerts, setViewedCerts] = useState<string[]>([]);
 
   useEffect(() => {
-    async function loadViewedCerts() {
+    let isMounted = true;
+    const loadViewed = async () => {
       try {
         const stored = await AsyncStorage.getItem("viewed_certificates");
-        if (stored) {
-          setViewedCerts(JSON.parse(stored));
-        }
+        if (stored && isMounted) setViewedCerts(JSON.parse(stored));
       } catch (err) {
         console.error("Error loading viewed certificates:", err);
       }
-    }
-    loadViewedCerts();
+    };
+    loadViewed();
+    return () => { isMounted = false; };
   }, []);
 
   const handleMarkAsViewed = async (courseId: string) => {
@@ -73,10 +75,10 @@ export default function AchievementsScreen() {
         }
         if (!hasLoadedOnce.current) setIsLoading(true);
         try {
-          // Get all enrollments
+          // Get all enrollments with level and instructor_id
           const { data: enrollments } = await supabase
             .from("enrollments")
-            .select("course_id, completed_at, enrolled_at, courses(title)")
+            .select("course_id, completed_at, enrolled_at, courses(title, level, instructor_id)")
             .eq("user_id", user.id);
 
           if (!enrollments) {
@@ -93,9 +95,12 @@ export default function AchievementsScreen() {
           const progressList = progressData ?? [];
           const results: CompletedCourse[] = [];
 
-          for (const enr of enrollments) {
+          const validEnrollments = enrollments.filter((enr: any) => enr.courses);
+          for (const enr of validEnrollments) {
             const courseId = String(enr.course_id);
             const courseTitle = (enr.courses as any)?.title ?? "Unknown Course";
+            const level = (enr.courses as any)?.level;
+            const instructor = undefined;
 
             // If already marked completed in enrollments table
             if (enr.completed_at) {
@@ -103,6 +108,8 @@ export default function AchievementsScreen() {
                 courseId,
                 courseTitle,
                 completedAt: enr.completed_at,
+                level,
+                instructor,
               });
               continue;
             }
@@ -128,6 +135,8 @@ export default function AchievementsScreen() {
                 courseId,
                 courseTitle,
                 completedAt: enr.enrolled_at ?? new Date().toISOString(),
+                level,
+                instructor,
               });
             }
           }
@@ -312,6 +321,8 @@ export default function AchievementsScreen() {
                               courseName: course.courseTitle,
                               studentName: user?.name ?? "",
                               completionDate: course.completedAt,
+                              level: (course as any).level,
+                              instructor: (course as any).instructor,
                             },
                           });
                         }}
@@ -332,6 +343,8 @@ export default function AchievementsScreen() {
                               studentName: user?.name ?? "",
                               completionDate: course.completedAt,
                               autoDownload: "true",
+                              level: (course as any).level,
+                              instructor: (course as any).instructor,
                             },
                           });
                         }}

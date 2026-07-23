@@ -732,6 +732,8 @@ export default function CourseDetailScreen() {
                       courseName: course.title,
                       studentName: user?.name ?? '',
                       completionDate: new Date().toISOString(),
+                      level: (course as any).level,
+                      instructor: (course as any).instructor,
                     },
                   })}
                 >

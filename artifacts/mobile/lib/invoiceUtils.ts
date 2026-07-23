@@ -24,17 +24,83 @@ import { supabase } from "@/lib/supabase";
 
 // ─── Seller constants ────────────────────────────────────────────────────────
 
-export const SELLER = {
+// TODO: seller_name, gst_number, cin_number, and seller_address MUST be populated in the public.settings
+// table in Supabase before going to production, as invoices currently have no legally valid GST registration info.
+
+export interface SellerSettings {
+  name: string;
+  tradeName: string;
+  address1?: string;
+  address2?: string;
+  state: string;
+  stateCode: string;
+  gstin: string | null;
+  cin: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+}
+
+let cachedSellerSettings: SellerSettings | null = null;
+
+export async function fetchSellerSettings(): Promise<SellerSettings> {
+  if (cachedSellerSettings) return cachedSellerSettings;
+
+  try {
+    const { data: rows, error } = await supabase
+      .from("settings")
+      .select("key, value");
+
+    if (!error && rows) {
+      const map: Record<string, string> = {};
+      for (const r of rows) {
+        if (r.key && r.value) {
+          map[r.key] = r.value.trim();
+        }
+      }
+
+      cachedSellerSettings = {
+        name: map["seller_name"] || map["store_name"] || "EDODWAJA PRIVATE LIMITED",
+        tradeName: map["seller_trade_name"] || "MAKERSFLOW",
+        address1: map["seller_address1"] || undefined,
+        address2: map["seller_address2"] || undefined,
+        state: map["seller_state"] || "Andhra Pradesh",
+        stateCode: map["seller_state_code"] || "37",
+        gstin: map["gst_number"] && map["gst_number"].length > 0 ? map["gst_number"] : null,
+        cin: map["cin_number"] && map["cin_number"].length > 0 ? map["cin_number"] : null,
+        phone: map["store_phone"] || map["seller_phone"] || null,
+        email: map["support_email"] || map["seller_email"] || null,
+        website: map["website"] || "www.makersflow.in",
+      };
+      return cachedSellerSettings;
+    }
+  } catch (err) {
+    console.warn("[Invoice] Error fetching seller settings:", err);
+  }
+
+  // Honest fallback without fabricated GSTIN or CIN strings
+  return {
+    name: "EDODWAJA PRIVATE LIMITED",
+    tradeName: "MAKERSFLOW",
+    state: "Andhra Pradesh",
+    stateCode: "37",
+    gstin: null,
+    cin: null,
+    phone: null,
+    email: null,
+    website: "www.makersflow.in",
+  };
+}
+
+export const SELLER: SellerSettings = {
   name: "EDODWAJA PRIVATE LIMITED",
   tradeName: "MAKERSFLOW",
-  address1: "10-91, Vaddila Street, Near Post Office, Srungavru",
-  address2: "West Godavari, Andhra Pradesh — 534 281",
   state: "Andhra Pradesh",
   stateCode: "37",
-  gstin: "37AADCE1234F1Z5",          // ← replace with actual GSTIN
-  cin: "U80904AP2023PTC123456",       // ← replace with actual CIN
-  phone: "+91 98765 43210",           // ← replace with actual
-  email: "support@makersflow.in",
+  gstin: null,
+  cin: null,
+  phone: null,
+  email: null,
   website: "www.makersflow.in",
 };
 
@@ -180,7 +246,8 @@ function computeLines(items: InvoiceLineItem[], intraState: boolean): ComputedLi
 
 // ─── HTML generator (Fixes #3, #5–#15) ──────────────────────────────────────
 
-export function buildInvoiceHtml(data: InvoiceData): string {
+export function buildInvoiceHtml(data: InvoiceData, sellerOverride?: SellerSettings): string {
+  const seller = sellerOverride || cachedSellerSettings || SELLER;
   const intra = isIntraState(data.billingAddress.state);
   const lines = computeLines(data.items, intra);
 
@@ -352,13 +419,14 @@ export function buildInvoiceHtml(data: InvoiceData): string {
   <div class="inv-header">
     <div class="brand">
       <div class="brand-text">
-        <div class="trade-name">${SELLER.tradeName}</div>
-        <div class="legal-name">${SELLER.name}</div>
+        <div class="trade-name">${seller.tradeName}</div>
+        <div class="legal-name">${seller.name}</div>
+        ${seller.address1 || seller.address2 ? `
         <div class="seller-addr">
-          ${SELLER.address1}<br/>
-          ${SELLER.address2}
-        </div>
-        <div class="gstin">GSTIN: ${SELLER.gstin} &nbsp;|&nbsp; State: ${SELLER.state} (${SELLER.stateCode})</div>
+          ${seller.address1 ? `${seller.address1}<br/>` : ""}
+          ${seller.address2 ? `${seller.address2}` : ""}
+        </div>` : ""}
+        <div class="gstin">GSTIN: ${seller.gstin ? seller.gstin : "Pending Registration"} &nbsp;|&nbsp; State: ${seller.state} (${seller.stateCode})</div>
       </div>
     </div>
     <div class="inv-meta">
@@ -440,7 +508,7 @@ export function buildInvoiceHtml(data: InvoiceData): string {
         <tr class="grand-row"><td>Grand Total</td><td>${R} ${fmt(grandTotal)}</td></tr>
       </table>
       <div class="sign-block">
-        For ${SELLER.name}<br/>
+        For ${seller.name}<br/>
         <span style="font-size:9px;color:#777;">Authorised Signatory</span>
       </div>
     </div>
@@ -451,12 +519,12 @@ export function buildInvoiceHtml(data: InvoiceData): string {
     <div class="footer-note">
       <b>Note:</b> This is a valid Tax Invoice under Section 31 of the CGST Act, 2017.
       Goods once sold will not be taken back or exchanged unless defective.
-      Subject to ${SELLER.state} jurisdiction only.
+      Subject to ${seller.state} jurisdiction only.
     </div>
     <div class="footer-contact">
-      <div>${SELLER.phone} &nbsp;|&nbsp; ${SELLER.email}</div>
-      <div>${SELLER.website}</div>
-      <div class="cin">CIN: ${SELLER.cin}</div>
+      ${seller.phone || seller.email ? `<div>${[seller.phone, seller.email].filter(Boolean).join(" &nbsp;|&nbsp; ")}</div>` : ""}
+      ${seller.website ? `<div>${seller.website}</div>` : ""}
+      ${seller.cin ? `<div class="cin">CIN: ${seller.cin}</div>` : ""}
     </div>
   </div>
 

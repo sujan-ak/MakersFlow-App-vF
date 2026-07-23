@@ -9,7 +9,7 @@ import { useAuth } from "@/context/AuthContextSupabase";
 import { supabase } from "@/lib/supabase";
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import { buildInvoiceHtml, generateInvoiceNumber, type InvoiceLineItem } from "@/lib/invoiceUtils";
+import { buildInvoiceHtml, generateInvoiceNumber, fetchSellerSettings, type InvoiceLineItem } from "@/lib/invoiceUtils";
 
 
 // ── Order Tracking Timeline ───────────────────────────────────────────────────
@@ -298,18 +298,22 @@ export default function OrdersScreen() {
         gstRate: 18,
       }));
 
+      const seller = await fetchSellerSettings();
       const invoiceNumber = await generateInvoiceNumber();
 
-      const html = buildInvoiceHtml({
-        invoiceNumber,
-        invoiceDate: new Date(order.created_at),
-        paymentId: order.id,
-        items: invoiceItems,
-        billingAddress,
-        shippingAddress: addr ? billingAddress : undefined,
-        shippingFee: 0,
-        totalDiscount: 0,
-      });
+      const html = buildInvoiceHtml(
+        {
+          invoiceNumber,
+          invoiceDate: new Date(order.created_at),
+          paymentId: order.id,
+          items: invoiceItems,
+          billingAddress,
+          shippingAddress: addr ? billingAddress : undefined,
+          shippingFee: 0,
+          totalDiscount: 0,
+        },
+        seller
+      );
 
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
